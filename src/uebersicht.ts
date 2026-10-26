@@ -39,7 +39,7 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
   const g=gruppeVon(z),w=z.werte;
   const haupt=g==='PAK'?(w.find(x=>SUMME.test(x.p))||null):g==='Chlorid'?(w.find(x=>CHLORID.test(x.p))||null):null;
   const u:UZeile={label:z.label||z.ref,nr:z.nr,stelle:z.desc||z.ref,haupt:haupt?{p:haupt.p,r:haupt.r,u:haupt.u,...(haupt.loq?{loq:haupt.loq}:{})}:null,
-   befund:g==='Asbest'?asbestBefund(w):null,weitere:g==='Weitere'||(!haupt&&g!=='Asbest')?w.slice(0,2).map(x=>({p:x.p,r:x.r,u:x.u})):[],
+   befund:g==='Asbest'?asbestBefund(w):null,weitere:g==='Weitere'?w.slice(0,2).map(x=>({p:x.p,r:x.r,u:x.u})):[],   // PAK/Chlorid ohne Hauptwert: nichts Fremdes in die Spalte
    ausstehend:z.status==='offen'||z.status==='ohneWerte',vorlaeufig:z.status==='vorlaeufig',nichtBeauftragt:z.status==='nichtBeauftragt'};
   map.set(g,[...(map.get(g)||[]),u]);
  }
@@ -51,7 +51,8 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
 /** Geschoss aus der Probenbezeichnung (von groß nach klein, z. B. „Haus A 1OG Bad Wand B“): KG/UG < EG < 1.OG … < DG. */
 const GESCHOSS=/^(?:(UG|KG|Keller(?:geschoss)?|EG|Erdgeschoss|DG|Dach(?:geschoss)?|Spitzboden|Außen(?:bereich)?)|(\d{1,2})\.?\s?OG|OG\s?(\d{1,2})|(OG))$/i;
 function geschoss(text:string){
- const w=text.split(/[\s,·]+/);for(let i=0;i<w.length;i++){
+ const w=text.replace(/(\d{1,2})\.\s+OG\b/gi,'$1.OG').replace(/\bOG\s+(\d{1,2})\b/gi,'OG$1').split(/[\s,·]+/);   // „1. OG“, „OG 2“ zusammenhalten
+ for(let i=0;i<w.length;i++){
   const m=GESCHOSS.exec(w[i]);if(!m)continue;
   const n=m[1]?.toUpperCase();const rang=m[2]||m[3]?1+Number(m[2]||m[3]):m[4]?2:n?(/^(UG|KG|KELLER)/.test(n)?0:n==='EG'||n==='ERDGESCHOSS'?1:/^(DG|DACH|SPITZBODEN)/.test(n)?50:60):40;
   return {vor:w.slice(0,i).join(' '),rang,rest:w.slice(i+1).join(' ')};}

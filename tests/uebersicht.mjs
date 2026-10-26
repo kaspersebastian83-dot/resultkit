@@ -32,6 +32,14 @@ ok('Asbest: nur eindeutig positiver Befund ist rot; Text bleibt wie im Bericht',
  assert.equal(b.text,'Chrysotil: nachgewiesen · Amphibol-Asbest: nicht nachgewiesen');assert.equal(b.gefunden,true);
  assert.equal(U.asbestBefund([{p:'PAK',r:'1',u:''}]),null);
 });
+ok('PAK ohne Σ16: keine Einzelstoffe als Ersatz in der Σ16-Spalte',()=>{
+ const g=U.uebersichtGruppen([z('P1','EG Küche',[['Benzo[a]pyren','1,2','µg/m²']],{typ:'PAK'})]);
+ assert.equal(g[0].zeilen[0].haupt,null);assert.deepEqual(g[0].zeilen[0].weitere,[]);
+});
+ok('Geschoss mit Leerzeichen: „1. OG“ und „OG 2“',()=>{
+ const zeilen=['P1 Haus A DG Bad','P2 Haus A 1. OG Flur','P3 Haus A EG Küche','P4 Haus A OG 2 Bad','P5 Haus A KG Lager'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
+ assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P5','P3','P2','P4','P1']);
+});
 ok('Sortierung nach Ort: Gebäude, Geschoss von unten nach oben, dann Raum; sonst nach Nummer',()=>{
  const zeilen=['P1 DG Bad Decke','P2 EG Küche Wand','P3 KG Heizung Decke','P4 1OG Flur Wand','P5 EG Flur Decke','P6 Haus B EG Lager Wand','P7 2.OG Bad Wand','P8 Garage Decke'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
  assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P8','P6']);

@@ -218,8 +218,9 @@ function uTabelle(g:UGruppe,nach:'ort'|'nr'){
  const leer=`<tr><td colspan="${3+(mitBewertung?1:0)}" class="muted">${filter==='offen'?'Keine offenen Proben.':filter==='auff'?'Keine auffälligen Proben.':''}</td></tr>`;
  const zeile=(z:UZeile)=>{let erg='',bew='';
   if(g.gruppe==='Asbest')erg=z.befund?(z.befund.gefunden?pastell(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen'):esc(z.befund.text)):'';
-  else if(g.gruppe==='Weitere'||!z.haupt)erg=z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
-  else{erg=`<span class="u-wert">${wert(z.haupt)}</span>`;const b=bewertung(z.haupt);if(b){bew=pastell(b.farbe,esc(b.text),b.titel);erg+=`<span class="u-mobil">${bew}</span>`;}}
+  else if(g.gruppe!=='Weitere'&&!z.haupt)erg=z.ausstehend?'':`<span class="u-aus">kein ${g.gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
+  else if(g.gruppe==='Weitere')erg=z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
+  else if(z.haupt){erg=`<span class="u-wert">${wert(z.haupt)}</span>`;const b=bewertung(z.haupt);if(b){bew=pastell(b.farbe,esc(b.text),b.titel);erg+=`<span class="u-mobil">${bew}</span>`;}}
   return `<tr${z.ausstehend?' class="u-offen"':''}><th scope="row">${esc(z.label)}</th><td>${esc(z.stelle)}</td><td>${erg}${hinweis(z)}</td>${mitBewertung?`<td class="u-bew">${bew}</td>`:''}</tr>`;};
  return `<section class="u-gruppe" aria-label="${esc(GTITEL[g.gruppe])}"><h2>${esc(GTITEL[g.gruppe])} <small>${g.zeilen.length} Probe${g.zeilen.length===1?'':'n'}${unter?` · ${esc(unter)}`:''}</small></h2>
   <div class="tabelle-scroll"><table class="u-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">${g.gruppe==='Asbest'?'Material und Stelle':'Probenahmestelle'}</th><th scope="col">${esc(kopf[0])}</th>${mitBewertung?'<th scope="col" class="u-bew">Bewertung</th>':''}</tr></thead>
