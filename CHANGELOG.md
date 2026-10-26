@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1 · 26.10.2026
+- Liefert das Labor denselben Parameter zweimal – je Probe und je Fläche (Eurofins: „Chlorid (Cl)“ in µg/Probe und berechnet in mg/m² bzw. µg/cm²) –, zeigt und bewertet die Übersicht immer den Wert je Fläche. Vorher konnte je nach Reihenfolge in der XML der Wert je Probe erscheinen (z. B. „2800 µg/Probe“ ohne Bewertung).
+- Asbest: leere Zeilen wie „Asbestgehalt: -“ erscheinen nicht mehr im Befund.
+
 ## 1.2.0 · 26.10.2026
 - Übersicht mit drei Spalten: Probe · Probenahmestelle · Ergebnis. Die Bewertung ist die Farbe des Werts (ruhiges Pastell), die Ergebnisse stehen in allen Tabellen untereinander. Über jeder Tabelle eine kleine Legende mit den Kategorien und Bereichen.
 - Über jeder Tabelle die Prüfberichte, aus denen die Werte stammen, mit Datum (vorläufige gekennzeichnet).

@@ -49,6 +49,18 @@ ok('Chlorid in µg/cm²: ältere Berichte in mg/m² umgerechnet (1 µg/cm² = 10
  assert.deepEqual(U.chloridInUgCm2({p:'Chlorid',r:'unter BG',u:'mg/m²',loq:'5'}),{p:'Chlorid',r:'unter BG',u:'µg/cm²',loq:'0,5'});
  assert.deepEqual(U.chloridInUgCm2({p:'Chlorid',r:'n. n.',u:'mg/m²'}),{p:'Chlorid',r:'n. n.',u:'µg/cm²'});
 });
+ok('Gleicher Parameter je Probe und je Fläche (Eurofins: Chlorid µg/Probe und µg/cm² berechnet): der Flächenwert gilt',()=>{
+ for(const reihe of [[['Chlorid (Cl)','2800','µg/ Probe'],['Chlorid (Cl)','20','µg/cm²']],[['Chlorid (Cl)','20','µg/cm²'],['Chlorid (Cl)','2800','µg/ Probe']]]){
+  const g=U.uebersichtGruppen([z('P6','EG',[['Größe der Probenfläche','140','cm²'],...reihe],{typ:'Chlorid'})]);
+  assert.deepEqual([g[0].zeilen[0].haupt.r,g[0].zeilen[0].haupt.u],['20','µg/cm²']);}
+ const pak=U.uebersichtGruppen([z('P1','EG',[['Summe 16 EPA-PAK exkl. BG','1700','ng/Probe'],['Summe 16 EPA-PAK exkl. BG','28','µg/m²']],{typ:'PAK'})]);
+ assert.equal(pak[0].zeilen[0].haupt.u,'µg/m²');
+ assert.equal(U.uebersichtGruppen([z('P2','EG',[['Chlorid','2800','µg/ Probe']],{typ:'Chlorid'})])[0].zeilen[0].haupt.u,'µg/ Probe','nur je Probe: wie im Bericht');
+});
+ok('Asbest: leere Zeilen wie „Asbestgehalt: -“ fallen weg',()=>{
+ assert.deepEqual(U.asbestBefund([{p:'Asbestgehalt',r:'-',u:''},{p:'Asbest',r:'Kein Asbest nachgewiesen',u:''}]),{text:'Kein Asbest nachgewiesen',gefunden:false});
+ assert.deepEqual(U.asbestBefund([{p:'Asbestgehalt',r:'-',u:''},{p:'Chrysotil',r:'nachgewiesen',u:''}]),{text:'Chrysotil: nachgewiesen',gefunden:true},'Mineral bleibt genannt');
+});
 ok('Sortierung nach Ort: Gebäude, Geschoss von unten nach oben, dann Raum; sonst nach Nummer',()=>{
  const zeilen=['P1 DG Bad Decke','P2 EG Küche Wand','P3 KG Heizung Decke','P4 1OG Flur Wand','P5 EG Flur Decke','P6 Haus B EG Lager Wand','P7 2.OG Bad Wand','P8 Garage Decke'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
  assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P8','P6']);
