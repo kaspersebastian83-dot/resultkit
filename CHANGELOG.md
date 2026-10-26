@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.3 · 26.10.2026
+- Liegt ein Prüfbericht als XML und als PDF mit anderem Dateinamen im Ordner, gelten die Werte der XML – auch wenn die PDF neuer ist. Vorher zeigte ResultKit dann „ohne Messwerte“ und den falschen Hinweis „Nur die PDF liegt vor“. Bei gleicher Berichtsnummer zählt die Datei mit Messwerten, dann der endgültige Bericht, sonst die neuere Datei; die PDF bleibt beim Bericht genannt.
+- Chlorid in mg/m²: Nur Zahlen, „< …“, „> …“ und Texte wie „unter BG“, „n. n.“ werden in µg/cm² umgerechnet. Werte wie „(3)“ oder „1.250“ bleiben wie im Bericht mit dessen Einheit, statt ohne Umrechnung mit „µg/cm²“ beschriftet zu werden.
+- Prüfbericht-Karte: Bei Asbest nach VDI 3866-5 (Asbestgehalt und Asbestart je Nachweisgrenze) erscheint der Befund auch, wenn er erst bei einer späteren Nachweisgrenze steht – vorher „-“.
+- Sortierung nach Ort: Proben ohne Geschoss stehen am Ende, auch nach Gebäuden mit Geschoss (z. B. „Treppenhaus“ nach „Haus A 1.OG“).
+- Skalen aus dem Probenplan werden wie in PlanKit geprüft; ungültige Skalen entfallen, Farben gelangen nur als „#rrggbb“ in die Anzeige.
+- Schneller Projektwechsel: Nutzung und Skalen des vorigen Projekts überschreiben das neu geöffnete nicht mehr.
+
 ## 1.2.2 · 26.10.2026
 - Asbest nach VDI 3866-5 wie bei Eurofins (je Nachweisgrenze „Asbestgehalt“ in % und „Asbestart“, nicht untersuchte Stufen „-“): Befund kurz als „Chrysotil · 5 - 20 %“ bzw. „Kein Asbest nachgewiesen“ – Art vor Gehalt, mit Einheit, gleiche Texte nur einmal. Ein Gehalt mit Zahl (z. B. „5 - 20“ oder „>1“ %) gilt als nachgewiesen, auch ohne Asbestart.
 

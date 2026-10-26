@@ -10,6 +10,7 @@ registerHooks({
 });
 // Ergebnisübersicht: Gruppen je Probenart, Hauptwert, Asbest-Befund, Sortierung nach Ort. Synthetische Daten.
 const U=await import('../src/uebersicht.ts');
+const B=await import('../src/bewertung.ts');
 let n=0;const ok=(name,fn)=>{fn();n++;console.log('OK Übersicht: '+name);};
 const z=(label,desc,werte,{typ,status='ergebnis'}={})=>({label,nr:Number(label.slice(1)),ref:`Probe ${label.slice(1)}`,desc,...(typ?{typ}:{}),erwartet:true,status,werte:werte.map(([p,r,u])=>({p,r,u,bericht:'AR',vorlaeufig:status==='vorlaeufig'})),berichte:['AR'],hinweise:[]});
 const SUM='Summe 16 EPA-PAK exkl. BG';
@@ -76,7 +77,33 @@ ok('Asbest nach VDI 3866-5 (Eurofins): Asbestgehalt % und Asbestart je Nachweisg
 });
 ok('Sortierung nach Ort: Gebäude, Geschoss von unten nach oben, dann Raum; sonst nach Nummer',()=>{
  const zeilen=['P1 DG Bad Decke','P2 EG Küche Wand','P3 KG Heizung Decke','P4 1OG Flur Wand','P5 EG Flur Decke','P6 Haus B EG Lager Wand','P7 2.OG Bad Wand','P8 Garage Decke'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
- assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P8','P6']);
+ assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P6','P8'],'ohne Geschoss (P8) ans Ende, auch nach „Haus B“');
  assert.deepEqual(U.sortiere(zeilen,'nr').map(z=>z.label),['P1','P2','P3','P4','P5','P6','P7','P8']);
+});
+ok('Sortierung nach Ort: ohne Geschoss nach allen Proben mit Geschoss, auch mit Gebäude davor',()=>{
+ const zeilen=['P1 Haus A EG Küche','P2 Treppenhaus Wand','P3 Haus A 1.OG Bad','P4 Außenwand Nord'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
+ assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P1','P3','P4','P2']);
+});
+ok('Chlorid in mg/m²: nur Sicheres wird umgerechnet, sonst bleibt Wert und Einheit wie im Bericht',()=>{
+ const c=(r,loq)=>U.chloridInUgCm2({p:'Chlorid',r,u:'mg/m²',...(loq?{loq}:{})});
+ assert.deepEqual(c('> 500','5'),{p:'Chlorid',r:'> 50',u:'µg/cm²',loq:'0,5'});
+ assert.deepEqual(c('< 0,5'),{p:'Chlorid',r:'< 0,05',u:'µg/cm²'});
+ assert.deepEqual(c('n. b.'),{p:'Chlorid',r:'n. b.',u:'µg/cm²'});
+ for(const r of ['(3)','1.250','(< 0,5)','< 1.250','ca. 30'])assert.equal(c(r),null,r);
+ const g=U.uebersichtGruppen([z('P1','EG',[['Chlorid','(3)','mg/m²']],{typ:'Chlorid'}),z('P2','EG',[['Chlorid','1.250','mg/m²']],{typ:'Chlorid'})]);
+ assert.deepEqual(g[0].zeilen.map(x=>[x.haupt.r,x.haupt.u,x.original]),[['(3)','mg/m²',undefined],['1.250','mg/m²',undefined]]);
+});
+ok('Wiederholte Parameter (Asbest je Nachweisgrenze): Wert mit Inhalt vor „-“',()=>{
+ const w=[['Asbestgehalt','-','%'],['Asbestart','-',''],['Asbestgehalt','-','%'],['Asbestart','–',''],['Asbestgehalt','>1','%'],['Asbestart','Chrysotil','']].map(([p,r,u])=>({p,r,u}));
+ assert.equal(U.wertFuer(w,'Asbestgehalt','%').r,'>1');assert.equal(U.wertFuer(w,'Asbestart','').r,'Chrysotil');
+ assert.equal(U.wertFuer([{p:'Asbestart',r:'-',u:''}],'Asbestart','').r,'-');assert.equal(U.wertFuer(w,'Chlorid',''),undefined);
+});
+ok('Skalen aus der Projektdatei: nur gültige wie in PlanKit, Farben nur „#rrggbb“',()=>{
+ const gut={name:'Büro',cats:[{name:'niedrig',from:0,color:'#4CAF50'},{name:'hoch',from:10,color:'#e0453a'}]};
+ const boese={name:'X',cats:[{name:'a',from:0,color:'red;background:url(x)"><img src=x onerror=alert(1)>'}]};
+ assert.deepEqual(B.gueltigeSkalen({'A|µg/m²':gut,'B|µg/m²':boese,'C|µg/m²':{name:'ohne Farbe',cats:[{name:'a',from:0}]},'D|µg/m²':null,'E|µg/m²':{name:'Y',cats:[{name:'a',from:5,color:'#ffffff'},{name:'b',from:1,color:'#000000'}]}}),
+  {'A|µg/m²':{name:'Büro',cats:[{name:'niedrig',from:0,color:'#4caf50'},{name:'hoch',from:10,color:'#e0453a'}]}});
+ for(const v of [undefined,null,[],'x'])assert.equal(B.gueltigeSkalen(v),undefined);
+ assert.equal(B.farbeSicher('#AbC123'),'#AbC123');assert.equal(B.farbeSicher('red;x:"'),B.UNRATED);assert.equal(B.farbeSicher(undefined,'#000000'),'#000000');
 });
 console.log(`${n} Prüfungen Übersicht bestanden`);

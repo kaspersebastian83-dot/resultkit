@@ -9,11 +9,11 @@ import {readLabFiles,reportWarnings,type LabReport} from './labreport';
 import {labelkitReport} from './labelkit';
 import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
-import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
+import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
 import type {ResultSettings,Scale,Wert} from './model';
-import {uebersichtGruppen,sortiere,type UGruppe,type UZeile,type Gruppe} from './uebersicht';
+import {uebersichtGruppen,sortiere,wertFuer,type UGruppe,type UZeile,type Gruppe} from './uebersicht';
 
-export const APP_VERSION='1.2.2';
+export const APP_VERSION='1.2.3';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -132,15 +132,15 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
 /** Bewertungsregel wie in PlanKit/FotoKit: Einstellungen der Ergebniskarte aus dem Probenplan, sonst Nutzung aus _Projekt.json. */
 async function planEinstellungen(f:ProjectFolder):Promise<ResultSettings|null>{
  try{const d=await findSubdir(f.dir,PLAENE),file=d?await fileInfo(d,`Probenplan ${f.name}.probenplan`):null;if(!file)return null;
-  const r=JSON.parse(await file.text())?.results,obj=(v:unknown)=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,Scale>:undefined;
-  if(r&&typeof r==='object')return {usage:r.usage==='residential'||r.usage==='industrial'?r.usage:undefined,vds:obj(r.vds),scales:obj(r.scales)};
+  const r=JSON.parse(await file.text())?.results;   // Skalen wie in PlanKit geprüft: Farben gelangen ins HTML
+  if(r&&typeof r==='object')return {usage:r.usage==='residential'||r.usage==='industrial'?r.usage:undefined,vds:gueltigeSkalen(r.vds),scales:gueltigeSkalen(r.scales)};
  }catch{/* Plan nicht lesbar: Nutzung aus den Projektdaten */}
  return null;
 }
 function skala(p:string,u:string):{scale?:Scale;quelle:string}{
  const settings=einstellungen??{usage:usageFromNutzung()},r=scaleFor(settings,p,u);
  if(r.scale&&Array.isArray(r.scale.cats)&&r.scale.cats.length){const farben=autoColors(r.scale.cats.length);
-  return {scale:{name:r.scale.name,cats:r.scale.cats.map((c,i)=>({...c,color:c.color||farben[i]}))},quelle:r.vds?(r.angepasst?'VdS 2357, in PlanKit angepasst':/^Chlorid/i.test(p)?'VdS 2357, Chlorid':einstellungen?'VdS 2357 (Nutzung aus PlanKit)':`VdS 2357 (Nutzung „${getNutzung()}“)`):'Skala aus PlanKit'};}
+  return {scale:{name:r.scale.name,cats:r.scale.cats.map((c,i)=>({...c,color:farbeSicher(c.color,farben[i])}))},quelle:r.vds?(r.angepasst?'VdS 2357, in PlanKit angepasst':/^Chlorid/i.test(p)?'VdS 2357, Chlorid':einstellungen?'VdS 2357 (Nutzung aus PlanKit)':`VdS 2357 (Nutzung „${getNutzung()}“)`):'Skala aus PlanKit'};}
  const s=fromShared(scaleKey(p,u));return s?{scale:s,quelle:'Büro-Skala'}:{quelle:''};
 }
 const genutzt=new Map<string,{p:string;u:string;scale:Scale;quelle:string}>();
@@ -151,7 +151,7 @@ function wertZelle(w:Wert,kurz=false){
  else if(q==='notDetected'){farbe=NOT_DETECTED;titel='nicht nachweisbar';}
  else if(q==='notDetermined'){farbe=NOT_DETERMINED;titel='nicht bestimmt';}
  else if(q==='measured'){const s=skala(w.p,w.u);if(s.scale){const i=rate(s.scale,labNumber(w.r));if(i>=0){farbe=s.scale.cats[i].color||UNRATED;titel=`${s.scale.cats[i].name} – ${s.scale.name}`;genutzt.set(scaleKey(w.p,w.u),{p:w.p,u:w.u,scale:s.scale,quelle:s.quelle});}}}
- const stil=farbe?` style="--c:${farbe};--t:${ink(farbe)}"`:'';
+ if(farbe)farbe=farbeSicher(farbe);const stil=farbe?` style="--c:${farbe};--t:${ink(farbe)}"`:'';
  return `<span class="wert${farbe?' bewertet':''}"${stil}${titel?` title="${esc(titel)}"`:''}>${name}<b>${esc(w.r)}</b>${kurz?einheit:''}</span>`;
 }
 /** Kernwerte einer Probe: Σ16 EPA-PAK, BaP, Chlorid, Asbest – sonst die ersten beiden Parameter. */
@@ -188,7 +188,7 @@ function bewertung(w:Wert):{text:string;farbe:string;index:number;titel:string}|
  return {text:s.scale.cats[i].name,farbe:s.scale.cats[i].color||UNRATED,index:i,titel:`${s.scale.name} (${s.quelle})`};
 }
 /** Ruhige Pastellfarben statt Vollfarbe: helle Fläche, dunkle Schrift aus derselben Farbe. */
-const pastell=(farbe:string,inhalt:string,titel='')=>`<span class="u-chip" style="--c:${farbe}"${titel?` title="${esc(titel)}"`:''}>${inhalt}</span>`;
+const pastell=(farbe:string,inhalt:string,titel='')=>`<span class="u-chip" style="--c:${farbeSicher(farbe)}"${titel?` title="${esc(titel)}"`:''}>${inhalt}</span>`;
 const ASBEST_ROT='#d0453a';
 const auffaellig=(z:UZeile)=>!!(z.befund?.gefunden||(z.bewertet&&(bewertung(z.bewertet)?.index??0)>0));
 const GTITEL:Record<Gruppe,string>={PAK:'PAK',Chlorid:'Chlorid',Asbest:'Asbest',Weitere:'Weitere Proben'};
@@ -278,7 +278,7 @@ function berichtKarte(b:Bericht){
  const zustand=b.ersetztDurch?['ersetzt','ersetzt']:b.ohneWerte?['ohne Messwerte','offen']:b.vorlaeufig?['vorläufig','vorl']:['endgültig','ok'];
  const spalten=[...new Map(proben.flatMap(p=>kernwerte(p.werte||[])).map(w=>[`${w.p}|${w.u}`,w])).values()].slice(0,5);
  const alle=[...new Map(proben.flatMap(p=>p.werte||[]).map(w=>[`${w.p}|${w.u}`,w])).values()];
- const zelle=(werte:Wert[]|undefined,p:string,u:string)=>{const w=(werte||[]).find(x=>x.p===p&&x.u===u);return w?wertZelle(w):'<span class="muted">–</span>';};
+ const zelle=(werte:Wert[]|undefined,p:string,u:string)=>{const w=wertFuer(werte||[],p,u);return w?wertZelle(w):'<span class="muted">–</span>';};
  const kopf=`<span class="eyebrow">PRÜFBERICHT</span><h3>${esc(b.bericht||b.sources.xml||b.sources.pdf||'ohne Nummer')} <span class="badge ${zustand[1]}">${zustand[0]}</span></h3>
   <p class="meta">${b.datum?`Bericht vom ${datum(b.datum)} · `:''}${proben.length} Probe${proben.length===1?'':'n'}${daten.length?` · Probenahme ${daten.map(datum).join(' – ')}`:''}${b.auftragsreferenz?` · Auftragsreferenz „${esc(b.auftragsreferenz)}“`:''} · ${[b.sources.xml?`XML ✓`:'XML fehlt',b.sources.pdf?'PDF ✓':'ohne PDF'].join(' · ')} · Datei vom ${esc(uhr(b.geaendert))}</p>`;
  const hinweise=b.hinweise.length?`<ul class="bericht-hinweise">${b.hinweise.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:'';
@@ -291,7 +291,7 @@ function berichtKarte(b:Bericht){
 }
 function renderLegende(){
  const l=[...genutzt.values()];
- $('legende').innerHTML=`<div class="legende"><span class="legende-titel">Bewertung</span>${l.map(x=>`<div class="legende-skala"><span class="skala-name">${esc(shortParameter(x.p))} (${esc(x.u)}): ${esc(x.scale.name||'Skala')} <small>${esc(x.quelle)}</small></span>${x.scale.cats.map((c,i)=>`<span class="wert bewertet" style="--c:${c.color};--t:${ink(c.color||UNRATED)}">${esc(c.name)} <small>${esc(rangeText(x.scale,i,x.u))}</small></span>`).join('')}</div>`).join('')}
+ $('legende').innerHTML=`<div class="legende"><span class="legende-titel">Bewertung</span>${l.map(x=>`<div class="legende-skala"><span class="skala-name">${esc(shortParameter(x.p))} (${esc(x.u)}): ${esc(x.scale.name||'Skala')} <small>${esc(x.quelle)}</small></span>${x.scale.cats.map((c,i)=>`<span class="wert bewertet" style="--c:${farbeSicher(c.color)};--t:${ink(farbeSicher(c.color))}">${esc(c.name)} <small>${esc(rangeText(x.scale,i,x.u))}</small></span>`).join('')}</div>`).join('')}
   <div class="legende-skala"><span class="wert bewertet" style="--c:${BELOW_LIMIT};--t:${ink(BELOW_LIMIT)}">&lt; BG</span><span class="wert bewertet" style="--c:${NOT_DETECTED};--t:${ink(NOT_DETECTED)}">n. n.</span><span class="wert">ohne Skala</span>
   ${l.length?'':`<span class="muted klein">Keine Skala für diese Parameter – Skalen werden in PlanKit (Ergebniskarte) oder FotoKit gepflegt. ResultKit erfindet keine Grenzwerte.</span>`}</div></div>`;
 }
@@ -306,8 +306,9 @@ async function oeffnen(dir:Dir){
  let f:ProjectFolder;try{f=await openFolder(dir);}catch(e){fail(e);return;}
  folder=f;scan=null;einstellungen=null;cache.clear();$('ordner-frage').hidden=true;render();PROJEKT_URL.setzen(f.name);
  window.MosaikLeiste?.aktualisieren();
- try{setNutzung((await readProjectData(f)).nutzung);}catch{setNutzung('');}
- einstellungen=await planEinstellungen(f);
+ let nutzung:unknown='';try{nutzung=(await readProjectData(f)).nutzung;}catch{/* ohne Projektdaten */}
+ if(folder!==f)return;setNutzung(nutzung);   // inzwischen ein anderes Projekt geöffnet
+ const e=await planEinstellungen(f);if(folder!==f)return;einstellungen=e;
  await neuEinlesen();
  void skalenAbgleich().then(()=>{if(folder===f&&scan)render();}).catch(()=>{});
 }

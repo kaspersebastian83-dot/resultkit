@@ -101,5 +101,17 @@ export function scaleFor(settings:ResultSettings|undefined,parameter:string,unit
   return {scale:settings?.scales?.[key],angepasst:false};
 }
 export function rangeText(scale:Scale,i:number,unit:string){const c=scale.cats[i],next=scale.cats[i+1],n=(v:number)=>v.toLocaleString('de-DE');return next?(i===0?`< ${n(next.from)} ${unit}`:`${n(c.from)} – < ${n(next.from)} ${unit}`):(i===0?`alle Werte`:`≥ ${n(c.from)} ${unit}`);}
+/** Farben kommen auch aus der Projektdatei (.probenplan) – nur „#rrggbb“ gelangt ins HTML, sonst die Ersatzfarbe. */
+export const FARBE=/^#[0-9a-f]{6}$/i;
+export const farbeSicher=(farbe:unknown,ersatz=UNRATED)=>typeof farbe==='string'&&FARBE.test(farbe)?farbe:ersatz;
+/** Skalen der Ergebniskarte aus der Projektdatei prüfen wie PlanKit (import.ts, validResults); ungültige Skalen entfallen. */
+export function gueltigeSkalen(raw:unknown):Record<string,Scale>|undefined{
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return;
+ const scales:Record<string,Scale>={};
+ for(const [key,s] of Object.entries(raw as Record<string,Scale|null>).slice(0,100)){
+  if(key.length>330||!s||typeof s.name!=='string'||s.name.length>160||!Array.isArray(s.cats)||!s.cats.length||s.cats.length>12||!s.cats.every((c,i)=>!!c&&typeof c.name==='string'&&!!c.name.trim()&&c.name.length<=60&&Number.isFinite(c.from)&&c.from>=0&&(i===0||c.from>=s.cats[i-1].from)&&typeof c.color==='string'&&FARBE.test(c.color)))continue;
+  scales[key]={name:s.name,cats:s.cats.map(c=>({name:c.name,from:c.from,color:c.color!.toLowerCase()}))};}
+ return scales;
+}
 /** Gut lesbare Schriftfarbe auf einer Füllfarbe. */
 export function ink(color:string){const n=parseInt(color.slice(1),16),r=n>>16,g=n>>8&255,b=n&255;return (r*299+g*587+b*114)/1000>150?'#1d2a33':'#ffffff';}
