@@ -59,6 +59,7 @@ ok('Gleicher Parameter je Probe und je Fläche (Eurofins: Chlorid µg/Probe und 
 });
 ok('Asbest: leere Zeilen wie „Asbestgehalt: -“ fallen weg',()=>{
  assert.deepEqual(U.asbestBefund([{p:'Asbestgehalt',r:'-',u:''},{p:'Asbest',r:'Kein Asbest nachgewiesen',u:''}]),{text:'Kein Asbest nachgewiesen',gefunden:false});
+ assert.deepEqual(U.asbestBefund([{p:'Asbestgehalt',r:'-',u:''},{p:'Chrysotil',r:'nachgewiesen',u:''}]),{text:'Chrysotil: nachgewiesen',gefunden:true},'Mineral bleibt genannt');
 });
 ok('Sortierung nach Ort: Gebäude, Geschoss von unten nach oben, dann Raum; sonst nach Nummer',()=>{
  const zeilen=['P1 DG Bad Decke','P2 EG Küche Wand','P3 KG Heizung Decke','P4 1OG Flur Wand','P5 EG Flur Decke','P6 Haus B EG Lager Wand','P7 2.OG Bad Wand','P8 Garage Decke'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});

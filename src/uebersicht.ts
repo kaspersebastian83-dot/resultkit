@@ -29,7 +29,7 @@ const NEGATIV=/nicht|kein|negativ|n\.\s*n\.|^<|unter/i;
 /** Asbest: Befundtext(e) wie im Bericht; „gefunden“ nur bei eindeutig positivem Wortlaut (sonst neutral angezeigt). */
 export function asbestBefund(werte:Wert[]):{text:string;gefunden:boolean}|null{
  const a=werte.filter(w=>ASBEST.test(w.p)&&!/^[-–—]?$/.test(w.r.trim()));if(!a.length)return null;   // „Asbestgehalt: -“ weglassen
- const text=a.length===1?a[0].r:a.map(w=>`${w.p}: ${w.r}`).join(' · ');
+ const text=a.map(w=>/^asbest(?:gehalt)?$/i.test(w.p.trim())?w.r:`${w.p}: ${w.r}`).join(' · ');   // Mineral (Chrysotil …) bleibt genannt
  return {text,gefunden:a.some(w=>POSITIV.test(w.r.trim())&&!NEGATIV.test(w.r.trim()))};
 }
 function gruppeVon(z:Zeile):Gruppe{
