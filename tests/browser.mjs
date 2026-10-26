@@ -39,7 +39,7 @@ const lies=(page,pfad)=>page.evaluate(async ([projekt,pfad])=>{let d=await (awai
 const liste=(page,pfad)=>page.evaluate(async ([projekt,pfad])=>{let d=await (await navigator.storage.getDirectory()).getDirectoryHandle(projekt);for(const t of pfad.split('/'))d=await d.getDirectoryHandle(t);const out=[];for await(const [name] of d.entries())out.push(name);return out.sort();},[PROJEKT,pfad]);
 
 try{
- for(const viewport of [{width:1366,height:900},{width:390,height:844}]){
+ for(const viewport of [{width:1366,height:900},{width:360,height:740}]){
   const context=await browser.newContext({viewport,timezoneId:'Europe/Berlin'});
   await context.addInitScript(projekt=>{window.showDirectoryPicker=async()=>(await navigator.storage.getDirectory()).getDirectoryHandle(projekt);},PROJEKT);
   const page=await context.newPage();page.setDefaultTimeout(15000);
