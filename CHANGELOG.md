@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.2 · 26.10.2026
+- Asbest nach VDI 3866-5 wie bei Eurofins (je Nachweisgrenze „Asbestgehalt“ in % und „Asbestart“, nicht untersuchte Stufen „-“): Befund kurz als „Chrysotil · 5 - 20 %“ bzw. „Kein Asbest nachgewiesen“ – Art vor Gehalt, mit Einheit, gleiche Texte nur einmal. Ein Gehalt mit Zahl (z. B. „5 - 20“ oder „>1“ %) gilt als nachgewiesen, auch ohne Asbestart.
+
 ## 1.2.1 · 26.10.2026
 - Liefert das Labor denselben Parameter zweimal – je Probe und je Fläche (Eurofins: „Chlorid (Cl)“ in µg/Probe und berechnet in mg/m² bzw. µg/cm²) –, zeigt und bewertet die Übersicht immer den Wert je Fläche. Vorher konnte je nach Reihenfolge in der XML der Wert je Probe erscheinen (z. B. „2800 µg/Probe“ ohne Bewertung).
 - Asbest: leere Zeilen wie „Asbestgehalt: -“ erscheinen nicht mehr im Befund.

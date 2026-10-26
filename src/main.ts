@@ -13,7 +13,7 @@ import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,
 import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,type UGruppe,type UZeile,type Gruppe} from './uebersicht';
 
-export const APP_VERSION='1.2.1';
+export const APP_VERSION='1.2.2';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----

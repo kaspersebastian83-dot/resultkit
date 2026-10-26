@@ -26,11 +26,19 @@ export const FLAECHE=/\/\s*(?:\d+\s*)?(?:c|d)?m\s*(?:2|²)\s*$/i;
 const bevorzugt=<T extends Wert>(werte:T[],re:RegExp):T|null=>{const c=werte.filter(x=>re.test(x.p));return c.find(x=>FLAECHE.test(x.u))||c[0]||null;};
 const NEGATIV=/nicht|kein|negativ|n\.\s*n\.|^<|unter/i;
 
-/** Asbest: Befundtext(e) wie im Bericht; „gefunden“ nur bei eindeutig positivem Wortlaut (sonst neutral angezeigt). */
+/** Asbestgehalt mit Zahl („5 - 20“ %, „> 1“ %) heißt nachgewiesen; „< 0,1“ oder Text wie „n. n.“ nicht. */
+const GEHALT=/^asbestgehalt\b/i,ART=/^asbest(?:art)?\b/i;
+const gehaltPositiv=(w:Wert)=>GEHALT.test(w.p.trim())&&/\d/.test(w.r)&&!/^\s*</.test(w.r)&&!NEGATIV.test(w.r.trim());
+/** Asbest: Befundtext(e) wie im Bericht; „gefunden“ nur bei eindeutig positivem Wortlaut oder Gehalt (sonst neutral angezeigt).
+ *  Eurofins (VDI 3866-5) liefert je Nachweisgrenze „Asbestgehalt“ (%) und „Asbestart“ – nicht untersuchte Stufen als „-“.
+ *  Gezeigt wird z. B. „Chrysotil · 5 - 20 %“ bzw. „Kein Asbest nachgewiesen“: Art vor Gehalt, gleiche Texte nur einmal. */
 export function asbestBefund(werte:Wert[]):{text:string;gefunden:boolean}|null{
  const a=werte.filter(w=>ASBEST.test(w.p)&&!/^[-–—]?$/.test(w.r.trim()));if(!a.length)return null;   // „Asbestgehalt: -“ weglassen
- const text=a.map(w=>/^asbest(?:gehalt)?$/i.test(w.p.trim())?w.r:`${w.p}: ${w.r}`).join(' · ');   // Mineral (Chrysotil …) bleibt genannt
- return {text,gefunden:a.some(w=>POSITIV.test(w.r.trim())&&!NEGATIV.test(w.r.trim()))};
+ const teil=(w:Wert)=>GEHALT.test(w.p.trim())?`${w.r.trim()}${w.u.trim()&&/\d/.test(w.r)?` ${w.u.trim()}`:''}`
+  :ART.test(w.p.trim())?w.r.trim():`${w.p.trim()}: ${w.r.trim()}`;   // Mineral (Chrysotil …, Amphibol-Asbest) bleibt genannt
+ const sortiert=[...a.filter(w=>!GEHALT.test(w.p.trim())),...a.filter(w=>GEHALT.test(w.p.trim()))];
+ const text=[...new Set(sortiert.map(teil))].join(' · ');
+ return {text,gefunden:a.some(w=>(POSITIV.test(w.r.trim())&&!NEGATIV.test(w.r.trim()))||gehaltPositiv(w))};
 }
 function gruppeVon(z:Zeile):Gruppe{
  if(z.typ==='PAK'||z.typ==='Chlorid'||z.typ==='Asbest')return z.typ;
