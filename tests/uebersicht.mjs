@@ -61,6 +61,19 @@ ok('Asbest: leere Zeilen wie „Asbestgehalt: -“ fallen weg',()=>{
  assert.deepEqual(U.asbestBefund([{p:'Asbestgehalt',r:'-',u:''},{p:'Asbest',r:'Kein Asbest nachgewiesen',u:''}]),{text:'Kein Asbest nachgewiesen',gefunden:false});
  assert.deepEqual(U.asbestBefund([{p:'Asbestgehalt',r:'-',u:''},{p:'Chrysotil',r:'nachgewiesen',u:''}]),{text:'Chrysotil: nachgewiesen',gefunden:true},'Mineral bleibt genannt');
 });
+ok('Asbest nach VDI 3866-5 (Eurofins): Asbestgehalt % und Asbestart je Nachweisgrenze, nicht untersuchte Stufen „-“',()=>{
+ const roh=(g1,a1,g2,a2,g3,a3)=>[['Asbestgehalt',g1,'%'],['Asbestart',a1,''],['Asbestgehalt',g2,'%'],['Asbestart',a2,''],['Asbestgehalt',g3,'%'],['Asbestart',a3,'']];
+ const stufen=(...x)=>roh(...x).map(([p,r,u])=>({p,r,u}));
+ assert.deepEqual(U.asbestBefund(stufen('5 - 20','Chrysotil','-','-','-','-')),{text:'Chrysotil · 5 - 20 %',gefunden:true},'positiv bei NWG 1 %');
+ assert.deepEqual(U.asbestBefund(stufen('-','-','-','Kein Asbest nachgewiesen','-','-')),{text:'Kein Asbest nachgewiesen',gefunden:false},'negativ bei NWG 0,1 %');
+ assert.deepEqual(U.asbestBefund(stufen('-','-','-','-','-','Kein Asbest nachgewiesen')),{text:'Kein Asbest nachgewiesen',gefunden:false},'negativ bei NWG 0,001 %');
+ assert.deepEqual(U.asbestBefund(stufen('-','-','-','-','>1','Chrysotil')),{text:'Chrysotil · >1 %',gefunden:true},'positiv bei NWG 0,001 %');
+ assert.equal(U.asbestBefund([{p:'Asbestgehalt',r:'>1',u:'%'}]).gefunden,true,'Gehalt allein reicht');
+ for(const r of ['< 0,1','n. n.','nicht nachweisbar'])assert.equal(U.asbestBefund([{p:'Asbestgehalt',r,u:'%'}]).gefunden,false,r);
+ assert.deepEqual(U.asbestBefund(stufen('-','Kein Asbest nachgewiesen','-','Kein Asbest nachgewiesen','-','-')).text,'Kein Asbest nachgewiesen','gleicher Text nur einmal');
+ const g=U.uebersichtGruppen([z('P11','Garage, Faserzementplatte Dach',roh('5 - 20','Chrysotil','-','-','-','-'),{typ:'Asbest'}),z('P12','Garage, Wandputz',roh('-','-','-','-','-','Kein Asbest nachgewiesen'),{typ:'Asbest'})]);
+ assert.deepEqual(g[0].zeilen.map(x=>[x.befund.text,x.befund.gefunden]),[['Chrysotil · 5 - 20 %',true],['Kein Asbest nachgewiesen',false]]);
+});
 ok('Sortierung nach Ort: Gebäude, Geschoss von unten nach oben, dann Raum; sonst nach Nummer',()=>{
  const zeilen=['P1 DG Bad Decke','P2 EG Küche Wand','P3 KG Heizung Decke','P4 1OG Flur Wand','P5 EG Flur Decke','P6 Haus B EG Lager Wand','P7 2.OG Bad Wand','P8 Garage Decke'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
  assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P8','P6']);
