@@ -7,7 +7,7 @@
     "dev": "node scripts/pdf-assets.mjs && vite --host 127.0.0.1",
     "build": "node scripts/pdf-assets.mjs && tsc --noEmit && vite build && node scripts/build-sw.mjs",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node tests/ergebnisse.mjs && node tests/browser.mjs"
+    "test": "node tests/run.mjs"
   },
   "dependencies": {
     "pdfjs-dist": "6.4.299"
