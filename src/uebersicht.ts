@@ -20,11 +20,15 @@ export interface UGruppe {gruppe:Gruppe;zeilen:UZeile[];einheit:string;mitErgebn
 const SUMME=/^(?:Summe|Σ)\s*16\s*EPA[-– ]?PAK/i,CHLORID=/chlorid/i;
 const ASBEST=/asbest|chrysotil|amosit|krokydolith|tremolit|aktinolith|anthophyllit/i;
 const POSITIV=/nachgewiesen|positiv|enthalten|gefunden|^ja$|chrysotil|amosit|krokydolith|tremolit|aktinolith|anthophyllit/i;
+/** Flächenbezogene Einheit (µg/m², µg/cm², µg/100 cm² …). Liefert das Labor denselben Parameter auch je Probe (z. B. Chlorid
+ *  „µg/Probe“ und „µg/cm² berechnet“), gilt der Wert je Fläche – nur er ist bewertbar. */
+export const FLAECHE=/\/\s*(?:\d+\s*)?(?:c|d)?m\s*(?:2|²)\s*$/i;
+const bevorzugt=<T extends Wert>(werte:T[],re:RegExp):T|null=>{const c=werte.filter(x=>re.test(x.p));return c.find(x=>FLAECHE.test(x.u))||c[0]||null;};
 const NEGATIV=/nicht|kein|negativ|n\.\s*n\.|^<|unter/i;
 
 /** Asbest: Befundtext(e) wie im Bericht; „gefunden“ nur bei eindeutig positivem Wortlaut (sonst neutral angezeigt). */
 export function asbestBefund(werte:Wert[]):{text:string;gefunden:boolean}|null{
- const a=werte.filter(w=>ASBEST.test(w.p));if(!a.length)return null;
+ const a=werte.filter(w=>ASBEST.test(w.p)&&!/^[-–—]?$/.test(w.r.trim()));if(!a.length)return null;   // „Asbestgehalt: -“ weglassen
  const text=a.length===1?a[0].r:a.map(w=>`${w.p}: ${w.r}`).join(' · ');
  return {text,gefunden:a.some(w=>POSITIV.test(w.r.trim())&&!NEGATIV.test(w.r.trim()))};
 }
@@ -50,7 +54,7 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
  const map=new Map<Gruppe,UZeile[]>();
  for(const z of zeilen){
   const g=gruppeVon(z),w=z.werte;
-  const roh=g==='PAK'?(w.find(x=>SUMME.test(x.p))||null):g==='Chlorid'?(w.find(x=>CHLORID.test(x.p))||null):null;
+  const roh=g==='PAK'?bevorzugt(w,SUMME):g==='Chlorid'?bevorzugt(w,CHLORID):null;
   const um=g==='Chlorid'&&roh?chloridInUgCm2(roh):null,haupt=um||roh;
   const gezeigt=roh?[roh]:g==='Asbest'?w.filter(x=>ASBEST.test(x.p)):g==='Weitere'?w.slice(0,2):[];
   const u:UZeile={label:z.label||z.ref,nr:z.nr,stelle:z.desc||z.ref,haupt:haupt?{p:haupt.p,r:haupt.r,u:haupt.u,...(haupt.loq?{loq:haupt.loq}:{})}:null,
