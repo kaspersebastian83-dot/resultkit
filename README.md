@@ -22,7 +22,7 @@ PlanKit, FotoKit und die Projektzentrale lesen nur diese Datei. Die vorige Über
 ## `_Ergebnisse.json` (Format `spektron-ergebnisse`, Version 1)
 
 `projekt` (Nummer), `uebernommen` (ISO-Zeit), `app`, `vollstaendig`, `stand`/`dateien` (Dateistand der Übernahme), `auftrag` (Proben aus LabelKit),
-`berichte` (je Bericht Herkunft wie PlanKits `LabOrigin` plus `proben` wie `LabSample` mit `reportId` und `werte` `{p,r,u,loq}`),
+`berichte` (je Bericht Herkunft wie PlanKits `LabOrigin`, `datum` des Prüfberichts, dazu `proben` wie `LabSample` mit `reportId` und `werte` `{p,r,u,loq}`),
 `ersetzt`, `offen`, `hinweise`. Lesen: `liesErgebnisDatei` in `src/ergebnisse.ts`.
 
 ## Entwicklung

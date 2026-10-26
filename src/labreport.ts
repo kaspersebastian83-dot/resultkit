@@ -4,7 +4,7 @@ import type {LabSample,LabSources} from './model';
 export function sourceFilename(value:string){return value.split(/[\\/]/).at(-1)||'';}
 export interface TextItem {text:string;x:number;y:number;width:number;height:number}
 export interface TextPage {width:number;height:number;items:TextItem[]}
-export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;quelle:string;batch:string;sources:LabSources;rows:LabSample[];expected:number|null;references:string[];warnings:string[];vorlaeufig?:boolean;results:{ref:string;parameter:string;result:string;unit:string;loq:string}[]}
+export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;quelle:string;batch:string;sources:LabSources;rows:LabSample[];expected:number|null;references:string[];warnings:string[];vorlaeufig?:boolean;/** Datum des Prüfberichts (Unterschrift, sonst Bearbeitungsende), JJJJ-MM-TT */datum?:string;results:{ref:string;parameter:string;result:string;unit:string;loq:string}[]}
 export const MAX_WERTE=300;
 const tidy=(s:string)=>s.normalize('NFC').replace(/\s+/g,' ').trim();
 const norm=(s:string)=>tidy(s).toLocaleLowerCase('de').replace(/[^\p{L}\p{N}]/gu,'');
@@ -26,6 +26,7 @@ export function parseLabXML(text:string,quelle=''):LabReport{
  const doc=new DOMParser().parseFromString(text,'application/xml'),root=doc.documentElement;
  if(doc.getElementsByTagNameNS('*','parsererror').length||root.localName!=='AnalyticalReport')throw Error('Keine unterstützte Eurofins-XML. Bitte den PDF-Bericht importieren oder Proben manuell eingeben.');
  const report=blankReport(quelle);report.bericht=tidy(root.getAttribute('AnalyticalReportCode')||'');report.labor='Eurofins';if(root.getAttribute('IsPreliminaryReport')==='true')report.vorlaeufig=true;
+ {const unterschrift=berlinDate(value(root,'SignatureOn')),ende=berlinDate((value(root,'ProcessingTo').split(' ')[0]||''));const d=unterschrift||ende;if(d)report.datum=d;}
  const batches=child(root,'Batches');if(!batches)throw Error('Eurofins-XML enthält keine Batches. Bitte den PDF-Bericht verwenden.');
  const rows:{row:LabSample;order:number;index:number}[]=[];
  for(const batch of children(batches,'Batch')){

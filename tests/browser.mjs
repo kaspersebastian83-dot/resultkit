@@ -101,7 +101,7 @@ try{
    await until(async()=>/✓ Übernommen/.test(await page.locator('.uebernahme').textContent()),'übernommen');
    const datei=JSON.parse(await lies(page,'Laborergebnisse/_Ergebnisse.json'));
    assert.equal(datei.format,'spektron-ergebnisse');assert.equal(datei.projekt,'99.9001');assert.equal(datei.vollstaendig,true);
-   assert.deepEqual(datei.berichte.map(b=>b.bericht),['AR-1-02']);assert.deepEqual(datei.ersetzt,[{bericht:'AR-1-01',durch:['AR-1-02']}]);
+   assert.deepEqual(datei.berichte.map(b=>b.bericht),['AR-1-02']);assert.equal(datei.berichte[0].datum,'2026-10-12');assert.deepEqual(datei.ersetzt,[{bericht:'AR-1-01',durch:['AR-1-02']}]);
    assert.equal(datei.berichte[0].proben.length,4);assert.equal(datei.berichte[0].proben[0].reportId,datei.berichte[0].id);
    assert.deepEqual(datei.offen,[]);assert.equal(datei.auftrag.proben.length,4);
    assert.equal(await page.getByRole('button',{name:'Erneut übernehmen'}).count(),1);

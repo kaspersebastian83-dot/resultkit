@@ -199,7 +199,7 @@ function berichtKarte(b:Bericht){
  const alle=[...new Map(proben.flatMap(p=>p.werte||[]).map(w=>[`${w.p}|${w.u}`,w])).values()];
  const zelle=(werte:Wert[]|undefined,p:string,u:string)=>{const w=(werte||[]).find(x=>x.p===p&&x.u===u);return w?wertZelle(w):'<span class="muted">–</span>';};
  const kopf=`<span class="eyebrow">PRÜFBERICHT</span><h3>${esc(b.bericht||b.sources.xml||b.sources.pdf||'ohne Nummer')} <span class="badge ${zustand[1]}">${zustand[0]}</span></h3>
-  <p class="meta">${proben.length} Probe${proben.length===1?'':'n'}${daten.length?` · Probenahme ${daten.map(datum).join(' – ')}`:''}${b.auftragsreferenz?` · Auftragsreferenz „${esc(b.auftragsreferenz)}“`:''} · ${[b.sources.xml?`XML ✓`:'XML fehlt',b.sources.pdf?'PDF ✓':'ohne PDF'].join(' · ')} · Datei vom ${esc(uhr(b.geaendert))}</p>`;
+  <p class="meta">${b.datum?`Bericht vom ${datum(b.datum)} · `:''}${proben.length} Probe${proben.length===1?'':'n'}${daten.length?` · Probenahme ${daten.map(datum).join(' – ')}`:''}${b.auftragsreferenz?` · Auftragsreferenz „${esc(b.auftragsreferenz)}“`:''} · ${[b.sources.xml?`XML ✓`:'XML fehlt',b.sources.pdf?'PDF ✓':'ohne PDF'].join(' · ')} · Datei vom ${esc(uhr(b.geaendert))}</p>`;
  const hinweise=b.hinweise.length?`<ul class="bericht-hinweise">${b.hinweise.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:'';
  if(b.ersetztDurch)return `<article class="bericht ersetzt"><details><summary>${kopf}</summary>${hinweise}</details></article>`;
  const tabelle=proben.length?`<div class="tabelle-scroll"><table class="werte-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">Beschreibung</th>${spalten.map(w=>`<th scope="col">${esc(shortParameter(w.p))}<small>${esc(w.u)}</small></th>`).join('')}</tr></thead>
