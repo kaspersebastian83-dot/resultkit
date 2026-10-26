@@ -3,6 +3,7 @@
 // die Bewertung nach Skala macht main.ts mit denselben Skalen wie in der Prüfansicht.
 import type {Zeile} from './ergebnisse';
 import type {Wert} from './model';
+import {chloridEinheit,labNumber} from './bewertung';
 
 export type Gruppe='PAK'|'Chlorid'|'Asbest'|'Weitere';
 export const GRUPPEN:Gruppe[]=['PAK','Chlorid','Asbest','Weitere'];
@@ -10,7 +11,10 @@ export interface UZeile {label:string;nr:number|null;stelle:string;
  /** Hauptwert (PAK: Σ16 EPA-PAK, Chlorid: Chlorid); null = noch kein Wert */haupt:Wert|null;
  /** Asbest: Befund wie im Prüfbericht; gefunden = Asbest nachgewiesen */befund:{text:string;gefunden:boolean}|null;
  /** Weitere Proben: bis zu zwei Werte */weitere:Wert[];
- ausstehend:boolean;vorlaeufig:boolean;nichtBeauftragt:boolean}
+ ausstehend:boolean;vorlaeufig:boolean;nichtBeauftragt:boolean;
+ /** Prüfberichte, aus denen die gezeigten Werte stammen */berichte:string[];
+ /** Chlorid umgerechnet: Wert wie im Bericht, z. B. „45 mg/m²“ */original?:string;
+ /** Wert für die Bewertung – wie im Bericht (eine im Projekt angepasste Skala gilt für dessen Einheit) */bewertet:Wert|null}
 export interface UGruppe {gruppe:Gruppe;zeilen:UZeile[];einheit:string;mitErgebnis:number}
 
 const SUMME=/^(?:Summe|Σ)\s*16\s*EPA[-– ]?PAK/i,CHLORID=/chlorid/i;
@@ -32,15 +36,27 @@ function gruppeVon(z:Zeile):Gruppe{
  if(z.werte.some(w=>ASBEST.test(w.p)))return 'Asbest';
  return 'Weitere';
 }
+/** Chlorid einheitlich in µg/cm² (ältere Berichte in mg/m²: 1 µg/cm² = 10 mg/m²); „< 0,5“ bleibt „< 0,05“. */
+export function chloridInUgCm2(w:Wert):Wert|null{
+ const f=chloridEinheit(w.u);if(!f)return null;if(f===1)return {...w,u:'µg/cm²'};
+ const zahl=(x:number)=>x.toLocaleString('de-DE',{maximumFractionDigits:4});
+ const loq=w.loq&&Number.isFinite(labNumber(w.loq))?{loq:zahl(labNumber(w.loq)/f)}:{};
+ const m=/^(<\s*)?(.*)$/.exec(w.r.trim())!,n=labNumber(m[2]);
+ if(!Number.isFinite(n))return {p:w.p,r:w.r,u:'µg/cm²',...loq};   // „unter BG“, „n. n.“: Text bleibt, Einheit und BG umgerechnet
+ return {p:w.p,r:`${m[1]?'< ':''}${zahl(n/f)}`,u:'µg/cm²',...loq};
+}
 /** Zeilen der Prüfung → Gruppen der Übersicht (leere Gruppen fallen weg). */
 export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
  const map=new Map<Gruppe,UZeile[]>();
  for(const z of zeilen){
   const g=gruppeVon(z),w=z.werte;
-  const haupt=g==='PAK'?(w.find(x=>SUMME.test(x.p))||null):g==='Chlorid'?(w.find(x=>CHLORID.test(x.p))||null):null;
+  const roh=g==='PAK'?(w.find(x=>SUMME.test(x.p))||null):g==='Chlorid'?(w.find(x=>CHLORID.test(x.p))||null):null;
+  const um=g==='Chlorid'&&roh?chloridInUgCm2(roh):null,haupt=um||roh;
+  const gezeigt=roh?[roh]:g==='Asbest'?w.filter(x=>ASBEST.test(x.p)):g==='Weitere'?w.slice(0,2):[];
   const u:UZeile={label:z.label||z.ref,nr:z.nr,stelle:z.desc||z.ref,haupt:haupt?{p:haupt.p,r:haupt.r,u:haupt.u,...(haupt.loq?{loq:haupt.loq}:{})}:null,
    befund:g==='Asbest'?asbestBefund(w):null,weitere:g==='Weitere'?w.slice(0,2).map(x=>({p:x.p,r:x.r,u:x.u})):[],   // PAK/Chlorid ohne Hauptwert: nichts Fremdes in die Spalte
-   ausstehend:z.status==='offen'||z.status==='ohneWerte',vorlaeufig:z.status==='vorlaeufig',nichtBeauftragt:z.status==='nichtBeauftragt'};
+   ausstehend:z.status==='offen'||z.status==='ohneWerte',vorlaeufig:z.status==='vorlaeufig',nichtBeauftragt:z.status==='nichtBeauftragt',
+   berichte:[...new Set(gezeigt.map(x=>x.bericht).filter(Boolean))],bewertet:roh?{p:roh.p,r:roh.r,u:roh.u,...(roh.loq?{loq:roh.loq}:{})}:null,...(um&&roh&&roh.u!==um.u?{original:`${roh.r} ${roh.u}`}:{})};
   map.set(g,[...(map.get(g)||[]),u]);
  }
  return GRUPPEN.filter(g=>map.has(g)).map(g=>{const z=map.get(g)!;const einheiten=z.map(x=>x.haupt?.u).filter(Boolean) as string[];

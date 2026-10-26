@@ -88,7 +88,7 @@ try{
    const ersetzt=page.locator('.bericht.ersetzt');assert.equal(await ersetzt.count(),1);assert.match(await ersetzt.textContent(),/AR-1-01.*ersetzt/s);
   });
 
-  await check(`${w}: Bewertung – Σ16 EPA-PAK nach VdS (Wohnen), BG neutral markiert, Legende ohne erfundene Skala`,async()=>{
+  await check(`${w}: Bewertung – Σ16 EPA-PAK nach VdS (Wohnen), BG neutral markiert, Chlorid nach VdS 2357`,async()=>{
    const p1=page.locator('table.proben tbody tr').nth(0).locator('.wert').first();
    assert.match(await p1.textContent(),/Σ16 EPA-PAK\s*14/);
    assert.equal(await p1.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(224, 69, 58)');
@@ -96,7 +96,7 @@ try{
    assert.equal(await p2.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(76, 175, 80)');
    assert.match(await page.locator('#legende').textContent(),/VdS 2357.*Wohn/);
    const chlorid=page.locator('table.proben tbody tr').nth(3).locator('.wert').first();
-   assert.equal(await chlorid.evaluate(e=>e.classList.contains('bewertet')),false,'Chlorid ohne Skala bleibt unbewertet');
+   assert.equal(await chlorid.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(224, 69, 58)','Chlorid 26 µg/cm²: oberhalb von 5–10 µg/cm² (VdS 2357)');
   });
 
   await check(`${w}: Alle Parameter aufklappbar`,async()=>{
@@ -108,14 +108,21 @@ try{
   await check(`${w}: Übersicht – nur Σ16 EPA-PAK, ruhige Bewertung, Filter „Nur auffällige“, Sortierung`,async()=>{
    await page.getByRole('tab',{name:'Übersicht'}).click();
    const pak=page.locator('.u-gruppe').first();
-   assert.deepEqual(await pak.locator('thead th').allTextContents(),['Probe','Probenahmestelle','Σ16 EPA-PAK (µg/m²)','Bewertung']);
-   assert.doesNotMatch(await pak.textContent(),/BaP|Benzo/);
+   assert.deepEqual(await pak.locator('thead th').allTextContents(),['Probe','Probenahmestelle','Σ16 EPA-PAK (µg/m²)'],'drei Spalten, Bewertung als Farbe des Werts');
+   assert.match(await pak.locator('h2').textContent(),/Prüfbericht AR-1-02 vom 12\.10\.2026/);
+   assert.match(await pak.locator('.u-legende').textContent(),/VdS 2357.*unter Referenzwert.*Referenzwert erreicht\/überschritten/s);
+   assert.doesNotMatch(await pak.locator('tbody').textContent(),/BaP|Benzo/);
    const chip=pak.locator('tbody tr').first().locator('.u-chip').first();
-   assert.equal(await chip.textContent(),'Referenzwert erreicht/überschritten');
-   const [bg,fg]=await chip.evaluate(e=>[getComputedStyle(e).backgroundColor,getComputedStyle(e).color]);
-   assert.notEqual(bg,'rgb(224, 69, 58)','keine Vollfarbe');assert.match(bg,/^(rgb|color)/);
+   assert.equal(await chip.textContent(),'14');assert.match(await chip.getAttribute('title'),/Referenzwert erreicht/);
+   const [bg]=await chip.evaluate(e=>[getComputedStyle(e).backgroundColor]);
+   assert.notEqual(bg,'rgb(224, 69, 58)','keine Vollfarbe');
+   // Chlorid: VdS 2357, 5–10 µg/cm² korrosionschemisch relevant – 26 µg/cm² liegt darüber
+   const cl=page.locator('.u-gruppe').nth(1);
+   assert.deepEqual(await cl.locator('thead th').allTextContents(),['Probe','Probenahmestelle','Chlorid (µg/cm²)']);
+   assert.match(await cl.locator('.u-legende').textContent(),/unterhalb.*< 5 µg\/cm².*im Bereich.*5 – < 10 µg\/cm².*oberhalb.*≥ 10 µg\/cm²/s);
+   const clChip=cl.locator('tbody .u-chip').first();assert.equal(await clChip.textContent(),'26');assert.match(await clChip.getAttribute('title'),/oberhalb/);
    await page.getByRole('button',{name:'Nur auffällige'}).click();
-   assert.deepEqual(await pak.locator('tbody th').allTextContents(),['P1']);
+   assert.deepEqual(await pak.locator('tbody th').allTextContents(),['P1']);assert.deepEqual(await cl.locator('tbody th').allTextContents(),['P4'],'Chlorid oberhalb ist auffällig');
    await page.getByRole('button',{name:'Alle'}).click();
    await page.locator('#u-sort').selectOption('nr');assert.deepEqual(await pak.locator('tbody th').allTextContents(),['P1','P2','P3']);
    await page.getByRole('tab',{name:/Prüfung und Import/}).click();

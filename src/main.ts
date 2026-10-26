@@ -13,7 +13,7 @@ import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,
 import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,type UGruppe,type UZeile,type Gruppe} from './uebersicht';
 
-export const APP_VERSION='1.1.0';
+export const APP_VERSION='1.2.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -140,7 +140,7 @@ async function planEinstellungen(f:ProjectFolder):Promise<ResultSettings|null>{
 function skala(p:string,u:string):{scale?:Scale;quelle:string}{
  const settings=einstellungen??{usage:usageFromNutzung()},r=scaleFor(settings,p,u);
  if(r.scale&&Array.isArray(r.scale.cats)&&r.scale.cats.length){const farben=autoColors(r.scale.cats.length);
-  return {scale:{name:r.scale.name,cats:r.scale.cats.map((c,i)=>({...c,color:c.color||farben[i]}))},quelle:r.vds?(r.angepasst?'VdS 2357, in PlanKit angepasst':einstellungen?'VdS 2357 (Nutzung aus PlanKit)':`VdS 2357 (Nutzung „${getNutzung()}“)`):'Skala aus PlanKit'};}
+  return {scale:{name:r.scale.name,cats:r.scale.cats.map((c,i)=>({...c,color:c.color||farben[i]}))},quelle:r.vds?(r.angepasst?'VdS 2357, in PlanKit angepasst':/^Chlorid/i.test(p)?'VdS 2357, Chlorid':einstellungen?'VdS 2357 (Nutzung aus PlanKit)':`VdS 2357 (Nutzung „${getNutzung()}“)`):'Skala aus PlanKit'};}
  const s=fromShared(scaleKey(p,u));return s?{scale:s,quelle:'Büro-Skala'}:{quelle:''};
 }
 const genutzt=new Map<string,{p:string;u:string;scale:Scale;quelle:string}>();
@@ -190,7 +190,7 @@ function bewertung(w:Wert):{text:string;farbe:string;index:number;titel:string}|
 /** Ruhige Pastellfarben statt Vollfarbe: helle Fläche, dunkle Schrift aus derselben Farbe. */
 const pastell=(farbe:string,inhalt:string,titel='')=>`<span class="u-chip" style="--c:${farbe}"${titel?` title="${esc(titel)}"`:''}>${inhalt}</span>`;
 const ASBEST_ROT='#d0453a';
-const auffaellig=(z:UZeile)=>!!(z.befund?.gefunden||(z.haupt&&(bewertung(z.haupt)?.index??0)>0));
+const auffaellig=(z:UZeile)=>!!(z.befund?.gefunden||(z.bewertet&&(bewertung(z.bewertet)?.index??0)>0));
 const GTITEL:Record<Gruppe,string>={PAK:'PAK',Chlorid:'Chlorid',Asbest:'Asbest',Weitere:'Weitere Proben'};
 function renderUebersicht(s:Scan){
  const gruppen=uebersichtGruppen(s.u.zeilen),nach=($('u-sort') as HTMLSelectElement).value as 'ort'|'nr';
@@ -203,27 +203,37 @@ function renderUebersicht(s:Scan){
   const vorl=g.zeilen.filter(z=>z.vorlaeufig).length;
   const teile=[g.gruppe==='Asbest'?`${auff} Asbest nachgewiesen`:auff?`${auff} auffällig`:'',vorl?`${vorl} vorläufig`:'',offen?`${offen} offen`:'',!offen&&!auff&&!vorl?'alle mit Ergebnis':''].filter(Boolean);
   return `<div class="u-kachel"><span class="u-k-name">${esc(GTITEL[g.gruppe])}</span><span class="u-k-zahl">${g.mitErgebnis} / ${n}</span><span class="u-k-text">${esc(teile.join(' · '))}</span></div>`;}).join('');
- $('u-tabellen').innerHTML=gruppen.map(g=>uTabelle(g,nach)).join('');
+ $('u-tabellen').innerHTML=gruppen.map(g=>uTabelle(g,nach,s.u.berichte)).join('');
  document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===filter)));
 }
-function uTabelle(g:UGruppe,nach:'ort'|'nr'){
+/** Prüfberichte einer Tabelle mit Datum, z. B. „Prüfbericht AR-1-01 vom 12.10.2026“ oder „Prüfberichte AR-1-01 (12.10.), AR-1-04 (vorläufig, 20.10.)“. */
+function berichtZeile(codes:string[],berichte:Bericht[]){
+ const b=codes.map(c=>berichte.find(x=>x.bericht===c)).filter(Boolean) as Bericht[];if(!b.length)return '';
+ if(b.length===1)return `Prüfbericht ${b[0].bericht}${b[0].vorlaeufig?' (vorläufig)':''}${b[0].datum?` vom ${datum(b[0].datum)}`:''}`;
+ return `Prüfberichte ${b.map(x=>`${x.bericht}${x.vorlaeufig||x.datum?` (${[x.vorlaeufig?'vorläufig':'',x.datum?datum(x.datum).slice(0,6):''].filter(Boolean).join(', ')})`:''}`).join(', ')}`;
+}
+function uTabelle(g:UGruppe,nach:'ort'|'nr',berichte:Bericht[]){
  let zeilen=sortiere(g.zeilen,nach);
  if(filter==='offen')zeilen=zeilen.filter(z=>z.ausstehend);else if(filter==='auff')zeilen=zeilen.filter(auffaellig);
- const wert=(w:Wert|null)=>w?`${esc(w.r)}${w.u&&w.u!==g.einheit?` <small>${esc(w.u)}</small>`:''}`:'';
  const hinweis=(z:UZeile)=>z.ausstehend?'<span class="u-aus">ausstehend</span>':`${z.vorlaeufig?' <small class="u-vorl">vorläufig</small>':''}${z.nichtBeauftragt?' <small class="u-nb" title="Steht im Prüfbericht, aber nicht im Laborauftrag aus LabelKit">nicht beauftragt</small>':''}`;
- const skalen=[...new Set(g.zeilen.map(z=>z.haupt&&labQualifier(z.haupt.r)==='measured'?skala(z.haupt.p,z.haupt.u):null).filter(x=>x?.scale).map(x=>`${x!.scale!.name}`))];
- const mitBewertung=(g.gruppe==='PAK'||g.gruppe==='Chlorid')&&g.zeilen.some(z=>z.haupt&&bewertung(z.haupt));
- const kopf=g.gruppe==='PAK'?['Σ16 EPA-PAK'+(g.einheit?` (${g.einheit})`:'')]:g.gruppe==='Chlorid'?['Chlorid'+(g.einheit?` (${g.einheit})`:'')]:g.gruppe==='Asbest'?['Befund']:['Ergebnis'];
- const unter=g.gruppe==='PAK'||g.gruppe==='Chlorid'?(skalen.length?`Bewertung: ${skalen.join(', ')}`:'ohne Bewertungsskala'):g.gruppe==='Asbest'?'Befund wie im Prüfbericht':'';
- const leer=`<tr><td colspan="${3+(mitBewertung?1:0)}" class="muted">${filter==='offen'?'Keine offenen Proben.':filter==='auff'?'Keine auffälligen Proben.':''}</td></tr>`;
- const zeile=(z:UZeile)=>{let erg='',bew='';
+ // Legende: die Kategorien der verwendeten Skalen mit Bereich – die Werte selbst tragen die Farbe
+ const skalen=new Map<string,{scale:Scale;u:string}>();let bg=false;
+ for(const z of g.zeilen)if(z.bewertet){const w=z.bewertet,q=labQualifier(w.r);if(q==='below'||q==='notDetected')bg=true;if(q==='measured'){const k=skala(w.p,w.u);if(k.scale)skalen.set(`${k.scale.name}|${w.u}`,{scale:k.scale,u:w.u});}}
+ const legende=g.gruppe==='Asbest'?`<p class="u-legende">Befund wie im Prüfbericht · ${pastell(ASBEST_ROT,'Asbest nachgewiesen')}</p>`
+  :(g.gruppe==='PAK'||g.gruppe==='Chlorid')?(skalen.size?[...skalen.values()].map(({scale,u})=>`<p class="u-legende">${esc(scale.name)}: ${scale.cats.map((c,i)=>pastell(c.color||UNRATED,`${esc(c.name)} <small>${esc(rangeText(scale,i,u))}</small>`)).join(' ')}${bg?` ${pastell(BELOW_LIMIT,'&lt; BG')}`:''}</p>`).join(''):'<p class="u-legende">ohne Bewertungsskala</p>'):'';
+ const codes=[...new Set(g.zeilen.flatMap(z=>z.berichte))];
+ const kopf=g.gruppe==='PAK'?`Σ16 EPA-PAK${g.einheit?` (${g.einheit})`:''}`:g.gruppe==='Chlorid'?`Chlorid${g.einheit?` (${g.einheit})`:''}`:g.gruppe==='Asbest'?'Befund':'Ergebnis';
+ const leer=`<tr><td colspan="3" class="muted">${filter==='offen'?'Keine offenen Proben.':filter==='auff'?'Keine auffälligen Proben.':''}</td></tr>`;
+ const zeile=(z:UZeile)=>{let erg='';
   if(g.gruppe==='Asbest')erg=z.befund?(z.befund.gefunden?pastell(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen'):esc(z.befund.text)):'';
   else if(g.gruppe!=='Weitere'&&!z.haupt)erg=z.ausstehend?'':`<span class="u-aus">kein ${g.gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
   else if(g.gruppe==='Weitere')erg=z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
-  else if(z.haupt){erg=`<span class="u-wert">${wert(z.haupt)}</span>`;const b=bewertung(z.haupt);if(b){bew=pastell(b.farbe,esc(b.text),b.titel);erg+=`<span class="u-mobil">${bew}</span>`;}}
-  return `<tr${z.ausstehend?' class="u-offen"':''}><th scope="row">${esc(z.label)}</th><td>${esc(z.stelle)}</td><td>${erg}${hinweis(z)}</td>${mitBewertung?`<td class="u-bew">${bew}</td>`:''}</tr>`;};
- return `<section class="u-gruppe" aria-label="${esc(GTITEL[g.gruppe])}"><h2>${esc(GTITEL[g.gruppe])} <small>${g.zeilen.length} Probe${g.zeilen.length===1?'':'n'}${unter?` · ${esc(unter)}`:''}</small></h2>
-  <div class="tabelle-scroll"><table class="u-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">${g.gruppe==='Asbest'?'Material und Stelle':'Probenahmestelle'}</th><th scope="col">${esc(kopf[0])}</th>${mitBewertung?'<th scope="col" class="u-bew">Bewertung</th>':''}</tr></thead>
+  else if(z.haupt){const w=z.haupt,b=z.bewertet?bewertung(z.bewertet):null,text=`${esc(w.r)}${w.u&&w.u!==g.einheit?` <small>${esc(w.u)}</small>`:''}`;
+   const titel=[b?.text,z.original?`laut Bericht ${z.original}`:''].filter(Boolean).join(' · ');
+   erg=b?pastell(b.farbe,`<span class="u-wert">${text}</span>`,titel):`<span class="u-wert"${titel?` title="${esc(titel)}"`:''}>${text}</span>`;}
+  return `<tr${z.ausstehend?' class="u-offen"':''}><th scope="row">${esc(z.label)}</th><td>${esc(z.stelle)}</td><td>${erg}${hinweis(z)}</td></tr>`;};
+ return `<section class="u-gruppe" aria-label="${esc(GTITEL[g.gruppe])}"><h2>${esc(GTITEL[g.gruppe])} <small>${g.zeilen.length} Probe${g.zeilen.length===1?'':'n'}${codes.length?` · ${esc(berichtZeile(codes,berichte))}`:''}</small></h2>${legende}
+  <div class="tabelle-scroll"><table class="u-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">${g.gruppe==='Asbest'?'Material und Stelle':'Probenahmestelle'}</th><th scope="col">${esc(kopf)}</th></tr></thead>
   <tbody>${zeilen.map(zeile).join('')||leer}</tbody></table></div></section>`;
 }
 function uebernahmeText(s:Scan){
