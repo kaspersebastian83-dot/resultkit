@@ -65,6 +65,18 @@ export function vdsScale(parameter:string,unit:string,usage:ResultSettings['usag
  const label=usage==='industrial'?'Industrie':nutzung==='Gesundheit & Labor'?'Gesundheit & Labor, Referenz < 10 µg/m²':'Wohn-/Büroräume';
  return {name:`VdS 2357 · ${label} · Hintergrundreferenz`,cats:[{name:'unter Referenzwert',from:0,color:'#4caf50'},{name:'Referenzwert erreicht/überschritten',from:limit,color:'#e0453a'}]};
 }
+/* ===== KORROSION-CHLORID v1 – in ResultKit, PlanKit (TypeScript) und FotoKit (JavaScript) gleich halten =====
+   Chlorid auf Oberflächen: VdS 2357 nennt 5–10 µg/cm² als korrosionschemisch relevante Größenordnung (Vorgabe des Büros).
+   Gilt unabhängig von der Nutzung. Die Grenzen werden in die Einheit des Berichts umgerechnet (1 µg/cm² = 10 mg/m²),
+   damit ältere Berichte in mg/m² gleich bewertet werden. Wie die PAK-Referenz in PlanKit anpassbar (dann nur im Projekt). */
+export const CHLORID_JE_UG_CM2:Record<string,number>={'µg/cm2':1,'mg/m2':10,'µg/m2':10000,'mg/cm2':.001,'µg/100cm2':100,'mg/dm2':.1};
+export const chloridEinheit=(unit:string)=>CHLORID_JE_UG_CM2[unit.replace(/μ/g,'µ').replace(/²/g,'2').replace(/\s+/g,'').toLowerCase()];
+export function chloridScale(parameter:string,unit:string):Scale|undefined{
+ const f=/^Chlorid\b/i.test(parameter.trim())?chloridEinheit(unit):undefined;if(!f)return;
+ return {name:'VdS 2357 · Chlorid · korrosionschemisch relevant 5–10 µg/cm²',cats:[{name:'unterhalb der korrosionschemisch relevanten Größenordnung',from:0,color:'#4caf50'},
+  {name:'im Bereich der korrosionschemisch relevanten Größenordnung',from:5*f,color:'#f0a030'},{name:'oberhalb der korrosionschemisch relevanten Größenordnung',from:10*f,color:'#e0453a'}]};
+}
+/* ===== Ende KORROSION-CHLORID v1 ===== */
 export function shortParameter(p:string){return p.replace(/^Summe 16 EPA-PAK.*$/i,'Σ16 EPA-PAK').replace(/^Benzo\[a\]pyren$/i,'BaP');}
 
 /** Index der Kategorie: letzte Kategorie, deren „ab“-Wert erreicht ist (wie in FotoKit). */
@@ -84,7 +96,7 @@ export function fromShared(key:string):Scale|null{
  *  und Einheit eine VdS-Referenz, gilt sie – außer sie wurde im Projekt angepasst. Sonst gilt die eigene Skala des Projekts.
  *  Beide bleiben bearbeitbar; keine Skala wird erfunden. */
 export function scaleFor(settings:ResultSettings|undefined,parameter:string,unit:string):{scale?:Scale;vds?:Scale;angepasst:boolean}{
-  const key=scaleKey(parameter,unit),vds=settings?.usage?vdsScale(parameter,unit,settings.usage):undefined;
+  const key=scaleKey(parameter,unit),vds=(settings?.usage?vdsScale(parameter,unit,settings.usage):undefined)??chloridScale(parameter,unit);   // Chlorid-Referenz gilt ohne Nutzung
   if(vds){const eigen=settings?.vds?.[key];return {scale:eigen||vds,vds,angepasst:!!eigen};}
   return {scale:settings?.scales?.[key],angepasst:false};
 }

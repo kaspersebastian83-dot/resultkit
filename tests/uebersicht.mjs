@@ -40,6 +40,12 @@ ok('Geschoss mit Leerzeichen: „1. OG“ und „OG 2“',()=>{
  const zeilen=['P1 Haus A DG Bad','P2 Haus A 1. OG Flur','P3 Haus A EG Küche','P4 Haus A OG 2 Bad','P5 Haus A KG Lager'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
  assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P5','P3','P2','P4','P1']);
 });
+ok('Chlorid in µg/cm²: ältere Berichte in mg/m² umgerechnet (1 µg/cm² = 10 mg/m²), Bericht der Werte bekannt',()=>{
+ const g=U.uebersichtGruppen([z('P1','EG',[['Chlorid','45','mg/m²']],{typ:'Chlorid'}),z('P2','EG',[['Chlorid','< 0,5','mg/m²']],{typ:'Chlorid'}),z('P3','EG',[['Chlorid','7,2','µg/cm²']],{typ:'Chlorid'})]);
+ const r=g[0].zeilen.map(x=>[x.haupt.r,x.haupt.u,x.original||'']);
+ assert.deepEqual(r,[['4,5','µg/cm²','45 mg/m²'],['< 0,05','µg/cm²','< 0,5 mg/m²'],['7,2','µg/cm²','']]);
+ assert.equal(g[0].einheit,'µg/cm²');assert.deepEqual(g[0].zeilen[0].berichte,['AR']);
+});
 ok('Sortierung nach Ort: Gebäude, Geschoss von unten nach oben, dann Raum; sonst nach Nummer',()=>{
  const zeilen=['P1 DG Bad Decke','P2 EG Küche Wand','P3 KG Heizung Decke','P4 1OG Flur Wand','P5 EG Flur Decke','P6 Haus B EG Lager Wand','P7 2.OG Bad Wand','P8 Garage Decke'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
  assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P8','P6']);
