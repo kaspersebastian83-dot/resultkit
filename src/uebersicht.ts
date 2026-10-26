@@ -13,7 +13,8 @@ export interface UZeile {label:string;nr:number|null;stelle:string;
  /** Weitere Proben: bis zu zwei Werte */weitere:Wert[];
  ausstehend:boolean;vorlaeufig:boolean;nichtBeauftragt:boolean;
  /** Prüfberichte, aus denen die gezeigten Werte stammen */berichte:string[];
- /** Chlorid umgerechnet: Wert wie im Bericht, z. B. „45 mg/m²“ */original?:string}
+ /** Chlorid umgerechnet: Wert wie im Bericht, z. B. „45 mg/m²“ */original?:string;
+ /** Wert für die Bewertung – wie im Bericht (eine im Projekt angepasste Skala gilt für dessen Einheit) */bewertet:Wert|null}
 export interface UGruppe {gruppe:Gruppe;zeilen:UZeile[];einheit:string;mitErgebnis:number}
 
 const SUMME=/^(?:Summe|Σ)\s*16\s*EPA[-– ]?PAK/i,CHLORID=/chlorid/i;
@@ -38,9 +39,11 @@ function gruppeVon(z:Zeile):Gruppe{
 /** Chlorid einheitlich in µg/cm² (ältere Berichte in mg/m²: 1 µg/cm² = 10 mg/m²); „< 0,5“ bleibt „< 0,05“. */
 export function chloridInUgCm2(w:Wert):Wert|null{
  const f=chloridEinheit(w.u);if(!f)return null;if(f===1)return {...w,u:'µg/cm²'};
- const m=/^(<\s*)?(.*)$/.exec(w.r.trim())!,n=labNumber(m[2]);if(!Number.isFinite(n))return null;
  const zahl=(x:number)=>x.toLocaleString('de-DE',{maximumFractionDigits:4});
- return {p:w.p,r:`${m[1]?'< ':''}${zahl(n/f)}`,u:'µg/cm²',...(w.loq&&Number.isFinite(labNumber(w.loq))?{loq:zahl(labNumber(w.loq)/f)}:{})};
+ const loq=w.loq&&Number.isFinite(labNumber(w.loq))?{loq:zahl(labNumber(w.loq)/f)}:{};
+ const m=/^(<\s*)?(.*)$/.exec(w.r.trim())!,n=labNumber(m[2]);
+ if(!Number.isFinite(n))return {p:w.p,r:w.r,u:'µg/cm²',...loq};   // „unter BG“, „n. n.“: Text bleibt, Einheit und BG umgerechnet
+ return {p:w.p,r:`${m[1]?'< ':''}${zahl(n/f)}`,u:'µg/cm²',...loq};
 }
 /** Zeilen der Prüfung → Gruppen der Übersicht (leere Gruppen fallen weg). */
 export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
@@ -53,7 +56,7 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
   const u:UZeile={label:z.label||z.ref,nr:z.nr,stelle:z.desc||z.ref,haupt:haupt?{p:haupt.p,r:haupt.r,u:haupt.u,...(haupt.loq?{loq:haupt.loq}:{})}:null,
    befund:g==='Asbest'?asbestBefund(w):null,weitere:g==='Weitere'?w.slice(0,2).map(x=>({p:x.p,r:x.r,u:x.u})):[],   // PAK/Chlorid ohne Hauptwert: nichts Fremdes in die Spalte
    ausstehend:z.status==='offen'||z.status==='ohneWerte',vorlaeufig:z.status==='vorlaeufig',nichtBeauftragt:z.status==='nichtBeauftragt',
-   berichte:[...new Set(gezeigt.map(x=>x.bericht).filter(Boolean))],...(um&&roh&&roh.u!==um.u?{original:`${roh.r} ${roh.u}`}:{})};
+   berichte:[...new Set(gezeigt.map(x=>x.bericht).filter(Boolean))],bewertet:roh?{p:roh.p,r:roh.r,u:roh.u,...(roh.loq?{loq:roh.loq}:{})}:null,...(um&&roh&&roh.u!==um.u?{original:`${roh.r} ${roh.u}`}:{})};
   map.set(g,[...(map.get(g)||[]),u]);
  }
  return GRUPPEN.filter(g=>map.has(g)).map(g=>{const z=map.get(g)!;const einheiten=z.map(x=>x.haupt?.u).filter(Boolean) as string[];
