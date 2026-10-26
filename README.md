@@ -6,6 +6,8 @@ Teil der Spektron-Apps (LabelKit → FotoKit → **ResultKit** → PlanKit → B
 - **was zurück ist** – die Prüfberichte im Ordner `Laborergebnisse` (Eurofins-XML, dazu die PDF zum Abgleich),
 - **was noch fehlt** – Proben ohne Ergebnis, nur vorläufige Werte, Proben im Bericht, die nicht beauftragt waren.
 
+**Übersicht (ab 1.1):** Startansicht mit den Ergebnissen auf einen Blick – je Probenart eine Kachel und eine einfache Tabelle (Probe · Probenahmestelle aus LabelKit · Ergebnis; PAK als Σ16 EPA-PAK mit Bewertung, Chlorid mit Wert, Asbest mit Befund). Filter „Nur auffällige“ / „Nur offene“, Sortierung nach Ort oder Probennummer. Alles Technische steht unter „Prüfung und Import“.
+
 Neue Prüfberichte werden **nur hier** importiert: ResultKit legt eine unveränderte Kopie in `Laborergebnisse` ab (nichts wird überschrieben).
 Nach der Prüfung schreibt **„Ergebnisse übernehmen“** die geltenden Werte nach `Laborergebnisse/_Ergebnisse.json`.
 PlanKit, FotoKit und die Projektzentrale lesen nur diese Datei. Die vorige Übernahme bleibt als `_Ergebnisse.vorher.json` erhalten.

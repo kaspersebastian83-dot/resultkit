@@ -51,6 +51,15 @@ try{
   await check(`${w}: Projekt öffnen – Auftrag aus LabelKit gegen vorläufigen Bericht`,async()=>{
    await page.getByRole('button',{name:'📁 Projektordner öffnen'}).click();
    await until(async()=>(await stand.textContent())?.includes('von 4'),'Stand');
+   // Zuerst die Übersicht: je Probenart eine Tabelle, LabelKit-Bezeichnung, vorläufige und offene Proben bleiben stehen
+   assert.equal(await page.getByRole('tab',{name:'Übersicht'}).getAttribute('aria-selected'),'true');
+   assert.deepEqual(await page.locator('.u-kachel .u-k-name').allTextContents(),['PAK','Chlorid']);
+   assert.match(await page.locator('.u-kachel').first().textContent(),/2 \/ 3.*1 auffällig · 2 vorläufig · 1 offen/s);
+   const pakZeilen=page.locator('.u-gruppe').first().locator('tbody tr');assert.equal(await pakZeilen.count(),3);
+   assert.match(await pakZeilen.first().textContent(),/P1.*EG Testraum 1, Wand, Ansicht, 400 cm².*12.*vorläufig/s);
+   assert.match(await pakZeilen.nth(2).textContent(),/P3.*ausstehend/s);
+   assert.match(await page.locator('#u-uebernahme').textContent(),/Noch nicht übernommen/);
+   await page.getByRole('tab',{name:/Prüfung und Import/}).click();
    assert.equal(await stand.textContent(),'0 von 4 Proben mit Ergebnis · 2 nur vorläufig · 2 offen');
    const zeilen=page.locator('table.proben tbody tr');assert.equal(await zeilen.count(),4);
    assert.match(await zeilen.nth(0).textContent(),/P1.*nur vorläufig/s);assert.match(await zeilen.nth(3).textContent(),/P4.*Chlorid.*offen/s);
@@ -96,9 +105,28 @@ try{
    assert.match(await karte.locator('.alle-tabelle').textContent(),/Naphthalin.*n\. n\./s);
   });
 
+  await check(`${w}: Übersicht – nur Σ16 EPA-PAK, ruhige Bewertung, Filter „Nur auffällige“, Sortierung`,async()=>{
+   await page.getByRole('tab',{name:'Übersicht'}).click();
+   const pak=page.locator('.u-gruppe').first();
+   assert.deepEqual(await pak.locator('thead th').allTextContents(),['Probe','Probenahmestelle','Σ16 EPA-PAK (µg/m²)','Bewertung']);
+   assert.doesNotMatch(await pak.textContent(),/BaP|Benzo/);
+   const chip=pak.locator('tbody tr').first().locator('.u-chip').first();
+   assert.equal(await chip.textContent(),'Referenzwert erreicht/überschritten');
+   const [bg,fg]=await chip.evaluate(e=>[getComputedStyle(e).backgroundColor,getComputedStyle(e).color]);
+   assert.notEqual(bg,'rgb(224, 69, 58)','keine Vollfarbe');assert.match(bg,/^(rgb|color)/);
+   await page.getByRole('button',{name:'Nur auffällige'}).click();
+   assert.deepEqual(await pak.locator('tbody th').allTextContents(),['P1']);
+   await page.getByRole('button',{name:'Alle'}).click();
+   await page.locator('#u-sort').selectOption('nr');assert.deepEqual(await pak.locator('tbody th').allTextContents(),['P1','P2','P3']);
+   await page.getByRole('tab',{name:/Prüfung und Import/}).click();
+  });
+
   await check(`${w}: Ergebnisse übernehmen – Datei für PlanKit/FotoKit`,async()=>{
    await page.getByRole('button',{name:'Ergebnisse übernehmen'}).click();
    await until(async()=>/✓ Übernommen/.test(await page.locator('.uebernahme').textContent()),'übernommen');
+   assert.equal(await page.getByRole('tab',{name:'Übersicht'}).getAttribute('aria-selected'),'true','nach der Übernahme zurück zur Übersicht');
+   assert.match(await page.locator('#u-uebernahme').textContent(),/✓ Übernommen/);
+   await page.getByRole('tab',{name:/Prüfung und Import/}).click();
    const datei=JSON.parse(await lies(page,'Laborergebnisse/_Ergebnisse.json'));
    assert.equal(datei.format,'spektron-ergebnisse');assert.equal(datei.projekt,'99.9001');assert.equal(datei.vollstaendig,true);
    assert.deepEqual(datei.berichte.map(b=>b.bericht),['AR-1-02']);assert.equal(datei.berichte[0].datum,'2026-10-12');assert.deepEqual(datei.ersetzt,[{bericht:'AR-1-01',durch:['AR-1-02']}]);
@@ -128,6 +156,7 @@ try{
   await check(`${w}: Ordner ändert sich nach der Übernahme → Hinweis „erneut übernehmen“`,async()=>{
    await page.evaluate(async projekt=>{const d=await (await (await navigator.storage.getDirectory()).getDirectoryHandle(projekt)).getDirectoryHandle('Laborergebnisse');const w=await (await d.getFileHandle('AR-1-02.pdf',{create:true})).createWritable();await w.write('%PDF-1.4 kaputt');await w.close();},PROJEKT);
    await page.getByRole('button',{name:'⟳ Neu einlesen'}).click();
+   await until(async()=>/Seit der Übernahme/.test(await page.locator('#u-uebernahme').textContent()),'Übersicht zeigt geändert');
    await until(async()=>/Seit der Übernahme/.test(await page.locator('.uebernahme').textContent()),'veraltet');
    assert.match(await page.locator('#berichte').textContent(),/PDF ist beschädigt/,'unlesbare PDF wird gemeldet');
    await page.getByRole('button',{name:'Ergebnisse übernehmen'}).click();
