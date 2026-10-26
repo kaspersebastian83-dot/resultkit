@@ -75,6 +75,10 @@ ok('gleicher Bericht als XML und neuere PDF mit anderem Dateinamen → Werte der
   assert.equal(p1.status,'ergebnis');assert.equal(p1.werte[0].r,'7');assert.equal(b.ohneWerte,false);
   assert.doesNotMatch(b.hinweise.join(' '),/Nur die PDF/);assert.deepEqual(b.sources,{xml:'export_123.xml',pdf:'AR-6-02.pdf'});
   assert.match(u.hinweise.join(' '),/mehrfach.*Es zählt die Datei mit Messwerten/);}
+ // vorläufige XML: die PDF (dort ohne Vorläufig-Kennung) gehört trotzdem zum selben Bericht
+ {const vx={...report('AR-6-04',[[1,pak('5')]],{vorlaeufig:true}),quelle:'export_9.xml',sources:{xml:'export_9.xml'}},vp={...report('AR-6-04',[[1]],{xml:false}),quelle:'AR-6-04.pdf'};
+  const u=E.uebersicht('99.9001',auftrag(),[{report:vx,geaendert:1},{report:vp,geaendert:5}]);
+  assert.deepEqual(u.berichte[0].sources,{xml:'export_9.xml',pdf:'AR-6-04.pdf'});assert.equal(u.berichte[0].vorlaeufig,true);}
  // gleiche Nummer, beide mit Werten: endgültig vor vorläufig, auch wenn der vorläufige neuer abgelegt ist
  const vorl={...report('AR-6-03',[[1,pak('3')]],{vorlaeufig:true}),quelle:'AR-6-03 vorl.xml'},endg=report('AR-6-03',[[1,pak('4')]]);
  const u=E.uebersicht('99.9001',auftrag(),[{report:endg,geaendert:1},{report:vorl,geaendert:9}]);
