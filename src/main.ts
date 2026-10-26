@@ -11,8 +11,9 @@ import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,standK
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
 import type {ResultSettings,Scale,Wert} from './model';
+import {uebersichtGruppen,sortiere,type UGruppe,type UZeile,type Gruppe} from './uebersicht';
 
-export const APP_VERSION='1.0.0';
+export const APP_VERSION='1.1.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -60,12 +61,25 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
   <p class="muted klein">Aus der Projektzentrale oder über die Spektron-Leiste öffnet ResultKit das Projekt direkt. Alles bleibt auf diesem Rechner.</p>
  </section>
  <div id="projekt" hidden>
+  <div class="ansicht-wahl" role="tablist" aria-label="Ansicht">
+   <button type="button" role="tab" id="tab-uebersicht" aria-selected="true" aria-controls="ansicht-uebersicht">Übersicht</button>
+   <button type="button" role="tab" id="tab-pruefung" aria-selected="false" aria-controls="ansicht-pruefung">Prüfung und Import<span id="tab-punkt" class="tab-punkt" hidden title="Hier gibt es etwas zu tun"></span></button>
+  </div>
+  <div id="ansicht-uebersicht" role="tabpanel" aria-labelledby="tab-uebersicht">
+   <div id="u-uebernahme"></div>
+   <div id="u-kacheln" class="u-kacheln"></div>
+   <div class="u-filter"><span class="u-chips" role="group" aria-label="Filter"><button type="button" data-filter="alle">Alle</button><button type="button" data-filter="auff">Nur auffällige</button><button type="button" data-filter="offen">Nur offene</button></span>
+    <label class="u-sort">Sortiert nach <select id="u-sort"><option value="ort">Ort (Geschoss, Raum)</option><option value="nr">Probennummer</option></select></label></div>
+   <div id="u-tabellen"></div>
+  </div>
+  <div id="ansicht-pruefung" role="tabpanel" aria-labelledby="tab-pruefung" hidden>
   <section id="stand" class="stand-karte" aria-live="polite"></section>
   <div id="hinweise"></div>
   <section class="block" aria-labelledby="h-proben"><div class="block-kopf"><h2 id="h-proben">Proben</h2><span id="proben-zahl" class="zahl"></span></div><div id="proben"></div><div id="legende"></div></section>
   <section class="block" aria-labelledby="h-berichte"><div class="block-kopf"><h2 id="h-berichte">Prüfberichte</h2><span id="berichte-zahl" class="zahl"></span></div><div id="berichte"></div>
    <div id="ablage" class="ablage"><p><b>Neue Prüfberichte:</b> XML und PDF hierher ziehen oder <button id="ablage-wahl" type="button" class="link">Dateien wählen …</button></p><p class="muted klein">ResultKit legt sie in „${LABOR}“ ab – nichts wird überschrieben. Die Messwerte kommen aus der XML, die PDF dient dem Abgleich.</p></div>
   </section>
+  </div>
  </div>
 </main>
 <footer class="fuss">ResultKit v${APP_VERSION} · liest und schreibt nur im Projektordner · keine Daten verlassen diesen Rechner</footer>
@@ -154,6 +168,63 @@ function render(){
  if(!scan){$('stand').innerHTML=`<p class="muted">Projektordner wird eingelesen …</p>`;for(const id of ['hinweise','proben','legende','berichte'])$(id).innerHTML='';return;}
  genutzt.clear();
  renderStand(scan);renderHinweise(scan);renderProben(scan);renderBerichte(scan);renderLegende();
+ renderUebersicht(scan);
+}
+
+// ---- Übersicht: Ergebnisse auf einen Blick ----
+type Ansicht='uebersicht'|'pruefung';type Filter='alle'|'auff'|'offen';
+const merke=(k:string,v?:string)=>{try{if(v===undefined)return localStorage.getItem('resultkit-'+k)||'';localStorage.setItem('resultkit-'+k,v);}catch{/* ohne Speicher */}return v||'';};
+let ansicht:Ansicht=merke('ansicht')==='pruefung'?'pruefung':'uebersicht',filter:Filter=(['auff','offen'].includes(merke('filter'))?merke('filter'):'alle') as Filter;
+($('u-sort') as HTMLSelectElement).value=merke('sortierung')==='nr'?'nr':'ort';
+function zeigeAnsicht(a:Ansicht){ansicht=a;merke('ansicht',a);
+ for(const [id,x] of [['uebersicht','uebersicht'],['pruefung','pruefung']] as const){$(`tab-${id}`).setAttribute('aria-selected',String(a===x));$(`ansicht-${id}`).hidden=a!==x;}}
+/** Bewertung eines Messwerts für die Übersicht: Kategorie der Skala (wie in der Prüfung), BG/n. n. neutral. */
+function bewertung(w:Wert):{text:string;farbe:string;index:number;titel:string}|null{
+ const q=labQualifier(w.r);
+ if(q==='below')return {text:'< BG',farbe:BELOW_LIMIT,index:-1,titel:`unter der Bestimmungsgrenze${w.loq?` (BG ${w.loq} ${w.u})`:''}`};
+ if(q==='notDetected')return {text:'n. n.',farbe:NOT_DETECTED,index:-1,titel:'nicht nachweisbar'};
+ if(q!=='measured')return null;
+ const s=skala(w.p,w.u);if(!s.scale)return null;const i=rate(s.scale,labNumber(w.r));if(i<0)return null;
+ return {text:s.scale.cats[i].name,farbe:s.scale.cats[i].color||UNRATED,index:i,titel:`${s.scale.name} (${s.quelle})`};
+}
+/** Ruhige Pastellfarben statt Vollfarbe: helle Fläche, dunkle Schrift aus derselben Farbe. */
+const pastell=(farbe:string,inhalt:string,titel='')=>`<span class="u-chip" style="--c:${farbe}"${titel?` title="${esc(titel)}"`:''}>${inhalt}</span>`;
+const ASBEST_ROT='#d0453a';
+const auffaellig=(z:UZeile)=>!!(z.befund?.gefunden||(z.haupt&&(bewertung(z.haupt)?.index??0)>0));
+const GTITEL:Record<Gruppe,string>={PAK:'PAK',Chlorid:'Chlorid',Asbest:'Asbest',Weitere:'Weitere Proben'};
+function renderUebersicht(s:Scan){
+ const gruppen=uebersichtGruppen(s.u.zeilen),nach=($('u-sort') as HTMLSelectElement).value as 'ort'|'nr';
+ const ue=uebernahmeText(s),aktuell=!!s.vorhanden&&s.vorhanden.stand===s.stand&&!s.vorhandenFehler;
+ const zuTun=!aktuell||s.fehler.length>0||!!s.auftragFehler;
+ $('tab-punkt').hidden=!zuTun;
+ $('u-uebernahme').innerHTML=gruppen.length?`<p class="u-stand ${aktuell?'ok':'warn'}">${esc(aktuell?ue.text.replace(/ PlanKit und FotoKit verwenden diesen Stand\.$/,''):ue.text)} ${aktuell?'':'<button type="button" class="link" data-zu="pruefung">Prüfen und übernehmen →</button>'}</p>`:'';
+ if(!gruppen.length){$('u-kacheln').innerHTML='';$('u-tabellen').innerHTML=`<p class="leer">Noch keine Proben. In LabelKit im Projekt speichern oder unter <button type="button" class="link" data-zu="pruefung">Prüfung und Import</button> Prüfberichte importieren.</p>`;return;}
+ $('u-kacheln').innerHTML=gruppen.map(g=>{const n=g.zeilen.length,offen=n-g.mitErgebnis,auff=g.zeilen.filter(auffaellig).length;
+  const vorl=g.zeilen.filter(z=>z.vorlaeufig).length;
+  const teile=[g.gruppe==='Asbest'?`${auff} Asbest nachgewiesen`:auff?`${auff} auffällig`:'',vorl?`${vorl} vorläufig`:'',offen?`${offen} offen`:'',!offen&&!auff&&!vorl?'alle mit Ergebnis':''].filter(Boolean);
+  return `<div class="u-kachel"><span class="u-k-name">${esc(GTITEL[g.gruppe])}</span><span class="u-k-zahl">${g.mitErgebnis} / ${n}</span><span class="u-k-text">${esc(teile.join(' · '))}</span></div>`;}).join('');
+ $('u-tabellen').innerHTML=gruppen.map(g=>uTabelle(g,nach)).join('');
+ document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===filter)));
+}
+function uTabelle(g:UGruppe,nach:'ort'|'nr'){
+ let zeilen=sortiere(g.zeilen,nach);
+ if(filter==='offen')zeilen=zeilen.filter(z=>z.ausstehend);else if(filter==='auff')zeilen=zeilen.filter(auffaellig);
+ const wert=(w:Wert|null)=>w?`${esc(w.r)}${w.u&&w.u!==g.einheit?` <small>${esc(w.u)}</small>`:''}`:'';
+ const hinweis=(z:UZeile)=>z.ausstehend?'<span class="u-aus">ausstehend</span>':`${z.vorlaeufig?' <small class="u-vorl">vorläufig</small>':''}${z.nichtBeauftragt?' <small class="u-nb" title="Steht im Prüfbericht, aber nicht im Laborauftrag aus LabelKit">nicht beauftragt</small>':''}`;
+ const skalen=[...new Set(g.zeilen.map(z=>z.haupt&&labQualifier(z.haupt.r)==='measured'?skala(z.haupt.p,z.haupt.u):null).filter(x=>x?.scale).map(x=>`${x!.scale!.name}`))];
+ const mitBewertung=(g.gruppe==='PAK'||g.gruppe==='Chlorid')&&g.zeilen.some(z=>z.haupt&&bewertung(z.haupt));
+ const kopf=g.gruppe==='PAK'?['Σ16 EPA-PAK'+(g.einheit?` (${g.einheit})`:'')]:g.gruppe==='Chlorid'?['Chlorid'+(g.einheit?` (${g.einheit})`:'')]:g.gruppe==='Asbest'?['Befund']:['Ergebnis'];
+ const unter=g.gruppe==='PAK'||g.gruppe==='Chlorid'?(skalen.length?`Bewertung: ${skalen.join(', ')}`:'ohne Bewertungsskala'):g.gruppe==='Asbest'?'Befund wie im Prüfbericht':'';
+ const leer=`<tr><td colspan="${3+(mitBewertung?1:0)}" class="muted">${filter==='offen'?'Keine offenen Proben.':filter==='auff'?'Keine auffälligen Proben.':''}</td></tr>`;
+ const zeile=(z:UZeile)=>{let erg='',bew='';
+  if(g.gruppe==='Asbest')erg=z.befund?(z.befund.gefunden?pastell(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen'):esc(z.befund.text)):'';
+  else if(g.gruppe!=='Weitere'&&!z.haupt)erg=z.ausstehend?'':`<span class="u-aus">kein ${g.gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
+  else if(g.gruppe==='Weitere')erg=z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
+  else if(z.haupt){erg=`<span class="u-wert">${wert(z.haupt)}</span>`;const b=bewertung(z.haupt);if(b){bew=pastell(b.farbe,esc(b.text),b.titel);erg+=`<span class="u-mobil">${bew}</span>`;}}
+  return `<tr${z.ausstehend?' class="u-offen"':''}><th scope="row">${esc(z.label)}</th><td>${esc(z.stelle)}</td><td>${erg}${hinweis(z)}</td>${mitBewertung?`<td class="u-bew">${bew}</td>`:''}</tr>`;};
+ return `<section class="u-gruppe" aria-label="${esc(GTITEL[g.gruppe])}"><h2>${esc(GTITEL[g.gruppe])} <small>${g.zeilen.length} Probe${g.zeilen.length===1?'':'n'}${unter?` · ${esc(unter)}`:''}</small></h2>
+  <div class="tabelle-scroll"><table class="u-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">${g.gruppe==='Asbest'?'Material und Stelle':'Probenahmestelle'}</th><th scope="col">${esc(kopf[0])}</th>${mitBewertung?'<th scope="col" class="u-bew">Bewertung</th>':''}</tr></thead>
+  <tbody>${zeilen.map(zeile).join('')||leer}</tbody></table></div></section>`;
 }
 function uebernahmeText(s:Scan){
  if(s.vorhandenFehler)return {cls:'warn',text:`⚠ „${DATEI}“ ist nicht lesbar: ${s.vorhandenFehler} Erneut übernehmen schreibt eine neue Datei (die alte bleibt als „${VORHER}“).`};
@@ -263,7 +334,7 @@ async function uebernehmen(){
   const labor=await f.dir.getDirectoryHandle(LABOR,{create:true}) as Dir;
   const alt=await fileInfo(labor,DATEI);if(alt)await writeFile(labor,VORHER,await alt.text());
   await writeFile(labor,DATEI,JSON.stringify(ergebnisDatei(u,frisch.auftrag,frisch.dateien,APP_VERSION),null,1));
-  toast(`Übernommen: ${standText(u)}. PlanKit und FotoKit verwenden jetzt diesen Stand.`);
+  toast(`Übernommen: ${standText(u)}. PlanKit und FotoKit verwenden jetzt diesen Stand.`);zeigeAnsicht('uebersicht');
   window.MosaikLeiste?.aktualisieren();
  }catch(e){fail(e);}
  finally{beschaeftigt=false;if(folder===f){render();await neuEinlesen();}}
@@ -315,7 +386,7 @@ function zeigeVorschau(f:ProjectFolder,vorschau:Vorschau[],uebrig:number){
    if(!await permission(f.dir,true))throw Error('Ohne Schreibzugriff auf den Projektordner kann ResultKit keine Berichte ablegen.');
    const labor=await f.dir.getDirectoryHandle(LABOR,{create:true}) as Dir;let n=0;
    for(const v of wahl)for(const [datei,name] of v.ziel){if(await fileInfo(labor,name))throw Error(`„${name}“ ist inzwischen im Ordner – bitte erneut importieren.`);await writeFile(labor,name,datei);n++;}
-   toast(`${n} Datei${n===1?'':'en'} in „${LABOR}“ abgelegt. Bitte prüfen und dann „Ergebnisse übernehmen“.`);
+   toast(`${n} Datei${n===1?'':'en'} in „${LABOR}“ abgelegt. Bitte prüfen und dann „Ergebnisse übernehmen“.`);zeigeAnsicht('pruefung');
   }catch(e){fail(e);}
   await neuEinlesen();
  };
@@ -325,6 +396,12 @@ function zeigeVorschau(f:ProjectFolder,vorschau:Vorschau[],uebrig:number){
 // ---- Bedienung ----
 $('btn-projekt').onclick=$('start-projekt').onclick=()=>void projektWaehlen();
 $('btn-neu').onclick=()=>void neuEinlesen();
+$('tab-uebersicht').onclick=()=>zeigeAnsicht('uebersicht');$('tab-pruefung').onclick=()=>zeigeAnsicht('pruefung');
+$('ansicht-uebersicht').addEventListener('click',e=>{const t=e.target as HTMLElement;
+ const f=t.closest<HTMLElement>('[data-filter]');if(f){filter=f.dataset.filter as Filter;merke('filter',filter);if(scan)renderUebersicht(scan);return;}
+ if(t.closest('[data-zu="pruefung"]'))zeigeAnsicht('pruefung');});
+$('u-sort').onchange=()=>{merke('sortierung',($('u-sort') as HTMLSelectElement).value);if(scan)renderUebersicht(scan);};
+zeigeAnsicht(ansicht);
 const wahl=$<HTMLInputElement>('datei-wahl');
 $('btn-import').onclick=$('ablage-wahl').onclick=()=>{wahl.value='';wahl.click();};
 wahl.onchange=()=>{const files=[...wahl.files||[]];if(files.length)void importieren(files);};
