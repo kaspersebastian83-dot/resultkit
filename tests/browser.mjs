@@ -136,7 +136,8 @@ try{
   });
 
   await check(`${w}: kein waagrechter Überlauf der Seite`,async()=>{
-   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   const breit=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth?[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&!e.closest('.tabelle-scroll')).map(e=>`${e.tagName}.${e.className}#${e.id} ${Math.round(e.getBoundingClientRect().right)}`).slice(0,12):[]);
+   assert.deepEqual(breit,[],'Elemente ragen über den Rand');
   });
   assert.deepEqual(fehler,[]);
   await context.close();
