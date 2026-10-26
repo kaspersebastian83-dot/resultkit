@@ -19,6 +19,8 @@ const labelkit=JSON.stringify({version:'4.41.0',projekt:{nr:'99.9001'},
 const vorlaeufig=labXML([probe(1,pak('12')),probe(2,pak('8'))],{vorlaeufig:true,code:'AR-1-01'});
 const endgueltig=labXML([probe(1,pak('14')),probe(2,pak('8,5')),probe(3,pak('< 0,5')),probe(4,[{p:'Chlorid',r:'26',u:'µg/cm²'}])],{code:'AR-1-02'});
 const fremd=labXML([probe(1,pak('3'))],{code:'AR-7-01',ref:'99.9002 Anderswo'});
+// Probenplan mit manipulierter Skalenfarbe: darf kein HTML einschleusen (ungültige Skala entfällt, VdS-Referenz gilt)
+const plan=JSON.stringify({results:{usage:'residential',parameter:SUM,scales:{},vds:{[`${SUM}|${U}`]:{name:'X',cats:[{name:'a',from:0,color:'red;background:url(x)"><img id="xss" src="data:," onerror="window.__xss=1">'}]}}}});
 
 const server=await preview({preview:{host:'127.0.0.1',port:0,open:false},logLevel:'silent'});
 const base=`http://127.0.0.1:${server.httpServer.address().port}/`;
@@ -45,7 +47,7 @@ try{
   const page=await context.newPage();page.setDefaultTimeout(15000);
   const fehler=[];page.on('pageerror',e=>fehler.push(e.message));page.on('console',m=>{if(m.type()==='error')fehler.push(m.text());});
   await page.goto(base);
-  await ordner(page,{'_Projekt.json':JSON.stringify({nutzung:'Wohnen'}),'Laboraufträge/99.9001_08.10.2026_Daten.json':labelkit,'Laborergebnisse/AR-1-01.xml':vorlaeufig});
+  await ordner(page,{'_Projekt.json':JSON.stringify({nutzung:'Wohnen'}),'Laboraufträge/99.9001_08.10.2026_Daten.json':labelkit,'Laborergebnisse/AR-1-01.xml':vorlaeufig,[`Pläne/Probenplan ${PROJEKT}.probenplan`]:plan});
   const stand=page.locator('#stand h1'),w=viewport.width;
 
   await check(`${w}: Projekt öffnen – Auftrag aus LabelKit gegen vorläufigen Bericht`,async()=>{
@@ -97,6 +99,7 @@ try{
    assert.match(await page.locator('#legende').textContent(),/VdS 2357.*Wohn/);
    const chlorid=page.locator('table.proben tbody tr').nth(3).locator('.wert').first();
    assert.equal(await chlorid.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(224, 69, 58)','Chlorid 26 µg/cm²: oberhalb von 5–10 µg/cm² (VdS 2357)');
+   assert.equal(await page.locator('#xss').count(),0,'Farbe aus dem Probenplan schleust kein HTML ein');assert.equal(await page.evaluate(()=>window.__xss),undefined);
   });
 
   await check(`${w}: Alle Parameter aufklappbar`,async()=>{

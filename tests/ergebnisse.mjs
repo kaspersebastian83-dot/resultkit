@@ -66,6 +66,20 @@ ok('gleicher Bericht zweimal abgelegt → neuere Datei, Hinweis',()=>{
  const u=E.uebersicht('99.9001',auftrag(),[{report:alt,geaendert:1},{report:neu,geaendert:5}]);
  assert.equal(u.berichte.length,1);assert.equal(u.zeilen.find(z=>z.label==='P1').werte[0].r,'6');assert.match(u.hinweise.join(' '),/mehrfach/);
 });
+ok('gleicher Bericht als XML und neuere PDF mit anderem Dateinamen → Werte der XML gelten, PDF bleibt genannt',()=>{
+ const xml={...report('AR-6-02',[[1,pak('7')]]),quelle:'export_123.xml',sources:{xml:'export_123.xml'}};
+ const pdf={...report('AR-6-02',[[1]],{xml:false}),quelle:'AR-6-02.pdf'};
+ for(const reihe of [[{report:xml,geaendert:1},{report:pdf,geaendert:5}],[{report:pdf,geaendert:5},{report:xml,geaendert:1}]]){
+  const u=E.uebersicht('99.9001',auftrag(),reihe);
+  assert.equal(u.berichte.length,1);const b=u.berichte[0],p1=u.zeilen.find(z=>z.label==='P1');
+  assert.equal(p1.status,'ergebnis');assert.equal(p1.werte[0].r,'7');assert.equal(b.ohneWerte,false);
+  assert.doesNotMatch(b.hinweise.join(' '),/Nur die PDF/);assert.deepEqual(b.sources,{xml:'export_123.xml',pdf:'AR-6-02.pdf'});
+  assert.match(u.hinweise.join(' '),/mehrfach.*Es zählt die Datei mit Messwerten/);}
+ // gleiche Nummer, beide mit Werten: endgültig vor vorläufig, auch wenn der vorläufige neuer abgelegt ist
+ const vorl={...report('AR-6-03',[[1,pak('3')]],{vorlaeufig:true}),quelle:'AR-6-03 vorl.xml'},endg=report('AR-6-03',[[1,pak('4')]]);
+ const u=E.uebersicht('99.9001',auftrag(),[{report:endg,geaendert:1},{report:vorl,geaendert:9}]);
+ assert.equal(u.zeilen.find(z=>z.label==='P1').werte[0].r,'4');assert.equal(u.berichte[0].vorlaeufig,undefined);
+});
 ok('ohne Laborauftrag: Werte sichtbar, Vollständigkeit nicht prüfbar',()=>{
  const u=E.uebersicht('99.9001',null,[{report:report('AR-7-01',[[1,pak('2')]]),geaendert:1}]);
  assert.equal(u.zaehler.erwartet,null);assert.equal(u.zeilen[0].status,'ergebnis');assert.match(u.hinweise.join(' '),/Kein Laborauftrag/);assert.equal(E.vollstaendig(u),false);

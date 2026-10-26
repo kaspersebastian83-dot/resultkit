@@ -3,7 +3,7 @@
 // die Bewertung nach Skala macht main.ts mit denselben Skalen wie in der Prüfansicht.
 import type {Zeile} from './ergebnisse';
 import type {Wert} from './model';
-import {chloridEinheit,labNumber} from './bewertung';
+import {chloridEinheit,labNumber,labQualifier} from './bewertung';
 
 export type Gruppe='PAK'|'Chlorid'|'Asbest'|'Weitere';
 export const GRUPPEN:Gruppe[]=['PAK','Chlorid','Asbest','Weitere'];
@@ -48,14 +48,22 @@ function gruppeVon(z:Zeile):Gruppe{
  if(z.werte.some(w=>ASBEST.test(w.p)))return 'Asbest';
  return 'Weitere';
 }
-/** Chlorid einheitlich in µg/cm² (ältere Berichte in mg/m²: 1 µg/cm² = 10 mg/m²); „< 0,5“ bleibt „< 0,05“. */
+/** Chlorid einheitlich in µg/cm² (ältere Berichte in mg/m²: 1 µg/cm² = 10 mg/m²); „< 0,5“ bleibt „< 0,05“, „> 500“ wird „> 50“.
+ *  Was sich nicht sicher umrechnen lässt („(3)“, „1.250“), bleibt wie im Bericht (null = nicht umgerechnet). */
 export function chloridInUgCm2(w:Wert):Wert|null{
  const f=chloridEinheit(w.u);if(!f)return null;if(f===1)return {...w,u:'µg/cm²'};
  const zahl=(x:number)=>x.toLocaleString('de-DE',{maximumFractionDigits:4});
  const loq=w.loq&&Number.isFinite(labNumber(w.loq))?{loq:zahl(labNumber(w.loq)/f)}:{};
- const m=/^(<\s*)?(.*)$/.exec(w.r.trim())!,n=labNumber(m[2]);
- if(!Number.isFinite(n))return {p:w.p,r:w.r,u:'µg/cm²',...loq};   // „unter BG“, „n. n.“: Text bleibt, Einheit und BG umgerechnet
- return {p:w.p,r:`${m[1]?'< ':''}${zahl(n/f)}`,u:'µg/cm²',...loq};
+ const m=/^([<>])?\s*(.*)$/.exec(w.r.trim())!,n=labNumber(m[2]);
+ if(Number.isFinite(n)&&n>=0)return {p:w.p,r:`${m[1]?`${m[1]} `:''}${zahl(n/f)}`,u:'µg/cm²',...loq};
+ const q=labQualifier(w.r);
+ if(!/\d/.test(w.r)&&(q==='below'||q==='notDetected'||q==='notDetermined'))return {p:w.p,r:w.r,u:'µg/cm²',...loq};   // „unter BG“, „n. n.“: Text bleibt, Einheit und BG umgerechnet
+ return null;
+}
+/** Wert einer Probe für Parameter/Einheit. Eurofins wiederholt Parameter (Asbest nach VDI 3866-5 je Nachweisgrenze,
+ *  nicht untersuchte Stufen „-“): ein Wert mit Inhalt geht vor „-“. */
+export function wertFuer<T extends Wert>(werte:T[],p:string,u:string):T|undefined{
+ const c=werte.filter(x=>x.p===p&&x.u===u);return c.find(x=>!/^[-–—]?$/.test(x.r.trim()))||c[0];
 }
 /** Zeilen der Prüfung → Gruppen der Übersicht (leere Gruppen fallen weg). */
 export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
@@ -91,5 +99,6 @@ export function sortiere(zeilen:UZeile[],nach:'ort'|'nr'):UZeile[]{
  const nr=(z:UZeile)=>z.nr??1e9;
  if(nach==='nr')return [...zeilen].sort((a,b)=>nr(a)-nr(b)||a.label.localeCompare(b.label,'de',{numeric:true}));
  const k=new Map(zeilen.map(z=>[z,geschoss(z.stelle)]));
- return [...zeilen].sort((a,b)=>{const x=k.get(a)!,y=k.get(b)!;return x.vor.localeCompare(y.vor,'de',{numeric:true})||x.rang-y.rang||x.rest.localeCompare(y.rest,'de',{numeric:true})||nr(a)-nr(b);});
+ const ohne=(g:{rang:number})=>g.rang===70?1:0;   // ohne Geschoss ans Ende, auch nach Gebäuden mit Geschoss
+ return [...zeilen].sort((a,b)=>{const x=k.get(a)!,y=k.get(b)!;return ohne(x)-ohne(y)||x.vor.localeCompare(y.vor,'de',{numeric:true})||x.rang-y.rang||x.rest.localeCompare(y.rest,'de',{numeric:true})||nr(a)-nr(b);});
 }
