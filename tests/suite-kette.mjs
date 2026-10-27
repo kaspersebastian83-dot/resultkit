@@ -1,13 +1,13 @@
-// Spektron-Kette (Integrationstest Stufe 1): LabelKit → ResultKit → Projektzentrale → PlanKit mit den echten Apps.
+// Spektron-Kette (Integrationstest): LabelKit → ResultKit → Projektzentrale → PlanKit → FotoKit mit den echten Apps.
 // Alle vier Apps laufen unter einem lokalen Server auf demselben Ursprung wie auf GitHub Pages und teilen sich daher den
 // Archivordner (IndexedDB „mosaik-suite“/„kv“/„archiv“) – hier ein Ordner im privaten Browserdateisystem (OPFS).
 // Ein erfundenes Projekt läuft einmal durch: Proben in LabelKit, vorläufiger und (teilweise) endgültiger Prüfbericht in ResultKit,
-// Stand in der Projektzentrale, Werte und Warnleiste in PlanKit. Geprüft wird vor allem, was zwischen den Apps kaputtgehen kann:
+// Stand in der Projektzentrale, Werte und Warnleiste in PlanKit, Ergebnistabelle fürs Gutachten in FotoKit. Geprüft wird vor allem, was zwischen den Apps kaputtgehen kann:
 // gleiche Probennummern und -bezeichnungen überall, Vollständigkeit, „Plan liegt hinter ResultKit“.
 // Nur erfundene Daten. Fehler nennen die App, in der der Schritt scheiterte.
 //
-// Voraussetzungen: ResultKit gebaut (pnpm build), daneben LabelKit, Projektzentrale und gebautes PlanKit:
-//   LABELKIT_DIR=../labelkit  ZENTRALE_DIR=../projektzentrale  PLANKIT_DIST=../probenplan/dist  node tests/suite-kette.mjs
+// Voraussetzungen: ResultKit gebaut (pnpm build), daneben LabelKit, Projektzentrale, FotoKit und gebautes PlanKit:
+//   LABELKIT_DIR=../labelkit  ZENTRALE_DIR=../projektzentrale  PLANKIT_DIST=../probenplan/dist  FOTOKIT_DIR=../bildumbenenner  node tests/suite-kette.mjs
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFile,stat} from 'node:fs/promises';
@@ -20,7 +20,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'@playwright/test');
 
 const neben=(env,...namen)=>{if(process.env[env])return path.resolve(process.env[env]);const d=namen.map(n=>path.resolve('..',n)).find(existsSync);if(!d)throw Error(`${env}: ${namen.join(' / ')} liegt nicht neben ResultKit`);return d;};
 // Erster Pfadteil → Ordner (ohne Groß-/Kleinschreibung, wie die Links der Apps: ../labelkit/, ../Projektzentrale/, ../Probenplan/)
-const APPS={labelkit:neben('LABELKIT_DIR','labelkit'),resultkit:path.resolve('dist'),projektzentrale:neben('ZENTRALE_DIR','projektzentrale','Projektzentrale'),probenplan:neben('PLANKIT_DIST','probenplan/dist','Probenplan/dist')};
+const APPS={labelkit:neben('LABELKIT_DIR','labelkit'),resultkit:path.resolve('dist'),projektzentrale:neben('ZENTRALE_DIR','projektzentrale','Projektzentrale'),probenplan:neben('PLANKIT_DIST','probenplan/dist','Probenplan/dist'),bildumbenenner:neben('FOTOKIT_DIR','bildumbenenner','Bildumbenenner')};
 for(const [app,dir] of Object.entries(APPS))if(!existsSync(path.join(dir,'index.html')))throw Error(`${app}: index.html fehlt in ${dir}${app==='resultkit'||app==='probenplan'?' – vorher bauen':''}`);
 const TYP={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.woff2':'font/woff2','.wasm':'application/wasm','.txt':'text/plain'};
 const server=http.createServer(async(req,res)=>{
@@ -178,6 +178,23 @@ try{
   assert.equal(o.P1.werte.find(w=>w.p===SUM)?.r,'14','Σ16 aus dem endgültigen Bericht');assert.equal(o.P2.werte.find(w=>w.p===SUM)?.r,'7,5');
   assert.equal(o.P4.werte.find(w=>w.p==='Chlorid')?.r,'3,5');assert.equal(o.P3.desc,'OG Bad, Fliese, Ansicht, 400 cm²');
   await pk.evaluate(()=>window.dispatchEvent(new Event('focus')));await pk.locator('#resultkit-warning').waitFor({state:'hidden'});
+ });
+ // ---- 6. FotoKit: Ergebnistabelle fürs Gutachten aus dem übernommenen Stand ----
+ const fk=await neueSeite('FotoKit');
+ await schritt('FotoKit','Ergebnistabelle: P1–P4 mit den Werten aus ResultKit, Zwischenstand und vorläufige Werte gekennzeichnet',async()=>{
+  await fk.goto(`${base}/bildumbenenner/#projekt=${encodeURIComponent(PROJEKT)}`);
+  await fk.locator('#btnLab:enabled').click();
+  const vorschau=fk.locator('#lPrev');await until(async()=>/P4/.test(await vorschau.textContent()),'Tabelle mit P4');
+  const tabelle=await vorschau.textContent();
+  const proben=await vorschau.locator('tr').evaluateAll(z=>z.map(r=>r.cells[0]?.textContent.trim()).filter(t=>/^P\d+$/.test(t||'')));
+  assert.deepEqual([...new Set(proben)].sort(),['P1','P2','P3','P4'],'je Probe eine Zeile');
+  assert.match(tabelle,/OG Bad, Fliese, Ansicht, 400 cm²/,'Beschreibung wie in LabelKit');
+  const p1=await vorschau.locator('tr').evaluateAll(z=>z.filter(r=>r.cells[0]?.textContent.trim()==='P1').map(r=>[...r.cells].map(c=>c.textContent.trim())));
+  assert.ok(p1.some(z=>z.some(c=>/^14\b/.test(c))),`Σ16 von P1 aus dem endgültigen Bericht (Zeile: ${JSON.stringify(p1)})`);
+  const quelle=await fk.locator('#lSrc').textContent();
+  assert.ok(p1.some(z=>z.some(c=>/^0,8\b/.test(c))),'BaP von P1 noch aus dem vorläufigen Bericht');
+  assert.match(quelle,/Zwischenstand/,'Zwischenstand aus ResultKit');assert.match(quelle,/vorläufige Werte/);
+  assert.doesNotMatch(quelle,/Seit der Übernahme/,'Stand passt zur Übernahme');
  });
  assert.deepEqual(fehler,[],'Skriptfehler in einer App');
 }catch(e){
