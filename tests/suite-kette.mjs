@@ -178,5 +178,9 @@ try{
   await pk.evaluate(()=>window.dispatchEvent(new Event('focus')));await pk.locator('#resultkit-warning').waitFor({state:'hidden'});
  });
  assert.deepEqual(fehler,[],'Skriptfehler in einer App');
+}catch(e){
+ // In GitHub Actions als Annotation am PR (App und Schritt stehen in der Meldung)
+ if(process.env.GITHUB_ACTIONS)console.log(`::error title=Spektron-Kette::${String(e?.message||e).slice(0,1500).replace(/%/g,'%25').replace(/\r/g,'').replace(/\n/g,'%0A')}${fehler.length?`%0ASkriptfehler: ${fehler.join(' | ').slice(0,600)}`:''}`);
+ throw e;
 }finally{await browser.close();await new Promise(r=>server.close(r));}
 console.log(`${n} Schritte der Spektron-Kette bestanden`);
