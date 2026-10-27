@@ -186,9 +186,11 @@ try{
   await fk.locator('#btnLab:enabled').click();
   const vorschau=fk.locator('#lPrev');await until(async()=>/P4/.test(await vorschau.textContent()),'Tabelle mit P4');
   const tabelle=await vorschau.textContent();
-  for(const nr of ['P1','P2','P3'])assert.match(tabelle,new RegExp(`\\b${nr}\\b`),`${nr} in der Tabelle`);
+  const proben=await vorschau.locator('tr').evaluateAll(z=>z.map(r=>r.cells[0]?.textContent.trim()).filter(t=>/^P\d+$/.test(t||'')));
+  assert.deepEqual([...new Set(proben)].sort(),['P1','P2','P3','P4'],'je Probe eine Zeile');
   assert.match(tabelle,/OG Bad, Fliese, Ansicht, 400 cm²/,'Beschreibung wie in LabelKit');
-  assert.match(tabelle,/\b14\b/,'Σ16 von P1 aus dem endgültigen Bericht');
+  const p1=await vorschau.locator('tr').evaluateAll(z=>z.filter(r=>r.cells[0]?.textContent.trim()==='P1').map(r=>[...r.cells].map(c=>c.textContent.trim())));
+  assert.ok(p1.some(z=>z.includes('14')),`Σ16 von P1 aus dem endgültigen Bericht (Zeile: ${JSON.stringify(p1)})`);
   const quelle=await fk.locator('#lSrc').textContent();
   assert.match(quelle,/Zwischenstand/,'Zwischenstand aus ResultKit');assert.match(quelle,/vorläufige Werte/);
   assert.doesNotMatch(quelle,/Seit der Übernahme/,'Stand passt zur Übernahme');
