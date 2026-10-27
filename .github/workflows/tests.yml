@@ -39,7 +39,7 @@ jobs:
         run: pnpm test
 
   spektron-kette:
-    name: Spektron-Kette (LabelKit → ResultKit → Projektzentrale → PlanKit → FotoKit)
+    name: Spektron-Kette (LabelKit → ResultKit → Projektzentrale → PlanKit → FotoKit → BüroKit → BelegKit)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -48,7 +48,7 @@ jobs:
         env:
           ZWEIG: ${{ github.head_ref }}
         run: |
-          for repo in labelkit Projektzentrale probenplan bildumbenenner; do
+          for repo in labelkit Projektzentrale probenplan bildumbenenner buerokit aufwandkit; do
             ziel="../$(echo "$repo" | tr '[:upper:]' '[:lower:]')"
             git clone --quiet --depth 1 --branch "$ZWEIG" "https://github.com/kaspersebastian83-dot/$repo.git" "$ziel" 2>/dev/null \
               || git clone --quiet --depth 1 "https://github.com/kaspersebastian83-dot/$repo.git" "$ziel"
