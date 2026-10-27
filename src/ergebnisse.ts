@@ -67,14 +67,17 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   if(!z.datum&&s.datum)z.datum=s.datum;
   for(const w of s.werte||[])z.werte.push({...w,bericht:b.bericht,vorlaeufig:!!b.vorlaeufig});}
  for(const z of zeilen.values()){
-  const endgueltig=z.werte.some(w=>!w.vorlaeufig);
+  // Endgültig erst, wenn kein Wert der Probe mehr nur vorläufig ist (z. B. PAK endgültig, Chlorid erst vorläufig → noch vorläufig)
+  const vorlaeufigeWerte=z.werte.filter(w=>w.vorlaeufig),endgueltig=z.werte.length>0&&!vorlaeufigeWerte.length;
   z.status=!z.erwartet&&auftrag?'nichtBeauftragt':z.werte.length?(endgueltig?'ergebnis':'vorlaeufig'):z.berichte.length?'ohneWerte':'offen';
   if(z.status==='nichtBeauftragt'&&!z.werte.length)z.hinweise.push('Steht im Bericht, aber ohne Messwerte.');
   if(z.status==='nichtBeauftragt')z.hinweise.push('Nicht im Laborauftrag aus LabelKit – Probennummer prüfen.');
   if(!z.label)z.hinweise.push(`Probenreferenz „${z.ref}“ hat keine Probennummer („Probe 3“).`);
   const muster=z.typ?ERWARTET[z.typ]:undefined;
   if(muster&&z.werte.length&&!z.werte.some(w=>muster.test(w.p)))z.hinweise.push(`${z.typ} beauftragt – der Bericht enthält dazu keinen Wert.`);
-  if(z.status==='vorlaeufig')z.hinweise.push('Nur vorläufige Werte – der endgültige Bericht fehlt noch.');}
+  if(z.status==='vorlaeufig')z.hinweise.push(vorlaeufigeWerte.length<z.werte.length
+   ?`Nur vorläufige Werte für ${[...new Set(vorlaeufigeWerte.map(w=>w.p))].join(', ')} – der endgültige Bericht fehlt dafür noch.`
+   :'Nur vorläufige Werte – der endgültige Bericht fehlt noch.');}
  const liste=[...zeilen.values()].sort((a,b)=>(a.nr??1e9)-(b.nr??1e9)||a.ref.localeCompare(b.ref,'de',{numeric:true}));
  const zahl=(s:Status)=>liste.filter(z=>z.status===s).length;
  if(!auftrag)hinweise.push('Kein Laborauftrag aus LabelKit gefunden (Ordner „Laboraufträge“) – welche Proben noch fehlen, lässt sich nicht prüfen.');

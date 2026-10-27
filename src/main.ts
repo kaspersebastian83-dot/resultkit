@@ -14,7 +14,7 @@ import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,type UGruppe,type UZeile,type Gruppe} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.3.0';
+export const APP_VERSION='1.3.1';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
