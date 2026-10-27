@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 · 27.10.2026
+- **Eine Seite statt zwei Reitern.** „Übersicht“ und „Prüfung und Import“ sind zusammengelegt: oben „Jetzt dran“, darunter die Ergebnisse, ganz unten die Prüfberichte (zugeklappt).
+- **„Jetzt dran“** zeigt den einen nächsten Schritt mit einem Hauptknopf: Berichte importieren → Ergebnisse übernehmen → grün „Übernommen ✓“ (nichts zu tun) → nach Änderungen im Ordner „Erneut übernehmen“. Darunter der Stand in einem Satz; Hinweise als Chip „⚠ n Hinweise“, der die betroffenen Proben und Berichte aufklappt.
+- **Nach dem Import ohne Hinweise:** „AR-… eingelesen – Jetzt übernehmen?“ mit „Ergebnisse übernehmen“ oder „Erst ansehen“.
+- **Proben aufklappen:** Klick auf eine Zeile zeigt alle Parameter (in der Bewertungsfarbe), Hinweise, Stand, Prüfbericht (vorläufig/endgültig, XML/PDF), Labor-Nr., Probenahmedatum und Art. Proben mit Hinweis tragen „⚠ Hinweis“ in der Zeile.
+- Prüfberichte (Karten mit Kernwerten und „Alle Parameter“, ersetzte Berichte) und die Ablage für neue Berichte stehen im aufklappbaren Bereich „Prüfberichte“; ohne Bericht ist er offen.
+- Unverändert: Import-Dialog, Ziehen überall, Regeln zum Zusammenführen, Bewertung und `_Ergebnisse.json`.
+
 ## 1.2.3 · 26.10.2026
 - Liegt ein Prüfbericht als XML und als PDF mit anderem Dateinamen im Ordner, gelten die Werte der XML – auch wenn die PDF neuer ist. Vorher zeigte ResultKit dann „ohne Messwerte“ und den falschen Hinweis „Nur die PDF liegt vor“. Bei gleicher Berichtsnummer zählt die Datei mit Messwerten, dann der endgültige Bericht, sonst die neuere Datei; die PDF bleibt beim Bericht genannt.
 - Chlorid in mg/m²: Nur Zahlen, „< …“, „> …“ und Texte wie „unter BG“, „n. n.“ werden in µg/cm² umgerechnet. Werte wie „(3)“ oder „1.250“ bleiben wie im Bericht mit dessen Einheit, statt ohne Umrechnung mit „µg/cm²“ beschriftet zu werden.
