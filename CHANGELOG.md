@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.1 · 27.10.2026
+- **Vollständigkeit richtig:** Eine Probe gilt erst als „✓ Ergebnis“, wenn keiner ihrer Werte mehr nur vorläufig ist. Bisher reichte ein endgültiger Wert – kam z. B. PAK endgültig, Chlorid aber nur vorläufig, stand die Probe als fertig da, und das Projekt konnte als „vollständig“ an die Projektzentrale gehen. Jetzt bleibt sie „vorläufig“ mit dem Hinweis, welcher Parameter fehlt („Nur vorläufige Werte für Chlorid …“); `_Ergebnisse.json` meldet dann `vollstaendig: false`.
+
 ## 1.3.0 · 27.10.2026
 - **Eine Seite statt zwei Reitern.** „Übersicht“ und „Prüfung und Import“ sind zusammengelegt: oben „Jetzt dran“, darunter die Ergebnisse, ganz unten die Prüfberichte (zugeklappt).
 - **„Jetzt dran“** zeigt den einen nächsten Schritt mit einem Hauptknopf: Berichte importieren → Ergebnisse übernehmen → grün „Übernommen ✓“ (nichts zu tun) → nach Änderungen im Ordner „Erneut übernehmen“. Darunter der Stand in einem Satz; Hinweise als Chip „⚠ n Hinweise“, der die betroffenen Proben und Berichte aufklappt.

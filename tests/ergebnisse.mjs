@@ -48,6 +48,19 @@ ok('nur vorläufig: Status vorläufig, mit Hinweis; zählt nicht als Ergebnis',(
  const p1=u.zeilen.find(z=>z.label==='P1');assert.equal(p1.status,'vorlaeufig');assert.match(p1.hinweise.join(' '),/endgültige Bericht fehlt/);
  assert.equal(u.zaehler.ergebnis,0);assert.equal(u.zaehler.vorlaeufig,1);
 });
+ok('endgültig nur für einen Teil der Werte: Probe bleibt vorläufig, Projekt nicht vollständig',()=>{
+ // vorläufig: PAK und Chlorid; endgültig nur PAK → Chlorid gilt weiter vorläufig
+ const vorl=report('AR-5-01',[[1,[...pak('12'),{p:'Chlorid',r:'3',u:'µg/cm²'}]],[2,pak('8')],[3,pak('1')],[4,[{p:'Chlorid',r:'2',u:'µg/cm²'}]]],{vorlaeufig:true});
+ const endg=report('AR-5-02',[[1,pak('14')],[2,pak('9')],[3,pak('1')],[4,[{p:'Chlorid',r:'2',u:'µg/cm²'}]]]);
+ const u=E.uebersicht('99.9001',auftrag(),[{report:vorl,geaendert:1},{report:endg,geaendert:2}]);
+ const p1=u.zeilen.find(z=>z.label==='P1');
+ assert.equal(p1.status,'vorlaeufig');assert.deepEqual(p1.werte.map(w=>[w.p,w.vorlaeufig]).sort(),[['Benzo[a]pyren',false],['Chlorid',true],[SUM,false]]);
+ assert.match(p1.hinweise.join(' '),/^Nur vorläufige Werte für Chlorid – der endgültige Bericht fehlt dafür noch\.$/);
+ assert.equal(u.zaehler.ergebnis,3);assert.equal(u.zaehler.vorlaeufig,1);assert.equal(E.vollstaendig(u),false);
+ assert.equal(E.standText(u),'3 von 4 Proben mit Ergebnis · 1 nur vorläufig');
+ assert.equal(E.ergebnisDatei(u,auftrag(),[],'1.3.1').vollstaendig,false,'an die Projektzentrale: nicht vollständig');
+ assert.deepEqual(u.berichte.find(b=>b.bericht==='AR-5-01').ersetztDurch,undefined,'vorläufiger Bericht gilt noch für Chlorid');
+});
 ok('Chlorid beauftragt, nur PAK geliefert → Hinweis; nicht beauftragte Probe erkannt',()=>{
  const u=E.uebersicht('99.9001',auftrag(),[{report:report('AR-3-01',[[4,pak('3')],[9,pak('1')]]),geaendert:1}]);
  const p4=u.zeilen.find(z=>z.label==='P4'),p9=u.zeilen.find(z=>z.label==='P9');
