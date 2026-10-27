@@ -1,13 +1,15 @@
-// Spektron-Kette (Integrationstest): LabelKit → ResultKit → Projektzentrale → PlanKit → FotoKit mit den echten Apps.
+// Spektron-Kette (Integrationstest): LabelKit → ResultKit → Projektzentrale → PlanKit → FotoKit → BüroKit → BelegKit mit den echten Apps.
 // Alle vier Apps laufen unter einem lokalen Server auf demselben Ursprung wie auf GitHub Pages und teilen sich daher den
 // Archivordner (IndexedDB „mosaik-suite“/„kv“/„archiv“) – hier ein Ordner im privaten Browserdateisystem (OPFS).
 // Ein erfundenes Projekt läuft einmal durch: Proben in LabelKit, vorläufiger und (teilweise) endgültiger Prüfbericht in ResultKit,
-// Stand in der Projektzentrale, Werte und Warnleiste in PlanKit, Ergebnistabelle fürs Gutachten in FotoKit. Geprüft wird vor allem, was zwischen den Apps kaputtgehen kann:
+// Stand in der Projektzentrale, Werte und Warnleiste in PlanKit, Ergebnistabelle fürs Gutachten in FotoKit; danach vollständiger Bericht,
+// Übergabe ans Büro, Versand in BüroKit, Abrechnung in BelegKit – bis die Projektzentrale „Versandt und abgerechnet“ zeigt. Geprüft wird vor allem, was zwischen den Apps kaputtgehen kann:
 // gleiche Probennummern und -bezeichnungen überall, Vollständigkeit, „Plan liegt hinter ResultKit“.
 // Nur erfundene Daten. Fehler nennen die App, in der der Schritt scheiterte.
 //
 // Voraussetzungen: ResultKit gebaut (pnpm build), daneben LabelKit, Projektzentrale, FotoKit und gebautes PlanKit:
-//   LABELKIT_DIR=../labelkit  ZENTRALE_DIR=../projektzentrale  PLANKIT_DIST=../probenplan/dist  FOTOKIT_DIR=../bildumbenenner  node tests/suite-kette.mjs
+//   LABELKIT_DIR=../labelkit  ZENTRALE_DIR=../projektzentrale  PLANKIT_DIST=../probenplan/dist  FOTOKIT_DIR=../bildumbenenner
+//   BUEROKIT_DIR=../buerokit  BELEGKIT_DIR=../aufwandkit  node tests/suite-kette.mjs
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFile,stat} from 'node:fs/promises';
@@ -20,7 +22,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'@playwright/test');
 
 const neben=(env,...namen)=>{if(process.env[env])return path.resolve(process.env[env]);const d=namen.map(n=>path.resolve('..',n)).find(existsSync);if(!d)throw Error(`${env}: ${namen.join(' / ')} liegt nicht neben ResultKit`);return d;};
 // Erster Pfadteil → Ordner (ohne Groß-/Kleinschreibung, wie die Links der Apps: ../labelkit/, ../Projektzentrale/, ../Probenplan/)
-const APPS={labelkit:neben('LABELKIT_DIR','labelkit'),resultkit:path.resolve('dist'),projektzentrale:neben('ZENTRALE_DIR','projektzentrale','Projektzentrale'),probenplan:neben('PLANKIT_DIST','probenplan/dist','Probenplan/dist'),bildumbenenner:neben('FOTOKIT_DIR','bildumbenenner','Bildumbenenner')};
+const APPS={labelkit:neben('LABELKIT_DIR','labelkit'),resultkit:path.resolve('dist'),projektzentrale:neben('ZENTRALE_DIR','projektzentrale','Projektzentrale'),probenplan:neben('PLANKIT_DIST','probenplan/dist','Probenplan/dist'),bildumbenenner:neben('FOTOKIT_DIR','bildumbenenner','Bildumbenenner'),buerokit:neben('BUEROKIT_DIR','buerokit'),aufwandkit:neben('BELEGKIT_DIR','aufwandkit')};
 for(const [app,dir] of Object.entries(APPS))if(!existsSync(path.join(dir,'index.html')))throw Error(`${app}: index.html fehlt in ${dir}${app==='resultkit'||app==='probenplan'?' – vorher bauen':''}`);
 const TYP={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.woff2':'font/woff2','.wasm':'application/wasm','.txt':'text/plain'};
 const server=http.createServer(async(req,res)=>{
@@ -43,6 +45,9 @@ const pak=(sum,bap)=>[{p:SUM,r:sum,u:U},...(bap?[{p:'Benzo[a]pyren',r:bap,u:U}]:
 // vorläufig: alles; endgültig: P1 nur Σ16 (BaP bleibt vorläufig), P2, P3, P4 Chlorid
 const VORL=labXML([xmlProbe(1,pak('12','0,8')),xmlProbe(2,pak('7','< 0,5')),xmlProbe(3,pak('< 0,5','< 0,5')),xmlProbe(4,[{p:'Chlorid',r:'3',u:CL}])],{vorlaeufig:true,code:'AR-9-01',ref:PROJEKT});
 const ENDG=labXML([xmlProbe(1,pak('14')),xmlProbe(2,pak('7,5','< 0,5')),xmlProbe(3,pak('< 0,5','< 0,5')),xmlProbe(4,[{p:'Chlorid',r:'3,5',u:CL}])],{code:'AR-9-02',ref:PROJEKT});
+// endgültig nachgeliefert: BaP von P1 → alle Werte endgültig
+const ENDG2=labXML([xmlProbe(1,[{p:'Benzo[a]pyren',r:'0,7',u:U}])],{code:'AR-9-03',ref:PROJEKT});
+const HEUTE=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin'}).format(new Date());   // JJJJ-MM-TT wie in BelegKit
 const SVG='<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#fff"/><rect x="40" y="40" width="720" height="520" fill="none" stroke="#000" stroke-width="6"/></svg>';
 
 const browser=await chromium.launch({headless:true,...(process.env.BROWSER_EXECUTABLE?{executablePath:process.env.BROWSER_EXECUTABLE}:{})});
@@ -65,7 +70,9 @@ try{
   const archiv=await root.getDirectoryHandle('Archiv',{create:true}),p=await archiv.getDirectoryHandle(projekt,{create:true});
   const schreib=async(d,name,text)=>{const w=await (await d.getFileHandle(name,{create:true})).createWritable();await w.write(text);await w.close();};
   for(const s of ['Laboraufträge','Laborergebnisse','Pläne','Fotos'])await p.getDirectoryHandle(s,{create:true});
-  await schreib(p,'_Projekt.json',JSON.stringify({format:'mosaik-projekt',version:1,projektnummer:projekt.slice(0,7),schadenort:'Kettenort',objekt:'Fiktives Testhaus, Musterweg 1',nutzung:'Wohnen'}));
+  await schreib(p,'_Projekt.json',JSON.stringify({format:'mosaik-projekt',version:1,projektnummer:projekt.slice(0,7),schadenort:'Kettenort',objekt:'Fiktives Testhaus, Musterweg 1',nutzung:'Wohnen',auftraggeber:'Fiktive Versicherung AG, Beispielweg 2'}));
+  await schreib(archiv,'_Spektron-Mitarbeiter.json',JSON.stringify({format:'spektron-mitarbeiter',version:1,personen:[{ordnerKuerzel:'SK',appKuerzel:'SK',name:'Sven Beispiel',aktiv:true},{ordnerKuerzel:'Nad',appKuerzel:'Nad',name:'Nora Test',aktiv:true}]}));
+  await schreib(await p.getDirectoryHandle('Mitteilungen',{create:true}),'Gutachten 26.0601.docx','synthetisch');
   await schreib(await p.getDirectoryHandle('Pläne'),'Grundriss EG.svg',svg);
   await new Promise((ok,nein)=>{const r=indexedDB.open('mosaik-suite',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onerror=()=>nein(r.error);
    r.onsuccess=()=>{const tx=r.result.transaction('kv','readwrite');tx.objectStore('kv').put(archiv,'archiv');tx.oncomplete=()=>{r.result.close();ok();};tx.onerror=()=>nein(tx.error);};});
@@ -195,6 +202,68 @@ try{
   assert.ok(p1.some(z=>z.some(c=>/^0,8\b/.test(c))),'BaP von P1 noch aus dem vorläufigen Bericht');
   assert.match(quelle,/Zwischenstand/,'Zwischenstand aus ResultKit');assert.match(quelle,/vorläufige Werte/);
   assert.doesNotMatch(quelle,/Seit der Übernahme/,'Stand passt zur Übernahme');
+ });
+ // ---- 7. Letzter endgültiger Bericht: alles vollständig ----
+ await schritt('ResultKit','nachgelieferten Bericht importieren: 4 von 4 endgültig, vollständig übernommen',async()=>{
+  await rk.bringToFront();await importieren('AR-9-03.xml',ENDG2);
+  await until(async()=>(await stand())==='4 von 4 Proben mit Ergebnis','Stand vollständig');
+  await uebernehmen();
+  const e=JSON.parse(await lies(rk,'Laborergebnisse/_Ergebnisse.json'));assert.equal(e.vollstaendig,true);assert.deepEqual(e.offen,[]);
+  assert.deepEqual(e.ersetzt.map(x=>x.bericht),['AR-9-01'],'vorläufiger Bericht jetzt ganz ersetzt');
+ });
+
+ // ---- 8. Projektzentrale: Labor fertig, Gutachten ans Büro übergeben ----
+ const pzZeile=()=>pz.locator(`.proj[data-name="${PROJEKT}"]`);
+ const pzStand=async(gruppe,kurz)=>until(async()=>(await pzZeile().getAttribute('data-gruppe'))===gruppe&&(await pzZeile().locator('.stand').textContent())===kurz,`Liste: ${gruppe} · ${kurz}`);
+ await schritt('Projektzentrale','Labor „vollständig übernommen“, dann „Ans Büro übergeben“ → Aufgabe für BüroKit',async()=>{
+  await pz.bringToFront();await pz.evaluate(()=>localStorage.setItem('spektron-ich','SK'));await pz.reload();
+  const t=await pzStufe();assert.match(t,/Ergebnisse vollständig übernommen/,`Labor-Stufe (war: „${t}“)`);
+  await pz.locator('[data-ab-summary]').click();
+  await pz.locator('[data-ab-word]').selectOption('Mitteilungen/Gutachten 26.0601.docx');
+  if(!await pz.locator('[data-ab-an="0"]').isChecked())await pz.locator('[data-ab-an="0"]').check();
+  assert.match(await pz.locator('[data-ab-details="0"]').inputValue(),/Fiktive Versicherung AG/,'Auftraggeber aus den Projektdaten');
+  await pz.locator('[data-ab-los]').click();await pz.locator('#bueroPanel [data-ab-msg]').filter({hasText:'✓ Ans Büro übergeben'}).waitFor();
+  const aufgaben=await liste(pz,'_Buero/aufgaben');assert.equal(aufgaben.length,1,'eine Aufgabe in „_Buero/aufgaben“');
+  await pz.locator('#btnRescan').click();await pzStand('laeuft','Beim Büro');
+ });
+
+ // ---- 9. BüroKit: gegenlesen, PDF, Versand → erledigt ----
+ const bk=await neueSeite('BüroKit');
+ await schritt('BüroKit','Aufgabe aus der Projektzentrale abarbeiten: Gegenlesen, PDF, Versand → erledigt',async()=>{
+  await bk.goto(`${base}/buerokit/`);
+  const karte=bk.locator('.aufgabe',{hasText:NR});await karte.waitFor();
+  assert.match(await karte.textContent(),/Kettenort/);
+  await bk.locator('#ich').selectOption('Nad');
+  const fertig=()=>bk.waitForFunction(()=>!document.querySelector('#liste input:disabled'));
+  await karte.locator('input[data-s="gegenlesen"]').check();await fertig();
+  await karte.locator('input[data-s="pdf"]').check();await fertig();
+  await karte.locator('button.schritt[data-mehr]').click();
+  const empf=karte.locator('.empf input');const anzahl=await empf.count();assert.ok(anzahl>=1,'Empfänger aus der Übergabe');
+  for(let i=0;i<anzahl;i++){await karte.locator('.empf input').nth(i).check();await fertig();}
+  await bk.locator('#erledigtBox').waitFor();
+ });
+ await schritt('Projektzentrale','nach dem Versand: „Versandt · Abrechnung offen“',async()=>{
+  await pz.bringToFront();await pz.locator('#btnRescan').click();await pzStand('dich','Versandt · Abrechnung offen');
+ });
+
+ // ---- 10. BelegKit: Zeiten erfassen, Abrechnungsstand speichern ----
+ const bl=await neueSeite('BelegKit');
+ await schritt('BelegKit','Zeiten erfassen und „Stand speichern“ → Abrechnung im Projektordner',async()=>{
+  await bl.goto(`${base}/aufwandkit/#zeiten&projekt=${encodeURIComponent(PROJEKT)}`);
+  await bl.waitForFunction(n=>typeof A!=='undefined'&&A.proj?.name===n,PROJEKT);
+  await bl.locator('button[data-tab="zeiten"]').click();
+  if(await bl.locator('#kzEin').isVisible().catch(()=>false)){await bl.locator('#kzEin').fill('sk');await bl.locator('#kzOk').click();}
+  await bl.locator('#zNeu').click();
+  const z=f=>bl.locator(`#zRows tr[data-i="0"] [data-f="${f}"]`);
+  await z('datum').fill(HEUTE);await z('stunden').fill('6');
+  await bl.waitForFunction(()=>/gespeichert in „Abrechnung\/Aufwand_SK\.json“/.test(document.getElementById('status').textContent));
+  await bl.locator('button[data-tab="abrechnung"]').click();await bl.locator('#aStand').click();
+  await until(async()=>(await liste(bl,'Abrechnung')).includes(`${NR.replace('.','-')}_Aufwand_${HEUTE}.json`),'Abrechnungsstand gespeichert');
+ });
+ await schritt('Projektzentrale','Projekt „Versandt und abgerechnet“, abgeschlossen; Fortschritt seit dem Spektron-Start',async()=>{
+  await pz.bringToFront();await pz.reload();
+  await pzStand('fertig','Versandt und abgerechnet');
+  assert.match(await pz.locator('.fortschritt').textContent(),/Seit dem Spektron-Start \(ab 26\.0560\): 1 Projekt im Büro, 1 abgeschlossen/);
  });
  assert.deepEqual(fehler,[],'Skriptfehler in einer App');
 }catch(e){
