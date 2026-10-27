@@ -263,6 +263,7 @@ try{
  await schritt('Projektzentrale','Projekt „Versandt und abgerechnet“, abgeschlossen; Fortschritt seit dem Spektron-Start',async()=>{
   await pz.bringToFront();await pz.reload();
   await pzStand('fertig','Versandt und abgerechnet');
+  await pz.locator('#heuteLink').click();   // nach dem Neuladen ist das zuletzt geöffnete Projekt wieder offen
   assert.match(await pz.locator('.fortschritt').textContent(),/Seit dem Spektron-Start \(ab 26\.0560\): 1 Projekt im Büro, 1 abgeschlossen/);
  });
  assert.deepEqual(fehler,[],'Skriptfehler in einer App');
