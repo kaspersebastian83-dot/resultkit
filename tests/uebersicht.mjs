@@ -10,6 +10,7 @@ registerHooks({
 });
 // Ergebnisübersicht: Gruppen je Probenart, Hauptwert, Asbest-Befund, Sortierung nach Ort. Synthetische Daten.
 const U=await import('../src/uebersicht.ts');
+const B=await import('../src/bewertung.ts');
 let n=0;const ok=(name,fn)=>{fn();n++;console.log('OK Übersicht: '+name);};
 const z=(label,desc,werte,{typ,status='ergebnis'}={})=>({label,nr:Number(label.slice(1)),ref:`Probe ${label.slice(1)}`,desc,...(typ?{typ}:{}),erwartet:true,status,werte:werte.map(([p,r,u])=>({p,r,u,bericht:'AR',vorlaeufig:status==='vorlaeufig'})),berichte:['AR'],hinweise:[]});
 const SUM='Summe 16 EPA-PAK exkl. BG';
@@ -49,9 +50,60 @@ ok('Chlorid in µg/cm²: ältere Berichte in mg/m² umgerechnet (1 µg/cm² = 10
  assert.deepEqual(U.chloridInUgCm2({p:'Chlorid',r:'unter BG',u:'mg/m²',loq:'5'}),{p:'Chlorid',r:'unter BG',u:'µg/cm²',loq:'0,5'});
  assert.deepEqual(U.chloridInUgCm2({p:'Chlorid',r:'n. n.',u:'mg/m²'}),{p:'Chlorid',r:'n. n.',u:'µg/cm²'});
 });
+ok('Gleicher Parameter je Probe und je Fläche (Eurofins: Chlorid µg/Probe und µg/cm² berechnet): der Flächenwert gilt',()=>{
+ for(const reihe of [[['Chlorid (Cl)','2800','µg/ Probe'],['Chlorid (Cl)','20','µg/cm²']],[['Chlorid (Cl)','20','µg/cm²'],['Chlorid (Cl)','2800','µg/ Probe']]]){
+  const g=U.uebersichtGruppen([z('P6','EG',[['Größe der Probenfläche','140','cm²'],...reihe],{typ:'Chlorid'})]);
+  assert.deepEqual([g[0].zeilen[0].haupt.r,g[0].zeilen[0].haupt.u],['20','µg/cm²']);}
+ const pak=U.uebersichtGruppen([z('P1','EG',[['Summe 16 EPA-PAK exkl. BG','1700','ng/Probe'],['Summe 16 EPA-PAK exkl. BG','28','µg/m²']],{typ:'PAK'})]);
+ assert.equal(pak[0].zeilen[0].haupt.u,'µg/m²');
+ assert.equal(U.uebersichtGruppen([z('P2','EG',[['Chlorid','2800','µg/ Probe']],{typ:'Chlorid'})])[0].zeilen[0].haupt.u,'µg/ Probe','nur je Probe: wie im Bericht');
+});
+ok('Asbest: leere Zeilen wie „Asbestgehalt: -“ fallen weg',()=>{
+ assert.deepEqual(U.asbestBefund([{p:'Asbestgehalt',r:'-',u:''},{p:'Asbest',r:'Kein Asbest nachgewiesen',u:''}]),{text:'Kein Asbest nachgewiesen',gefunden:false});
+ assert.deepEqual(U.asbestBefund([{p:'Asbestgehalt',r:'-',u:''},{p:'Chrysotil',r:'nachgewiesen',u:''}]),{text:'Chrysotil: nachgewiesen',gefunden:true},'Mineral bleibt genannt');
+});
+ok('Asbest nach VDI 3866-5 (Eurofins): Asbestgehalt % und Asbestart je Nachweisgrenze, nicht untersuchte Stufen „-“',()=>{
+ const roh=(g1,a1,g2,a2,g3,a3)=>[['Asbestgehalt',g1,'%'],['Asbestart',a1,''],['Asbestgehalt',g2,'%'],['Asbestart',a2,''],['Asbestgehalt',g3,'%'],['Asbestart',a3,'']];
+ const stufen=(...x)=>roh(...x).map(([p,r,u])=>({p,r,u}));
+ assert.deepEqual(U.asbestBefund(stufen('5 - 20','Chrysotil','-','-','-','-')),{text:'Chrysotil · 5 - 20 %',gefunden:true},'positiv bei NWG 1 %');
+ assert.deepEqual(U.asbestBefund(stufen('-','-','-','Kein Asbest nachgewiesen','-','-')),{text:'Kein Asbest nachgewiesen',gefunden:false},'negativ bei NWG 0,1 %');
+ assert.deepEqual(U.asbestBefund(stufen('-','-','-','-','-','Kein Asbest nachgewiesen')),{text:'Kein Asbest nachgewiesen',gefunden:false},'negativ bei NWG 0,001 %');
+ assert.deepEqual(U.asbestBefund(stufen('-','-','-','-','>1','Chrysotil')),{text:'Chrysotil · >1 %',gefunden:true},'positiv bei NWG 0,001 %');
+ assert.equal(U.asbestBefund([{p:'Asbestgehalt',r:'>1',u:'%'}]).gefunden,true,'Gehalt allein reicht');
+ for(const r of ['< 0,1','n. n.','nicht nachweisbar'])assert.equal(U.asbestBefund([{p:'Asbestgehalt',r,u:'%'}]).gefunden,false,r);
+ assert.deepEqual(U.asbestBefund(stufen('-','Kein Asbest nachgewiesen','-','Kein Asbest nachgewiesen','-','-')).text,'Kein Asbest nachgewiesen','gleicher Text nur einmal');
+ const g=U.uebersichtGruppen([z('P11','Garage, Faserzementplatte Dach',roh('5 - 20','Chrysotil','-','-','-','-'),{typ:'Asbest'}),z('P12','Garage, Wandputz',roh('-','-','-','-','-','Kein Asbest nachgewiesen'),{typ:'Asbest'})]);
+ assert.deepEqual(g[0].zeilen.map(x=>[x.befund.text,x.befund.gefunden]),[['Chrysotil · 5 - 20 %',true],['Kein Asbest nachgewiesen',false]]);
+});
 ok('Sortierung nach Ort: Gebäude, Geschoss von unten nach oben, dann Raum; sonst nach Nummer',()=>{
  const zeilen=['P1 DG Bad Decke','P2 EG Küche Wand','P3 KG Heizung Decke','P4 1OG Flur Wand','P5 EG Flur Decke','P6 Haus B EG Lager Wand','P7 2.OG Bad Wand','P8 Garage Decke'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
- assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P8','P6']);
+ assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P6','P8'],'ohne Geschoss (P8) ans Ende, auch nach „Haus B“');
  assert.deepEqual(U.sortiere(zeilen,'nr').map(z=>z.label),['P1','P2','P3','P4','P5','P6','P7','P8']);
+});
+ok('Sortierung nach Ort: ohne Geschoss nach allen Proben mit Geschoss, auch mit Gebäude davor',()=>{
+ const zeilen=['P1 Haus A EG Küche','P2 Treppenhaus Wand','P3 Haus A 1.OG Bad','P4 Außenwand Nord'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
+ assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P1','P3','P4','P2']);
+});
+ok('Chlorid in mg/m²: nur Sicheres wird umgerechnet, sonst bleibt Wert und Einheit wie im Bericht',()=>{
+ const c=(r,loq)=>U.chloridInUgCm2({p:'Chlorid',r,u:'mg/m²',...(loq?{loq}:{})});
+ assert.deepEqual(c('> 500','5'),{p:'Chlorid',r:'> 50',u:'µg/cm²',loq:'0,5'});
+ assert.deepEqual(c('< 0,5'),{p:'Chlorid',r:'< 0,05',u:'µg/cm²'});
+ assert.deepEqual(c('n. b.'),{p:'Chlorid',r:'n. b.',u:'µg/cm²'});
+ for(const r of ['(3)','1.250','(< 0,5)','< 1.250','ca. 30'])assert.equal(c(r),null,r);
+ const g=U.uebersichtGruppen([z('P1','EG',[['Chlorid','(3)','mg/m²']],{typ:'Chlorid'}),z('P2','EG',[['Chlorid','1.250','mg/m²']],{typ:'Chlorid'})]);
+ assert.deepEqual(g[0].zeilen.map(x=>[x.haupt.r,x.haupt.u,x.original]),[['(3)','mg/m²',undefined],['1.250','mg/m²',undefined]]);
+});
+ok('Wiederholte Parameter (Asbest je Nachweisgrenze): Wert mit Inhalt vor „-“',()=>{
+ const w=[['Asbestgehalt','-','%'],['Asbestart','-',''],['Asbestgehalt','-','%'],['Asbestart','–',''],['Asbestgehalt','>1','%'],['Asbestart','Chrysotil','']].map(([p,r,u])=>({p,r,u}));
+ assert.equal(U.wertFuer(w,'Asbestgehalt','%').r,'>1');assert.equal(U.wertFuer(w,'Asbestart','').r,'Chrysotil');
+ assert.equal(U.wertFuer([{p:'Asbestart',r:'-',u:''}],'Asbestart','').r,'-');assert.equal(U.wertFuer(w,'Chlorid',''),undefined);
+});
+ok('Skalen aus der Projektdatei: nur gültige wie in PlanKit, Farben nur „#rrggbb“',()=>{
+ const gut={name:'Büro',cats:[{name:'niedrig',from:0,color:'#4CAF50'},{name:'hoch',from:10,color:'#e0453a'}]};
+ const boese={name:'X',cats:[{name:'a',from:0,color:'red;background:url(x)"><img src=x onerror=alert(1)>'}]};
+ assert.deepEqual(B.gueltigeSkalen({'A|µg/m²':gut,'B|µg/m²':boese,'C|µg/m²':{name:'ohne Farbe',cats:[{name:'a',from:0}]},'D|µg/m²':null,'E|µg/m²':{name:'Y',cats:[{name:'a',from:5,color:'#ffffff'},{name:'b',from:1,color:'#000000'}]}}),
+  {'A|µg/m²':{name:'Büro',cats:[{name:'niedrig',from:0,color:'#4caf50'},{name:'hoch',from:10,color:'#e0453a'}]}});
+ for(const v of [undefined,null,[],'x'])assert.equal(B.gueltigeSkalen(v),undefined);
+ assert.equal(B.farbeSicher('#AbC123'),'#AbC123');assert.equal(B.farbeSicher('red;x:"'),B.UNRATED);assert.equal(B.farbeSicher(undefined,'#000000'),'#000000');
 });
 console.log(`${n} Prüfungen Übersicht bestanden`);

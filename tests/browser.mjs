@@ -19,6 +19,8 @@ const labelkit=JSON.stringify({version:'4.41.0',projekt:{nr:'99.9001'},
 const vorlaeufig=labXML([probe(1,pak('12')),probe(2,pak('8'))],{vorlaeufig:true,code:'AR-1-01'});
 const endgueltig=labXML([probe(1,pak('14')),probe(2,pak('8,5')),probe(3,pak('< 0,5')),probe(4,[{p:'Chlorid',r:'26',u:'µg/cm²'}])],{code:'AR-1-02'});
 const fremd=labXML([probe(1,pak('3'))],{code:'AR-7-01',ref:'99.9002 Anderswo'});
+// Probenplan mit manipulierter Skalenfarbe: darf kein HTML einschleusen (ungültige Skala entfällt, VdS-Referenz gilt)
+const plan=JSON.stringify({results:{usage:'residential',parameter:SUM,scales:{},vds:{[`${SUM}|${U}`]:{name:'X',cats:[{name:'a',from:0,color:'red;background:url(x)"><img id="xss" src="data:," onerror="window.__xss=1">'}]}}}});
 
 const server=await preview({preview:{host:'127.0.0.1',port:0,open:false},logLevel:'silent'});
 const base=`http://127.0.0.1:${server.httpServer.address().port}/`;
@@ -45,7 +47,7 @@ try{
   const page=await context.newPage();page.setDefaultTimeout(15000);
   const fehler=[];page.on('pageerror',e=>fehler.push(e.message));page.on('console',m=>{if(m.type()==='error')fehler.push(m.text());});
   await page.goto(base);
-  await ordner(page,{'_Projekt.json':JSON.stringify({nutzung:'Wohnen'}),'Laboraufträge/99.9001_08.10.2026_Daten.json':labelkit,'Laborergebnisse/AR-1-01.xml':vorlaeufig});
+  await ordner(page,{'_Projekt.json':JSON.stringify({nutzung:'Wohnen'}),'Laboraufträge/99.9001_08.10.2026_Daten.json':labelkit,'Laborergebnisse/AR-1-01.xml':vorlaeufig,[`Pläne/Probenplan ${PROJEKT}.probenplan`]:plan});
   const stand=page.locator('#jetzt .jetzt-stand'),jetzt=page.locator('#jetzt'),w=viewport.width;
   const art=()=>jetzt.getAttribute('data-art');
   const aufklappen=async(gruppe,probe)=>{const z=page.locator('.u-gruppe').nth(gruppe).locator('tr.u-zeile',{has:page.getByRole('button',{name:probe,exact:true})});await z.getByRole('button',{name:probe,exact:true}).click();
@@ -108,13 +110,14 @@ try{
    const p1=(await aufklappen(0,'P1')).locator('.wert').first();
    assert.match(await p1.textContent(),/Σ16 EPA-PAK\s*14/);
    assert.equal(await p1.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(224, 69, 58)');
-   assert.match(await p1.getAttribute('title'),/VdS 2357.*Wohnen/);
+   assert.match(await p1.getAttribute('title'),/VdS 2357.*Wohn/);
    const p2=(await aufklappen(0,'P2')).locator('.wert').first();
    assert.equal(await p2.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(76, 175, 80)');
    const chlorid=(await aufklappen(1,'P4')).locator('.wert').first();
    assert.equal(await chlorid.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(224, 69, 58)','Chlorid 26 µg/cm²: oberhalb von 5–10 µg/cm² (VdS 2357)');
    for(const p of ['P1','P2','P4'])await page.getByRole('button',{name:p,exact:true}).click();
    assert.equal(await page.locator('.u-detail').count(),0);
+   assert.equal(await page.locator('#xss').count(),0,'Farbe aus dem Probenplan schleust kein HTML ein');assert.equal(await page.evaluate(()=>window.__xss),undefined);
   });
 
   await check(`${w}: Prüfberichte aufklappen – Alle Parameter je Bericht`,async()=>{

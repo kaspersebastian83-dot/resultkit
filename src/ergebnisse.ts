@@ -4,7 +4,7 @@
 // „Laborergebnisse/_Ergebnisse.json“, aus der PlanKit, FotoKit und die Projektzentrale lesen.
 //
 // Zusammenführen wie im Datenarchiv der Projektzentrale (archiv/auswertung.js, projektMessungen):
-// gleicher Bericht mehrfach abgelegt → neueste Datei; gleiche Probe/Parameter/Einheit in mehreren Berichten → endgültig vor
+// gleicher Bericht mehrfach abgelegt → die Datei mit Messwerten (XML), dann endgültig vor vorläufig, sonst die neueste; gleiche Probe/Parameter/Einheit in mehreren Berichten → endgültig vor
 // vorläufig, sonst der neuere. Ein Bericht, von dem nichts übrig bleibt, gilt als ersetzt.
 import type {LabReport} from './labreport';
 import {referenceLabel} from './labreport';
@@ -30,11 +30,17 @@ const projektnummer=(s:string)=>s.match(/\b\d{2}\.\d{3,6}\b/)?.[0]||'';
 
 export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Eingang[]):Uebersicht{
  const hinweise:string[]=[];
- // 1. Gleicher Bericht mehrfach abgelegt → neueste Datei. Ohne Nummer zählt die Datei als eigener Bericht.
- const nachCode=new Map<string,Eingang>();
+ // 1. Gleicher Bericht mehrfach abgelegt → die Datei mit Messwerten (XML), dann endgültig vor vorläufig, sonst die neuere.
+ //    Eine PDF allein (anderer Dateiname als die XML) verdrängt die Werte nicht, sie bleibt als PDF des Berichts genannt.
+ //    Ohne Nummer zählt die Datei als eigener Bericht.
+ const nachCode=new Map<string,Eingang>(),mitWerten=(e:Eingang)=>e.report.rows.some(row=>row.werte?.length);
  for(const e of eingaenge){const key=e.report.bericht?`b:${norm(e.report.bericht)}`:`d:${e.report.quelle}`;const alt=nachCode.get(key);
-  if(alt){hinweise.push(`Prüfbericht ${e.report.bericht} liegt mehrfach im Ordner (${[alt.report.quelle,e.report.quelle].join(', ')}). Es zählt die neuere Datei.`);if(e.geaendert<alt.geaendert)continue;}
-  nachCode.set(key,e);}
+  if(!alt){nachCode.set(key,e);continue;}
+  const [grund,neuGilt]=mitWerten(e)!==mitWerten(alt)?['die Datei mit Messwerten',mitWerten(e)]:!e.report.vorlaeufig!==!alt.report.vorlaeufig?['der endgültige Bericht',!e.report.vorlaeufig]:['die neuere Datei',e.geaendert>=alt.geaendert];
+  hinweise.push(`Prüfbericht ${e.report.bericht} liegt mehrfach im Ordner (${[alt.report.quelle,e.report.quelle].join(', ')}). Es zählt ${grund}.`);
+  const [gilt,andere]=neuGilt?[e,alt]:[alt,e];
+  const pdf=!mitWerten(andere)&&andere.report.sources.pdf&&!gilt.report.sources.pdf?andere.report.sources.pdf:'';
+  nachCode.set(key,pdf?{...gilt,report:{...gilt.report,sources:{...gilt.report.sources,pdf}}}:gilt);}
  const berichte:Bericht[]=[...nachCode.values()].map((e,i)=>{const r=e.report,id=`b${i+1}`;const b:Bericht={id,bericht:r.bericht,labor:r.labor,auftragsreferenz:r.auftragsreferenz,...(r.batch?{batch:r.batch}:{}),sources:{...r.sources},...(r.vorlaeufig?{vorlaeufig:true as const}:{}),...(r.datum?{datum:r.datum}:{}),
   proben:r.rows.map(row=>({...row,label:row.label||referenceLabel(row.ref),bericht:r.bericht,...(row.werte?{werte:row.werte.map(w=>({...w}))}:{})})),geaendert:e.geaendert,hinweise:[...new Set(r.warnings)],ohneWerte:!r.rows.some(row=>row.werte?.length)};
   const nr=projektnummer(r.auftragsreferenz);if(projekt&&nr&&nr!==projekt)b.hinweise.push(`Die Auftragsreferenz „${r.auftragsreferenz}“ nennt Projekt ${nr} – dieses Projekt ist ${projekt}. Gehört der Bericht hierher?`);
