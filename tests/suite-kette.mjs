@@ -36,7 +36,9 @@ const base=`http://127.0.0.1:${server.address().port}`;
 
 const NR='26.0601',PROJEKT=`${NR} Kettenort`,SUM='Summe 16 EPA-PAK exkl. BG',U='µg/m²',CL='µg/cm²';
 const STELLEN=[['EG Küche','Wand','Ansicht'],['EG Flur','Decke','Untersicht'],['OG Bad','Fliese','Ansicht']];
-const xmlProbe=(n,lines)=>({ref:`Probe ${n}`,labNr:`999-2099-${String(n).padStart(8,'0')}`,desc:`Labortext ${n}`,art:'Wischprobe',lines});
+// Wie bei Eurofins: Probenreferenz „Probe <Nr>“ und Probenbeschreibung (SPLPT_NAME) kommen aus der LabelKit-Übergabe zurück
+const BESCHREIBUNG=[...STELLEN.map(([z2,z3,z4])=>`${z2}, ${z3}, ${z4}, 400 cm²`),'EG Küche, Arbeitsplatte, Aufsicht, 100 cm²'];
+const xmlProbe=(n,lines)=>({ref:`Probe ${n}`,labNr:`999-2099-${String(n).padStart(8,'0')}`,desc:BESCHREIBUNG[n-1],art:'Wischprobe',lines});
 const pak=(sum,bap)=>[{p:SUM,r:sum,u:U},...(bap?[{p:'Benzo[a]pyren',r:bap,u:U}]:[])];
 // vorläufig: alles; endgültig: P1 nur Σ16 (BaP bleibt vorläufig), P2, P3, P4 Chlorid
 const VORL=labXML([xmlProbe(1,pak('12','0,8')),xmlProbe(2,pak('7','< 0,5')),xmlProbe(3,pak('< 0,5','< 0,5')),xmlProbe(4,[{p:'Chlorid',r:'3',u:CL}])],{vorlaeufig:true,code:'AR-9-01',ref:PROJEKT});
