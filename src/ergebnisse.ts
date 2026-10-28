@@ -6,8 +6,8 @@
 // Zusammenführen wie im Datenarchiv der Projektzentrale (archiv/auswertung.js, projektMessungen):
 // gleicher Bericht mehrfach abgelegt → die Datei mit Messwerten (XML), dann endgültig vor vorläufig, sonst die neueste; gleiche Probe/Parameter/Einheit in mehreren Berichten → endgültig vor
 // vorläufig, sonst der neuere. Ein Bericht, von dem nichts übrig bleibt, gilt als ersetzt.
-import type {LabReport} from './labreport';
-import {referenceLabel} from './labreport';
+import type {LabReport,Abweichung} from './labreport';
+import {referenceLabel,mitPdfAbgleichen,abgleichHinweis,ABGLEICH} from './labreport';
 import type {LabOrigin,LabSample,Wert} from './model';
 
 export const FORMAT='spektron-ergebnisse',VERSION=1,DATEI='_Ergebnisse.json';
@@ -17,7 +17,8 @@ const nummer=(label:string)=>{const n=Number(label.replace(/^P/i,''));return Num
 
 /** Ein Prüfbericht, wie er im Ordner liegt (XML und/oder PDF gleichen Namens). */
 export interface Eingang {report:LabReport;geaendert:number}
-export interface Bericht extends LabOrigin {datum?:string;proben:LabSample[];geaendert:number;hinweise:string[];ersetztDurch?:string[];ohneWerte:boolean}
+/** wertAbgleich (ab 1.6): Hauptwerte XML↔PDF – nur wenn beide Dateien vorliegen. */
+export interface Bericht extends LabOrigin {datum?:string;proben:LabSample[];geaendert:number;hinweise:string[];ersetztDurch?:string[];ohneWerte:boolean;wertAbgleich?:{erkannt:boolean;geprueft:number;abweichend:number}}
 export type Status='ergebnis'|'vorlaeufig'|'ohneWerte'|'offen'|'nichtBeauftragt';
 export interface Zeile {label:string;nr:number|null;ref:string;desc:string;typ?:string;art?:string;datum?:string;erwartet:boolean;status:Status;werte:(Wert&{bericht:string;vorlaeufig:boolean})[];berichte:string[];hinweise:string[]}
 export interface Uebersicht {projekt:string;auftrag:{quelle:string;proben:number;hinweise:string[]}|null;berichte:Bericht[];zeilen:Zeile[];
@@ -40,10 +41,15 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   hinweise.push(`Prüfbericht ${e.report.bericht} liegt mehrfach im Ordner (${[alt.report.quelle,e.report.quelle].join(', ')}). Es zählt ${grund}.`);
   const [gilt,andere]=neuGilt?[e,alt]:[alt,e];
   const pdf=!mitWerten(andere)&&andere.report.sources.pdf&&!gilt.report.sources.pdf?andere.report.sources.pdf:'';
-  nachCode.set(key,pdf?{...gilt,report:{...gilt.report,sources:{...gilt.report.sources,pdf}}}:gilt);}
+  if(!pdf){nachCode.set(key,gilt);continue;}
+  // XML und PDF mit verschiedenem Dateinamen: wie gemeinsam abgelegt behandeln – auch die Hauptwerte abgleichen (ab 1.6)
+  const zusammen:LabReport={...gilt.report,sources:{...gilt.report.sources,pdf},warnings:[...gilt.report.warnings]};if(gilt.report.sources.xml)mitPdfAbgleichen(zusammen,andere.report);
+  nachCode.set(key,{...gilt,report:zusammen});}
+ const abweichungen=new Map<Bericht,Record<string,Abweichung[]>>();
  const berichte:Bericht[]=[...nachCode.values()].map((e,i)=>{const r=e.report,id=`b${i+1}`;const b:Bericht={id,bericht:r.bericht,labor:r.labor,auftragsreferenz:r.auftragsreferenz,...(r.batch?{batch:r.batch}:{}),sources:{...r.sources},...(r.vorlaeufig?{vorlaeufig:true as const}:{}),...(r.datum?{datum:r.datum}:{}),
-  proben:r.rows.map(row=>({...row,label:row.label||referenceLabel(row.ref),bericht:r.bericht,...(row.werte?{werte:row.werte.map(w=>({...w}))}:{})})),geaendert:e.geaendert,hinweise:[...new Set(r.warnings)],ohneWerte:!r.rows.some(row=>row.werte?.length)};
+  proben:r.rows.map(row=>({...row,label:row.label||referenceLabel(row.ref),bericht:r.bericht,...(row.werte?{werte:row.werte.map(w=>({...w}))}:{})})),geaendert:e.geaendert,hinweise:[...new Set(r.warnings.filter(h=>!h.startsWith(ABGLEICH)))],ohneWerte:!r.rows.some(row=>row.werte?.length)};
   const nr=projektnummer(r.auftragsreferenz);if(projekt&&nr&&nr!==projekt)b.hinweise.push(`Die Auftragsreferenz „${r.auftragsreferenz}“ nennt Projekt ${nr} – dieses Projekt ist ${projekt}. Gehört der Bericht hierher?`);
+  if(r.wertAbgleich&&r.sources.xml&&r.sources.pdf){b.wertAbgleich={erkannt:r.wertAbgleich.erkannt,geprueft:r.wertAbgleich.geprueft,abweichend:0};abweichungen.set(b,r.wertAbgleich.abweichend);}
   if(b.ohneWerte)b.hinweise.push(r.sources.xml?'Der Bericht enthält keine Messwerte.':'Nur die PDF liegt vor – Messwerte kommen aus der XML. Bitte die XML des Berichts von Eurofins (EOL) ergänzen.');
   return b;});
  // 2. Je Probe/Parameter/Einheit gewinnt: endgültig vor vorläufig, sonst die neuere Datei.
@@ -54,6 +60,11 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   for(const s of b.proben){if(!s.werte)continue;s.werte=s.werte.filter(w=>{const g=sieger.get(`${probeKey(s)}\u0000${tidy(w.p)}\u0000${tidy(w.u)}`);if(g===b)return true;if(g)durch.add(g.bericht||g.sources.xml||'');return false;});if(s.werte.length)blieb=true;}
   if(!b.ohneWerte&&!blieb){b.ersetztDurch=[...durch].filter(Boolean);b.hinweise.push(`Ersetzt durch ${b.ersetztDurch.join(', ')||'einen neueren Bericht'} – die Werte dieses Berichts gelten nicht mehr.`);}
   else if(durch.size&&b.vorlaeufig)b.hinweise.push(`Teilweise ersetzt durch ${[...durch].join(', ')}.`);}
+ // Abweichungen XML↔PDF nur für Werte, die noch gelten (ein neuerer Bericht kann einzelne Parameter ersetzen)
+ for(const [b,alle] of abweichungen){const gilt:Record<string,Abweichung[]>={};
+  for(const s of b.proben){const k=norm(s.ref),a=(alle[k]||[]).filter(x=>(s.werte||[]).some(w=>tidy(w.p)===tidy(x.p)&&tidy(w.u)===tidy(x.u)));if(a.length)gilt[k]=a;}
+  abweichungen.set(b,gilt);const n=Object.values(gilt).flat().length;b.wertAbgleich!.abweichend=n;
+  const h=abgleichHinweis(Object.keys(gilt).map(k=>b.proben.find(s=>norm(s.ref)===k)?.ref||k),n);if(h)b.hinweise.push(h);}
  // 3. Zeilen je Probe: erwartet (LabelKit) ∪ in Berichten.
  const zeilen=new Map<string,Zeile>();
  const zeile=(s:LabSample,erwartet:boolean)=>{const key=s.label||`?${norm(s.ref)||norm(s.labNr)}`;let z=zeilen.get(key);
@@ -65,6 +76,7 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   if(!z.desc)z.desc=tidy(s.desc);if(!z.art&&s.art)z.art=tidy(s.art);
   if(z.erwartet&&z.datum&&s.datum&&z.datum!==s.datum)z.hinweise.push(`Probenahmedatum: LabelKit ${z.datum}, Bericht ${b.bericht} ${s.datum}.`);
   if(!z.datum&&s.datum)z.datum=s.datum;
+  for(const a of abweichungen.get(b)?.[norm(s.ref)]||[])z.hinweise.push(`PDF zeigt einen anderen Wert – ${a.text} (Bericht ${b.bericht}). Bitte mit dem unterschriebenen PDF prüfen; berichtigen kann nur das Labor.`);
   for(const w of s.werte||[])z.werte.push({...w,bericht:b.bericht,vorlaeufig:!!b.vorlaeufig});}
  for(const z of zeilen.values()){
   // Endgültig erst, wenn kein Wert der Probe mehr nur vorläufig ist (z. B. PAK endgültig, Chlorid erst vorläufig → noch vorläufig)

@@ -14,7 +14,7 @@ import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.5.0';
+export const APP_VERSION='1.6.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -347,6 +347,11 @@ function renderBerichte(s:Scan){
  if(!b.length||s.fehler.length)($('berichte-block') as HTMLDetailsElement).open=true;
  $('berichte').innerHTML=b.length?[...b].sort((x,y)=>(x.ersetztDurch?1:0)-(y.ersetztDurch?1:0)||y.geaendert-x.geaendert).map(berichtKarte).join(''):`<p class="leer">${s.ohneOrdner?`Noch kein Ordner „${esc(LABOR)}“ im Projekt – er wird beim ersten Import angelegt.`:`Noch keine Prüfberichte in „${esc(LABOR)}“.`}</p>`;
 }
+/** XML↔PDF-Abgleich der Hauptwerte in einem Satz (ab 1.6). */
+function wertAbgleichText(b:Bericht){const w=b.wertAbgleich;if(!w)return '';
+ if(w.abweichend)return `⚠ ${w.abweichend} von ${w.geprueft} Hauptwert${w.geprueft===1?'':'en'} weich${w.abweichend===1?'t':'en'} im PDF ab`;
+ if(w.geprueft)return `Hauptwerte XML↔PDF: ${w.geprueft} geprüft ✓`;
+ return w.erkannt?'Hauptwerte im PDF nicht zuzuordnen':'Werte im PDF nicht erkannt – nicht abgeglichen';}
 function berichtKarte(b:Bericht){
  const proben=b.proben,daten=[...new Set(proben.map(p=>p.datum).filter(Boolean))].sort() as string[];
  const zustand=b.ersetztDurch?['ersetzt','ersetzt']:b.ohneWerte?['ohne Messwerte','offen']:b.vorlaeufig?['vorläufig','vorl']:['endgültig','ok'];
@@ -354,7 +359,7 @@ function berichtKarte(b:Bericht){
  const alle=[...new Map(proben.flatMap(p=>p.werte||[]).map(w=>[`${w.p}|${w.u}`,w])).values()];
  const zelle=(werte:Wert[]|undefined,p:string,u:string)=>{const w=wertFuer(werte||[],p,u);return w?wertZelle(w):'<span class="muted">–</span>';};
  const kopf=`<span class="eyebrow">PRÜFBERICHT</span><h3>${esc(b.bericht||b.sources.xml||b.sources.pdf||'ohne Nummer')} <span class="badge ${zustand[1]}">${zustand[0]}</span></h3>
-  <p class="meta">${b.datum?`Bericht vom ${datum(b.datum)} · `:''}${proben.length} Probe${proben.length===1?'':'n'}${daten.length?` · Probenahme ${daten.map(datum).join(' – ')}`:''}${b.auftragsreferenz?` · Auftragsreferenz „${esc(b.auftragsreferenz)}“`:''} · ${[b.sources.xml?`XML ✓`:'XML fehlt',b.sources.pdf?'PDF ✓':'ohne PDF'].join(' · ')} · Datei vom ${esc(uhr(b.geaendert))}</p>`;
+  <p class="meta">${b.datum?`Bericht vom ${datum(b.datum)} · `:''}${proben.length} Probe${proben.length===1?'':'n'}${daten.length?` · Probenahme ${daten.map(datum).join(' – ')}`:''}${b.auftragsreferenz?` · Auftragsreferenz „${esc(b.auftragsreferenz)}“`:''} · ${[b.sources.xml?`XML ✓`:'XML fehlt',b.sources.pdf?'PDF ✓':'ohne PDF',wertAbgleichText(b)].filter(Boolean).join(' · ')} · Datei vom ${esc(uhr(b.geaendert))}</p>`;
  const hinweise=b.hinweise.length?`<ul class="bericht-hinweise">${b.hinweise.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:'';
  if(b.ersetztDurch)return `<article class="bericht ersetzt"><details><summary>${kopf}</summary>${hinweise}</details></article>`;
  const tabelle=proben.length?`<div class="tabelle-scroll"><table class="werte-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">Beschreibung</th>${spalten.map(w=>`<th scope="col">${esc(shortParameter(w.p))}<small>${esc(w.u)}</small></th>`).join('')}</tr></thead>

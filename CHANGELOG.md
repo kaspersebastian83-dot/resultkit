@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.0 · 28.10.2026
+- **Hauptwerte XML↔PDF abgleichen:** Liegen XML und PDF eines Prüfberichts vor, liest ResultKit aus der Ergebnistabelle der PDF die Hauptwerte (Σ16 EPA-PAK, Chlorid, Asbest) und vergleicht sie mit der XML. Zuordnung über Probenreferenz und Parameter (bei Chlorid je Probe/je Fläche zusätzlich über die Einheit); Schreibweisen wie „<0,5“ / „< 0,5“ oder „14“ / „14,0“ zählen als gleich.
+- Weicht ein Wert ab: Hinweis beim Import und in „Jetzt dran“ (auch wenn XML und PDF verschieden benannt sind), an der Probe „⚠ Hinweis – PDF zeigt einen anderen Wert … Bitte mit dem unterschriebenen PDF prüfen; berichtigen kann nur das Labor.“ Die Prüfberichtskarte nennt das Ergebnis („Hauptwerte XML↔PDF: 12 geprüft ✓“, „⚠ 1 von 12 … weicht ab“ oder „Werte im PDF nicht erkannt – nicht abgeglichen“).
+- Es wird nichts automatisch geändert: Messwerte kommen weiter ausschließlich aus der XML. Werte, die ein neuerer Bericht ersetzt hat (ganz oder je Parameter), melden nichts mehr.
+
 ## 1.5.0 · 28.10.2026
 - **Oberflächenart und Raum gehen mit an PlanKit:** `_Ergebnisse.json` trägt an jeder Probe Oberflächenart (Aufsicht/Ansicht/Untersicht) und Raum aus dem LabelKit-Auftrag, dazu die Probenart, wenn der Prüfbericht keine nennt. PlanKit (ab 1.42) zeigt damit den Oberflächen-Balken und füllt das Raumbuch auch bei Proben aus dem Prüfbericht. Werte ändern sich nicht.
 - Wurde ein Projekt vor 1.5 übernommen und hat der Laborauftrag Oberflächenart oder Raum, zeigt „Jetzt dran“ einmal „Bitte einmal erneut übernehmen“.
