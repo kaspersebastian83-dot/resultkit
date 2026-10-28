@@ -125,4 +125,35 @@ ok('_Ergebnisse.json: Rundweg und Ablehnung fremder/neuerer Formate',()=>{
  assert.throws(()=>E.liesErgebnisDatei(JSON.stringify({...JSON.parse(text),version:2})),/aktualisieren/);
  assert.equal(E.standKennung([{name:'b.xml',size:1,t:2},{name:'a.pdf',size:3,t:4}]),'a.pdf|3|4\nb.xml|1|2');
 });
+// XML↔PDF-Abgleich der Hauptwerte (ab 1.6): PDF-Ergebnistabelle lesen, mit der XML vergleichen, Hinweis an der Probe.
+const L=await import('../src/labreport.ts');const {labPages}=await import('./lab-fixtures.mjs');
+const pdfMit=werte=>L.parseLabPDF(labPages({werte}),'AR.pdf');
+const xmlMit=zeilen=>({...L.blankReport('AR.xml'),bericht:'AR-999-2099-000001-01',rows:zeilen.map(([nr,werte])=>({label:`P${nr}`,ref:`Probe ${nr}`,desc:'',werte}))});
+ok('PDF: Hauptwerte je Probe aus der Ergebnistabelle (über mehrere Seiten, Spalten nach Lage)',()=>{
+ const pdf=pdfMit([{zeile:'Summe 16 EPA-PAK exkl. BG  µg/m²',r:['14','8,5','< 0,5','','','','','','3']},{zeile:'Benzo[a]pyren  µg/m²',r:['1','1','1']}]);
+ assert.deepEqual(pdf.pdfWerte['probe1'],[{zeile:'Summe 16 EPA-PAK exkl. BG µg/m²',r:'14'}]);assert.deepEqual(pdf.pdfWerte['probe3'],[{zeile:'Summe 16 EPA-PAK exkl. BG µg/m²',r:'< 0,5'}]);
+ assert.deepEqual(pdf.pdfWerte['probe9'],[{zeile:'Summe 16 EPA-PAK exkl. BG µg/m²',r:'3'}],'zweite Ergebnisseite');assert.equal(pdf.pdfWerte['probe4'],undefined,'leere Zelle');
+ assert.equal(Object.values(pdf.pdfWerte).flat().some(w=>/pyren/i.test(w.zeile)),false,'nur Hauptwerte');
+});
+ok('Abgleich: gleiche Werte ✓ (Schreibweise egal), Abweichung wird benannt',()=>{
+ const xml=xmlMit([[1,[{p:SUM,r:'14,0',u:U}]],[2,[{p:SUM,r:'8,5',u:U}]],[3,[{p:SUM,r:'<0,5',u:U}]]]);
+ let a=L.compareValues(xml,pdfMit([{zeile:`${SUM}  ${U}`,r:['14','8,5','< 0,5']}]));assert.equal(a.erkannt,true);assert.equal(a.geprueft,3);assert.deepEqual(a.abweichend,{});
+ a=L.compareValues(xml,pdfMit([{zeile:`${SUM}  ${U}`,r:['41','8,5','< 0,5']}]));assert.equal(a.geprueft,3);assert.deepEqual(a.abweichend,{probe1:[`${SUM} (${U}): XML „14,0“, PDF „41“`]});
+ a=L.compareValues(xml,pdfMit([{zeile:`${SUM}  ${U}`,r:['14','8,5','0,5']}]));assert.deepEqual(Object.keys(a.abweichend),['probe3'],'„<“ zählt');
+});
+ok('Abgleich: Chlorid je Probe und je Fläche über die Einheit getrennt; Asbest-Text; ohne Werte im PDF „nicht erkannt“',()=>{
+ const xml=xmlMit([[4,[{p:'Chlorid',r:'1040',u:'µg/Probe'},{p:'Chlorid',r:'2,6',u:'µg/cm²'}]],[5,[{p:'Asbestart',r:'Chrysotil',u:''}]]]);
+ const a=L.compareValues(xml,pdfMit([{zeile:'Chlorid  µg/Probe',r:['','','','1040']},{zeile:'Chlorid  µg/cm²',r:['','','','26']},{zeile:'Asbestart',r:['','','','','chrysotil']}]));
+ assert.equal(a.geprueft,3);assert.deepEqual(a.abweichend,{probe4:['Chlorid (µg/cm²): XML „2,6“, PDF „26“']});
+ const leer=L.compareValues(xml,pdfMit([]));assert.equal(leer.erkannt,false);assert.equal(leer.geprueft,0);
+});
+ok('Übersicht: Abweichung als Hinweis an der Probe und am Bericht; ersetzter Bericht meldet nichts',()=>{
+ const r=report('AR-1-02',[[1,pak('14')],[2,pak('8,5')]]);r.wertAbgleich={erkannt:true,geprueft:2,abweichend:{probe1:[`${SUM} (${U}): XML „14“, PDF „41“`]}};
+ const u=E.uebersicht('99.9001',auftrag(),[{report:r,geaendert:1}]);
+ assert.deepEqual(u.berichte[0].wertAbgleich,{erkannt:true,geprueft:2,abweichend:1});
+ assert.match(u.zeilen.find(z=>z.label==='P1').hinweise.join(' '),/PDF zeigt einen anderen Wert – Summe 16 EPA-PAK exkl\. BG \(µg\/m²\): XML „14“, PDF „41“ \(Bericht AR-1-02\)/);
+ assert.equal(u.zeilen.find(z=>z.label==='P2').hinweise.some(h=>/PDF zeigt/.test(h)),false);
+ const neu=report('AR-1-03',[[1,pak('14')],[2,pak('8,5')]]);const u2=E.uebersicht('99.9001',auftrag(),[{report:r,geaendert:1},{report:neu,geaendert:2}]);
+ assert.equal(u2.zeilen.find(z=>z.label==='P1').hinweise.some(h=>/PDF zeigt/.test(h)),false,'Werte des ersetzten Berichts gelten nicht');
+});
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);

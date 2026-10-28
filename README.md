@@ -18,6 +18,7 @@ PlanKit, FotoKit und die Projektzentrale lesen nur diese Datei. Die vorige Über
 ## Regeln
 
 - Werte kommen ausschließlich aus der XML. Eine PDF allein liefert keine Werte (Hinweis „XML ergänzen“).
+- Liegt die PDF dazu vor, werden die Hauptwerte (Σ16 EPA-PAK, Chlorid, Asbest) mit der PDF-Ergebnistabelle abgeglichen; Abweichungen erscheinen als Hinweis an der Probe, geändert wird nichts.
 - Gleicher Bericht mehrfach im Ordner → die neuere Datei zählt. Gleiche Probe/Parameter/Einheit in mehreren Berichten →
   endgültig vor vorläufig, sonst der neuere Bericht (wie im Datenarchiv der Projektzentrale). Ein vollständig ersetzter Bericht wird als „ersetzt“ gezeigt und nicht übernommen.
 - Chlorid: VdS 2357, 5–10 µg/cm² korrosionschemisch relevante Größenordnung (< 5 grün, 5 – < 10 amber, ≥ 10 rot), unabhängig von der Nutzung; in ResultKit, PlanKit und FotoKit gleich (Block KORROSION-CHLORID v1). Ältere Berichte in mg/m² werden umgerechnet (1 µg/cm² = 10 mg/m²).

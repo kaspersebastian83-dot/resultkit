@@ -17,7 +17,8 @@ const nummer=(label:string)=>{const n=Number(label.replace(/^P/i,''));return Num
 
 /** Ein Prüfbericht, wie er im Ordner liegt (XML und/oder PDF gleichen Namens). */
 export interface Eingang {report:LabReport;geaendert:number}
-export interface Bericht extends LabOrigin {datum?:string;proben:LabSample[];geaendert:number;hinweise:string[];ersetztDurch?:string[];ohneWerte:boolean}
+/** wertAbgleich (ab 1.6): Hauptwerte XML↔PDF – nur wenn beide Dateien vorliegen. */
+export interface Bericht extends LabOrigin {datum?:string;proben:LabSample[];geaendert:number;hinweise:string[];ersetztDurch?:string[];ohneWerte:boolean;wertAbgleich?:{erkannt:boolean;geprueft:number;abweichend:number}}
 export type Status='ergebnis'|'vorlaeufig'|'ohneWerte'|'offen'|'nichtBeauftragt';
 export interface Zeile {label:string;nr:number|null;ref:string;desc:string;typ?:string;art?:string;datum?:string;erwartet:boolean;status:Status;werte:(Wert&{bericht:string;vorlaeufig:boolean})[];berichte:string[];hinweise:string[]}
 export interface Uebersicht {projekt:string;auftrag:{quelle:string;proben:number;hinweise:string[]}|null;berichte:Bericht[];zeilen:Zeile[];
@@ -41,9 +42,11 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   const [gilt,andere]=neuGilt?[e,alt]:[alt,e];
   const pdf=!mitWerten(andere)&&andere.report.sources.pdf&&!gilt.report.sources.pdf?andere.report.sources.pdf:'';
   nachCode.set(key,pdf?{...gilt,report:{...gilt.report,sources:{...gilt.report.sources,pdf}}}:gilt);}
+ const abweichungen=new Map<Bericht,Record<string,string[]>>();
  const berichte:Bericht[]=[...nachCode.values()].map((e,i)=>{const r=e.report,id=`b${i+1}`;const b:Bericht={id,bericht:r.bericht,labor:r.labor,auftragsreferenz:r.auftragsreferenz,...(r.batch?{batch:r.batch}:{}),sources:{...r.sources},...(r.vorlaeufig?{vorlaeufig:true as const}:{}),...(r.datum?{datum:r.datum}:{}),
   proben:r.rows.map(row=>({...row,label:row.label||referenceLabel(row.ref),bericht:r.bericht,...(row.werte?{werte:row.werte.map(w=>({...w}))}:{})})),geaendert:e.geaendert,hinweise:[...new Set(r.warnings)],ohneWerte:!r.rows.some(row=>row.werte?.length)};
   const nr=projektnummer(r.auftragsreferenz);if(projekt&&nr&&nr!==projekt)b.hinweise.push(`Die Auftragsreferenz „${r.auftragsreferenz}“ nennt Projekt ${nr} – dieses Projekt ist ${projekt}. Gehört der Bericht hierher?`);
+  if(r.wertAbgleich&&r.sources.xml&&r.sources.pdf){b.wertAbgleich={erkannt:r.wertAbgleich.erkannt,geprueft:r.wertAbgleich.geprueft,abweichend:Object.values(r.wertAbgleich.abweichend).flat().length};abweichungen.set(b,r.wertAbgleich.abweichend);}
   if(b.ohneWerte)b.hinweise.push(r.sources.xml?'Der Bericht enthält keine Messwerte.':'Nur die PDF liegt vor – Messwerte kommen aus der XML. Bitte die XML des Berichts von Eurofins (EOL) ergänzen.');
   return b;});
  // 2. Je Probe/Parameter/Einheit gewinnt: endgültig vor vorläufig, sonst die neuere Datei.
@@ -65,6 +68,7 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   if(!z.desc)z.desc=tidy(s.desc);if(!z.art&&s.art)z.art=tidy(s.art);
   if(z.erwartet&&z.datum&&s.datum&&z.datum!==s.datum)z.hinweise.push(`Probenahmedatum: LabelKit ${z.datum}, Bericht ${b.bericht} ${s.datum}.`);
   if(!z.datum&&s.datum)z.datum=s.datum;
+  if(!b.ersetztDurch)for(const a of abweichungen.get(b)?.[norm(s.ref)]||[])z.hinweise.push(`PDF zeigt einen anderen Wert – ${a} (Bericht ${b.bericht}). Bitte mit dem unterschriebenen PDF prüfen; berichtigen kann nur das Labor.`);
   for(const w of s.werte||[])z.werte.push({...w,bericht:b.bericht,vorlaeufig:!!b.vorlaeufig});}
  for(const z of zeilen.values()){
   // Endgültig erst, wenn kein Wert der Probe mehr nur vorläufig ist (z. B. PAK endgültig, Chlorid erst vorläufig → noch vorläufig)
