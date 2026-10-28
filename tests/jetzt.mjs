@@ -51,4 +51,9 @@ ok('Ordner geändert nach Übernahme → Erneut übernehmen',()=>{
 ok('_Ergebnisse.json nicht lesbar → Erneut übernehmen',()=>{
  const r=j({vorhandenFehler:'kaputt.'});assert.equal(r.art,'unlesbar');assert.equal(r.haupt.aktion,'uebernehmen');
 });
+ok('übernommen vor 1.5 (ohne Oberflächenart/Raum) → einmal erneut übernehmen',()=>{
+ const r=j({vorhanden:{stand:'S1',uebernommen:'2026-10-27T14:05:00Z',vollstaendig:true,ohneLage:true}});
+ assert.equal(r.art,'geaendert');assert.equal(r.haupt.aktion,'uebernehmen');assert.match(r.text,/Oberflächenart/);
+});
+
 console.log(`${n} Prüfungen „Jetzt dran“ bestanden`);

@@ -43,6 +43,18 @@ ok('vorläufig, dann endgültig: endgültige Werte gelten, vorläufiger Bericht 
  assert.deepEqual(datei.offen,['P4']);assert.equal(datei.vollstaendig,false);
  assert.equal(datei.berichte[0].proben[0].reportId,datei.berichte[0].id);assert.equal(datei.berichte[0].proben[0].werte[0].loq,'0,5');
 });
+ok('Oberflächenart und Raum aus LabelKit stehen auch an den Berichtsproben (für PlanKit)',()=>{
+ const u=E.uebersicht('99.9001',auftrag(),[{report:report('AR-7-01',[[1,pak('14')],[4,[{p:'Chlorid',r:'2',u:'µg/cm²'}]]]),geaendert:1}]);
+ const d=E.ergebnisDatei(u,auftrag(),[],'1.5.0');const pr=Object.fromEntries(d.berichte[0].proben.map(p=>[p.label,p]));
+ assert.equal(pr.P1.surface,'wall');assert.equal(pr.P1.raum,'EG Testraum 1');assert.equal(pr.P1.typ,'PAK');
+ assert.equal(pr.P4.surface,'floor');assert.equal(pr.P4.typ,'Chlorid');
+ assert.deepEqual(d.auftrag.proben.find(p=>p.label==='P4'),{label:'P4',typ:'Chlorid',ref:'Probe 4',desc:'EG Testraum 1, Aufsicht',surface:'floor',raum:'EG Testraum 1'});
+});
+ok('ohneLage: alte Datei ohne Oberflächenart, Auftrag mit – erneut übernehmen; neue Datei nicht',()=>{
+ const u=E.uebersicht('99.9001',auftrag(),[{report:report('AR-7-01',[[1,pak('14')]]),geaendert:1}]);const neu=E.ergebnisDatei(u,auftrag(),[],'1.5.0');
+ const alt={...neu,auftrag:{...neu.auftrag,proben:neu.auftrag.proben.map(({surface,raum,...p})=>p)}};
+ assert.equal(E.ohneLage(alt,auftrag()),true);assert.equal(E.ohneLage(neu,auftrag()),false);assert.equal(E.ohneLage(null,auftrag()),false);
+});
 ok('nur vorläufig: Status vorläufig, mit Hinweis; zählt nicht als Ergebnis',()=>{
  const u=E.uebersicht('99.9001',auftrag(),[{report:report('AR-2-01',[[1,pak('12')]],{vorlaeufig:true}),geaendert:1}]);
  const p1=u.zeilen.find(z=>z.label==='P1');assert.equal(p1.status,'vorlaeufig');assert.match(p1.hinweise.join(' '),/endgültige Bericht fehlt/);
