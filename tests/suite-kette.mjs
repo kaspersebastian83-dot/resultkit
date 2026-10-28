@@ -266,7 +266,8 @@ try{
   await z('datum').fill(HEUTE);await z('stunden').fill('6');
   await bl.waitForFunction(()=>/gespeichert in „_Spektron\/BelegKit\/Aufwand_SK\.json“/.test(document.getElementById('status').textContent));
   await bl.locator('button[data-tab="abrechnung"]').click();await bl.locator('#aStand').click();
-  await until(async()=>(await liste(bl,'Abrechnung')).includes(`${NR.replace('.','-')}_Aufwand_${HEUTE}.json`),'Abrechnungsstand gespeichert');
+  await until(async()=>(await liste(bl,'_Spektron/BelegKit')).includes(`${NR.replace('.','-')}_Aufwand_${HEUTE}.json`),'Abrechnungsstand gespeichert (JSON in _Spektron/BelegKit)');
+  await until(async()=>(await liste(bl,'Abrechnung')).includes(`${NR.replace('.','-')}_Aufwand_${HEUTE}.csv`),'CSV des Stands bleibt sichtbar in „Abrechnung“');
  });
  await schritt('Projektzentrale','nach dem Abrechnungsstand: „Versandt · Rechnung beim Büro“',async()=>{
   await pz.bringToFront();await pz.reload();await pzStand('laeuft','Versandt · Rechnung beim Büro');
