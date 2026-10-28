@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.0 · 28.10.2026
+- **Spektron-Ordner ist da:** Neue Projekte (ab 26.0560) und per Projektzentrale umgezogene Projekte haben `_Ergebnisse.json` jetzt unter `_Spektron/ResultKit`; noch nicht umgezogene Projekte werden weiter am bisherigen Ort gelesen und geschrieben (`spektron-ordner.js`, Umstellung aktiv). Prüfberichte bleiben in „Laborergebnisse“.
+
 ## 1.7.1 · 28.10.2026
 - Leiste oben: die Haken für Proben, Fotos, Ergebnisse, Plan und Abrechnung finden die App-Daten auch im künftigen Ordner „_Spektron“ (spektron-ordner.js). Keine sichtbare Änderung.
 
