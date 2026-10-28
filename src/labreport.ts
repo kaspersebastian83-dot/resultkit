@@ -11,7 +11,8 @@ export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;
  wertAbgleich?:WertAbgleich}
 /** Ein Wert aus der PDF-Ergebnistabelle: Text links (Parameter, ggf. Einheit/BG) und der Wert in der Spalte der Probe. */
 export interface PdfWert {zeile:string;r:string}
-export interface WertAbgleich {erkannt:boolean;geprueft:number;abweichend:Record<string,string[]>}
+export interface Abweichung {p:string;u:string;text:string}
+export interface WertAbgleich {erkannt:boolean;geprueft:number;abweichend:Record<string,Abweichung[]>}
 export const MAX_WERTE=300;
 const tidy=(s:string)=>s.normalize('NFC').replace(/\s+/g,' ').trim();
 const norm=(s:string)=>tidy(s).toLocaleLowerCase('de').replace(/[^\p{L}\p{N}]/gu,'');
@@ -148,9 +149,17 @@ export function compareValues(xml:LabReport,pdf:LabReport):WertAbgleich{
    const lang=Math.max(0,...c.map(x=>norm(x.p).length));c=c.filter(x=>norm(x.p).length===lang);   // „exkl. BG“ vor bloßem „Summe 16 EPA-PAK“
    if(c.length>1)c=c.filter(x=>x.u&&z.includes(norm(x.u)));
    if(c.length!==1)continue;const x=c[0];out.geprueft++;
-   if(wertForm(x.r)!==wertForm(w.r))(out.abweichend[norm(row.ref)]||=[]).push(`${x.p}${x.u?` (${x.u})`:''}: XML „${x.r}“, PDF „${w.r}“`);
+   if(wertForm(x.r)!==wertForm(w.r))(out.abweichend[norm(row.ref)]||=[]).push({p:x.p,u:x.u,text:`${x.p}${x.u?` (${x.u})`:''}: XML „${x.r}“, PDF „${w.r}“`});
   }}
  return out;
+}
+/** Satz für Import und „Jetzt dran“; beginnt immer mit ABGLEICH, damit die Übersicht ihn nach dem Ersetzen neu bilden kann. */
+export const ABGLEICH='Messwert-Abgleich XML↔PDF: ';
+export function abgleichHinweis(refs:string[],n:number){return n?`${ABGLEICH}${n} Wert${n===1?'':'e'} weich${n===1?'t':'en'} ab (${refs.join(', ')}). Bitte mit dem unterschriebenen PDF prüfen – berichtigen kann nur das Labor.`:'';}
+/** XML-Bericht und PDF desselben Berichts (auch mit anderem Dateinamen) abgleichen: Ergebnis und Hinweis am XML-Bericht. */
+export function mitPdfAbgleichen(xml:LabReport,pdf:LabReport){
+ const a=compareValues(xml,pdf);xml.wertAbgleich=a;const n=Object.values(a.abweichend).flat().length;
+ const h=abgleichHinweis(Object.keys(a.abweichend).map(k=>xml.rows.find(r=>norm(r.ref)===k)?.ref||k),n);if(h)xml.warnings.push(h);return a;
 }
 export async function readLabFiles(files:File[]):Promise<LabReport>{
  if(!files.length||files.length>2||files.some(f=>!(/\.(xml|pdf)$/i.test(f.name))))throw Error('Bitte eine XML, eine PDF oder beide Berichte gemeinsam auswählen (höchstens zwei Dateien).');
@@ -164,8 +173,7 @@ export async function readLabFiles(files:File[]):Promise<LabReport>{
   if(a.auftragsreferenz&&b.auftragsreferenz&&a.auftragsreferenz!==b.auftragsreferenz)throw Error('XML und PDF haben unterschiedliche Auftragsreferenzen. Bitte getrennt importieren.');
   if(a.batch&&b.batch&&a.batch!==b.batch)throw Error('XML und PDF haben unterschiedliche Batchkennungen. Bitte getrennt importieren.');
   report.warnings.push(...compareReports(a,b));
-  const abgleich=compareValues(a,b);report.wertAbgleich=abgleich;const n=Object.values(abgleich.abweichend).flat().length;
-  if(n)report.warnings.push(`${n} Messwert${n===1?'':'e'} weich${n===1?'t':'en'} zwischen XML und PDF ab (${Object.keys(abgleich.abweichend).map(k=>a.rows.find(r=>norm(r.ref)===k)?.ref||k).join(', ')}). Bitte mit dem unterschriebenen PDF prüfen – berichtigen kann nur das Labor.`);const xmlRefs=new Set(a.rows.map(r=>norm(r.ref)));for(const row of b.rows)if(!xmlRefs.has(norm(row.ref)))report.rows.push({...row});
+  mitPdfAbgleichen(report,b);const xmlRefs=new Set(a.rows.map(r=>norm(r.ref)));for(const row of b.rows)if(!xmlRefs.has(norm(row.ref)))report.rows.push({...row});
   report.bericht||=b.bericht;report.labor||=b.labor;report.auftragsreferenz||=b.auftragsreferenz;report.batch||=b.batch;
  }
  report.sources={...(a?{xml:sourceFilename(xml[0].name)}:{}),...(b?{pdf:sourceFilename(pdf[0].name)}:{})};report.quelle=[report.sources.xml,report.sources.pdf].filter(Boolean).join(' + ');report.warnings.push(...errors);return report;

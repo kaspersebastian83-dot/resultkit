@@ -212,7 +212,7 @@ try{
    const pdfWerte=[{zeile:`${SUM}  ${U}`,r:['41','8,5','< 0,5','2','2','2','2','2','2']}];
    await page.locator('#datei-wahl').setInputFiles([{name:'AR-999.xml',mimeType:'application/xml',buffer:Buffer.from(labXML(rows))},{name:'AR-999.pdf',mimeType:'application/pdf',buffer:labPDF({werte:pdfWerte})}]);
    const d=page.locator('#import-dialog');await d.waitFor({timeout:60000});
-   assert.match(await d.locator('.import-eintrag').textContent(),/1 Messwert weicht zwischen XML und PDF ab \(Probe 1\)/);
+   assert.match(await d.locator('.import-eintrag').textContent(),/Messwert-Abgleich XML↔PDF: 1 Wert weicht ab \(Probe 1\)/);
    await d.getByRole('button',{name:'Abbrechen'}).click();
   });
 
