@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.7.1 · 28.10.2026
+- Leiste oben: die Haken für Proben, Fotos, Ergebnisse, Plan und Abrechnung finden die App-Daten auch im künftigen Ordner „_Spektron“ (spektron-ordner.js). Keine sichtbare Änderung.
+
 ## 1.7.0 · 28.10.2026
 - **Vorbereitung „Spektron-Ordner“:** Die App-Daten eines Projekts ziehen später in den Unterordner `_Spektron` (Prüfberichte bleiben in „Laborergebnisse“). ResultKit liest und schreibt `_Ergebnisse.json`, die LabelKit-Datei, den Probenplan und die Projektdaten jetzt über `spektron-ordner.js` – bis zum Umzug am bisherigen Ort, es ändert sich nichts.
 - Der Dateistand nennt die LabelKit-Datei weiter „Laboraufträge/…“, auch wenn sie später in `_Spektron` liegt – übernommene Ergebnisse bleiben gültig.

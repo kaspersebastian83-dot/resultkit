@@ -124,26 +124,28 @@
       try{ for await (var e of arch.values()) if (e.kind === 'directory' && nfc(e.name) === nfc(name)){ proj = e; break; } }catch(e2){}
     }
     if (!proj) return null;
+    /* Spektron-Ordner (spektron-ordner.js, falls geladen): App-Daten künftig in „_Spektron/…“; sonst wie bisher. */
+    async function bereich(b, alt){ var SO = window.SpektronOrdner; if (SO) try{ return (await SO.ort(proj, b)).dir; }catch(eb){} return alt ? unterordner(proj, alt) : proj; }
     var s = { label: false, fotos: false, ergebnis: false, plan: false, beleg: false, objekt: '', anzeige: '', person: '' }, zust = null;
     var activeData = window.SpektronProjectData && window.SpektronProjectData(name);
     if (activeData){ var activeObjekt = typeof activeData.data.objekt === 'string' ? activeData.data.objekt : activeData.data.daten && activeData.data.daten.objekt; if (typeof activeObjekt === 'string') s.objekt = activeObjekt.trim(); zust = activeData.data.zustaendig; }
     else try{
-      var pj = await proj.getFileHandle('_Projekt.json').then(function(f){ return f.getFile(); }).then(function(f){ return f.text(); }).catch(function(){ return ''; });
+      var pj = await ((await bereich('projekt', '')) || proj).getFileHandle('_Projekt.json').then(function(f){ return f.getFile(); }).then(function(f){ return f.text(); }).catch(function(){ return ''; });
       if (pj){ var j = JSON.parse(pj), o = j && (typeof j.objekt === 'string' ? j.objekt : j.daten && j.daten.objekt); if (typeof o === 'string') s.objekt = o.trim(); zust = j && j.zustaendig; }   // Projektzentrale schreibt die Felder direkt in _Projekt.json (ältere Testdateien: unter „daten“)
     }catch(e3){}
     await personUndAnzeige(arch, s, zust);
-    try{ var fo = await unterordner(proj, 'Fotos'); if (fo) s.fotos = await fo.getFileHandle('_Bildumbenenner.json').then(function(){ return true; }, function(){ return false; }); }catch(e4){}
+    try{ var fo = await bereich('fotokit', 'Fotos'); if (fo) s.fotos = await fo.getFileHandle('_Bildumbenenner.json').then(function(){ return true; }, function(){ return false; }); }catch(e4){}
     try{
-      var la = await unterordner(proj, 'Laboraufträge');
+      var la = await bereich('labelkit', 'Laboraufträge');
       if (la) for await (var f of la.values()) if (f.kind === 'file' && /_Daten\.json$/i.test(f.name)){ s.label = true; break; }
     }catch(e5){}
-    try{ var le = await unterordner(proj, 'Laborergebnisse'); if (le) s.ergebnis = await le.getFileHandle('_Ergebnisse.json').then(function(){ return true; }, function(){ return false; }); }catch(e8){}   // ResultKit: geprüfte Ergebnisse übernommen
+    try{ var le = await bereich('resultkit', 'Laborergebnisse'); if (le) s.ergebnis = await le.getFileHandle('_Ergebnisse.json').then(function(){ return true; }, function(){ return false; }); }catch(e8){}   // ResultKit: geprüfte Ergebnisse übernommen
     try{
-      var pl = await unterordner(proj, 'Pläne');
+      var pl = await bereich('plankit', 'Pläne');
       if (pl) for await (var g of pl.values()) if (g.kind === 'file' && /\.probenplan$/i.test(g.name) && !/ \((vorher|Wiederherstellung|Speicherkandidat|Kopie)\b[^)]*\)\.probenplan$/i.test(g.name)){ s.plan = true; break; }
     }catch(e6){}
     try{
-      var ab = await unterordner(proj, 'Abrechnung');
+      var ab = await bereich('belegkit', 'Abrechnung');
       if (ab) for await (var k of ab.values()) if (k.kind === 'file' && /_Aufwand_.*\.json$/i.test(k.name)){ s.beleg = true; break; }
     }catch(e7){}
     return s;
