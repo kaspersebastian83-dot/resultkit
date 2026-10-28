@@ -106,4 +106,34 @@ ok('Skalen aus der Projektdatei: nur gültige wie in PlanKit, Farben nur „#rrg
  for(const v of [undefined,null,[],'x'])assert.equal(B.gueltigeSkalen(v),undefined);
  assert.equal(B.farbeSicher('#AbC123'),'#AbC123');assert.equal(B.farbeSicher('red;x:"'),B.UNRATED);assert.equal(B.farbeSicher(undefined,'#000000'),'#000000');
 });
+ok('Nach Stelle: PAK und Chlorid derselben Stelle in einer Zeile; Fläche, Ansicht, verrußt zählen nicht',()=>{
+ const g=U.uebersichtGruppen([z('P1','EG Küche Brandraum Decke, verrußt, Untersicht, 400 cm²',[[SUM,'412','µg/m²']],{typ:'PAK'}),z('P2','EG Flur Wand, Ansicht, 400 cm²',[[SUM,'36','µg/m²']],{typ:'PAK'}),
+  z('P3','EG Küche Brandraum Decke, Untersicht',[['Chlorid','14,2','µg/cm²']],{typ:'Chlorid'}),z('P4','EG Wohnzimmer Decke',[['Chlorid','< 0,5','µg/cm²']],{typ:'Chlorid'}),
+  z('P5','KG Heizraum Rohrisolierung',[['Asbest','Chrysotil nachgewiesen','']],{typ:'Asbest'})]);
+ const m=U.matrix(g);
+ assert.deepEqual(m.map(r=>[r.stelle,r.labels.join(' ')]),[['EG Küche Brandraum Decke, verrußt, Untersicht','P1 P3'],['EG Flur Wand, Ansicht','P2'],['EG Wohnzimmer Decke','P4'],['KG Heizraum Rohrisolierung','P5']]);
+ assert.equal(m[0].zellen.PAK.haupt.r,'412');assert.equal(m[0].zellen.Chlorid.haupt.r,'14,2');assert.equal(m[0].zellen.Asbest,undefined);
+ assert.equal(U.stelleKey('EG Küche Decke, mit Belag, Aufsicht'),U.stelleKey('eg küche decke'));assert.notEqual(U.stelleKey('EG Küche Decke'),U.stelleKey('EG Küche Wand'));
+});
+ok('Nach Stelle: zweite Probe derselben Art an derselben Stelle bleibt eine eigene Zeile',()=>{
+ const m=U.matrix(U.uebersichtGruppen([z('P1','EG Bad Wand',[[SUM,'5','µg/m²']],{typ:'PAK'}),z('P2','EG Bad Wand',[[SUM,'7','µg/m²']],{typ:'PAK'}),z('P3','EG Bad Wand',[['Chlorid','2','µg/cm²']],{typ:'Chlorid'})]));
+ assert.deepEqual(m.map(r=>r.labels),[['P1','P3'],['P2']]);
+});
+ok('Nach Stelle sortieren wie Excel: Werte auf/ab, < BG unter jedem Messwert, leere Zellen immer zuletzt',()=>{
+ const m=U.matrix(U.uebersichtGruppen([z('P1','OG Bad',[[SUM,'8,5','µg/m²']],{typ:'PAK'}),z('P2','EG Flur',[[SUM,'< 0,5','µg/m²']],{typ:'PAK'}),z('P3','EG Küche',[[SUM,'1.280','µg/m²']],{typ:'PAK'}),
+  z('P4','KG Keller',[],{typ:'PAK',status:'offen'}),z('P5','DG Speicher',[['Chlorid','3','µg/cm²']],{typ:'Chlorid'})]));
+ const ls=r=>r.map(x=>x.labels[0]);
+ assert.deepEqual(ls(U.sortiereMatrix(m,'PAK',false)).slice(0,3),['P3','P1','P2'],'absteigend: höchster zuerst');
+ const ab=ls(U.sortiereMatrix(m,'PAK',false));assert.deepEqual(ab.slice(3).sort(),['P4','P5'],'leer und offen zuletzt');
+ const auf=ls(U.sortiereMatrix(m,'PAK',true));assert.equal(auf[0],'P2');assert.deepEqual(auf.slice(3).sort(),['P4','P5'],'leer auch aufsteigend zuletzt');
+ assert.deepEqual(ls(U.sortiereMatrix(m,'stelle',true)),['P4','P2','P3','P1','P5'],'KG, EG, OG, DG');
+ assert.deepEqual(ls(U.sortiereMatrix(m,'probe',false)),['P5','P4','P3','P2','P1']);
+});
+ok('Kopieren für Excel: Werte wie im Bericht, Einheit im Kopf, Tabulatoren, keine Farben',()=>{
+ const g=U.uebersichtGruppen([z('P1','EG Küche Decke, 400 cm²',[[SUM,'412','µg/m²']],{typ:'PAK'}),z('P2','EG Küche Decke',[['Chlorid','14,2','µg/cm²']],{typ:'Chlorid'}),z('P3','EG Flur\tWand',[],{typ:'PAK',status:'offen'})]);
+ const d=U.tabelleDaten(U.sortiereMatrix(U.matrix(g),'stelle',true),g);
+ assert.deepEqual(d.kopf,['Probe','Probenahmestelle','Σ16 EPA-PAK (µg/m²)','Chlorid (µg/cm²)']);
+ assert.deepEqual(d.zeilen,[['P3','EG Flur\tWand','ausstehend',''],['P1, P2','EG Küche Decke','412','14,2']]);
+ const t=U.alsTSV(d).split('\r\n');assert.equal(t.length,3);assert.equal(t[1],'P3\tEG Flur Wand\tausstehend\t','Tabulator in Text wird Leerzeichen');
+});
 console.log(`${n} Prüfungen Übersicht bestanden`);

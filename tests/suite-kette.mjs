@@ -112,9 +112,15 @@ try{
  await schritt('ResultKit','Projekt öffnen: LabelKit-Proben sind beauftragt, noch nichts zurück',async()=>{
   await rk.goto(`${base}/resultkit/#projekt=${encodeURIComponent(PROJEKT)}`);
   await until(async()=>/0 von 4/.test(await stand()),'Stand 0 von 4');
-  const zeilen=rk.locator('.u-gruppe').first().locator('tbody tr.u-zeile');assert.equal(await zeilen.count(),3);
-  const p1=rk.locator('.u-gruppe').first().locator('tr.u-zeile',{has:rk.getByRole('button',{name:'P1',exact:true})});
-  assert.match(await p1.textContent(),/P1.*EG Küche, Wand, Ansicht, 400 cm²/s,'Probenahmestelle wie in LabelKit');
+  // Standardansicht „Nach Stelle“ (ab ResultKit 1.4.0): eine Zeile je Probenahmestelle, Spalte je Probenart
+  const t=rk.locator('#m-tabelle');await t.waitFor();
+  const spalten=(await t.locator('thead th').allTextContents()).map(x=>x.replace(/[▲▼]/g,''));
+  assert.deepEqual(spalten.slice(0,3),['Probe','Probenahmestelle','Σ16 EPA-PAK']);
+  const proben=(await t.locator('tbody tr.m-zeile th').allTextContents()).flatMap(x=>x.split(' · '));
+  assert.deepEqual([...proben].sort(),['P1','P2','P3','P4'],'alle LabelKit-Proben genau einmal');
+  const p1=t.locator('tr.m-zeile',{has:rk.locator('th',{hasText:/^P1( · |$)/})});
+  assert.match(await p1.textContent(),/P1.*EG Küche, Wand, Ansicht/s,'Probenahmestelle wie in LabelKit (ohne Fläche)');
+  assert.match(await p1.textContent(),/ausstehend/);
  });
  await schritt('ResultKit','vorläufigen Bericht importieren und als Zwischenstand übernehmen',async()=>{
   await importieren('AR-9-01.xml',VORL);

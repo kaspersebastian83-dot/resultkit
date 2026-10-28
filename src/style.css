@@ -115,7 +115,7 @@ dialog>p{font-size:13px;white-space:pre-line}
   .kopf-aktionen{margin-left:0;width:100%}
   .start{padding:22px 18px;margin-top:3vh}
 }
-@media print{.kopf,.kopf-aktionen,.ablage,.fuss,#mosaikLeiste,.jetzt-knoepfe,.u-tipp,button:not(.u-auf){display:none!important}body{background:#fff}.jetzt{box-shadow:none}}
+@media print{.kopf,.kopf-aktionen,.ablage,.fuss,#mosaikLeiste,.jetzt-knoepfe,.u-tipp,.u-ansicht,.u-kopieren,button:not(.u-auf):not(.m-sort){display:none!important}.m-scroll{max-height:none!important;overflow:visible!important}body{background:#fff}.jetzt{box-shadow:none}}
 
 /* Jetzt dran: ein Schritt, ein Hauptknopf */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -193,3 +193,23 @@ tr.u-detail>td{background:var(--panel2);padding:2px 12px 14px 28px}
 .berichte-kurz{font-size:13px;color:var(--muted)}
 .berichte-inhalt{padding:0 18px 16px}
 @media print{.u-filter{display:none!important}.u-gruppe{box-shadow:none;break-inside:avoid-page}}
+
+/* Nach Stelle (ab 1.4.0): Lesen wie in Excel – sortieren, markieren, kopieren; nichts bearbeitbar */
+.u-ansicht{display:inline-flex;gap:2px;border:1px solid var(--line2);border-radius:8px;padding:2px;background:var(--panel)}
+.u-ansicht button{min-height:32px;padding:4px 12px;font-size:13px;border:0;border-radius:6px;background:none;box-shadow:none;font-weight:600;color:var(--muted)}
+.u-ansicht button[aria-pressed=true]{background:var(--accent);color:#fff}
+.u-kopieren{min-height:34px;padding:5px 12px;font-size:13px}
+.m-scroll{max-height:72vh;overflow:auto;border:1px solid var(--line);border-radius:8px;outline:none;-webkit-overflow-scrolling:touch}
+.m-scroll:focus-visible{box-shadow:0 0 0 3px var(--focus)}
+.m-tabelle{table-layout:auto;margin:0;min-width:100%}
+.m-tabelle thead th{position:sticky;top:0;z-index:1;background:var(--panel2);padding:0;white-space:nowrap}
+.m-sort{display:flex;align-items:center;gap:4px;width:100%;min-height:36px;padding:6px 9px;border:0;border-radius:0;background:none;box-shadow:none;font:inherit;font-weight:600;color:var(--text);text-align:left;cursor:pointer}
+.m-sort:hover:not(:disabled){background:var(--focus);color:var(--accent-2)}
+.m-pfeil{font-size:10px;color:var(--accent);min-width:10px}
+.m-tabelle tbody tr.m-zeile>th,.m-tabelle tbody tr.m-zeile>td{user-select:none;-webkit-user-select:none}
+.m-tabelle tbody tr.m-zeile>th{white-space:nowrap}
+.m-tabelle tbody tr.sel{background:color-mix(in srgb,var(--accent) 10%,var(--panel))}
+.m-tabelle tbody tr.sel:hover{background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
+.m-tabelle tbody tr.cur>th{box-shadow:inset 3px 0 0 var(--accent)}
+.m-leer{color:var(--muted)}
+.m-det-titel{font-size:12px;margin:12px 0 0;color:var(--accent-2);text-transform:uppercase;letter-spacing:.05em}
