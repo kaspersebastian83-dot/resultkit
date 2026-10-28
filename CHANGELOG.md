@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.0 · 28.10.2026
+- **Vorbereitung „Spektron-Ordner“:** Die App-Daten eines Projekts ziehen später in den Unterordner `_Spektron` (Prüfberichte bleiben in „Laborergebnisse“). ResultKit liest und schreibt `_Ergebnisse.json`, die LabelKit-Datei, den Probenplan und die Projektdaten jetzt über `spektron-ordner.js` – bis zum Umzug am bisherigen Ort, es ändert sich nichts.
+- Der Dateistand nennt die LabelKit-Datei weiter „Laboraufträge/…“, auch wenn sie später in `_Spektron` liegt – übernommene Ergebnisse bleiben gültig.
+
 ## 1.6.0 · 28.10.2026
 - **Hauptwerte XML↔PDF abgleichen:** Liegen XML und PDF eines Prüfberichts vor, liest ResultKit aus der Ergebnistabelle der PDF die Hauptwerte (Σ16 EPA-PAK, Chlorid, Asbest) und vergleicht sie mit der XML. Zuordnung über Probenreferenz und Parameter (bei Chlorid je Probe/je Fläche zusätzlich über die Einheit); Schreibweisen wie „<0,5“ / „< 0,5“ oder „14“ / „14,0“ zählen als gleich.
 - Weicht ein Wert ab: Hinweis beim Import und in „Jetzt dran“ (auch wenn XML und PDF verschieden benannt sind), an der Probe „⚠ Hinweis – PDF zeigt einen anderen Wert … Bitte mit dem unterschriebenen PDF prüfen; berichtigen kann nur das Labor.“ Die Prüfberichtskarte nennt das Ergebnis („Hauptwerte XML↔PDF: 12 geprüft ✓“, „⚠ 1 von 12 … weicht ab“ oder „Werte im PDF nicht erkannt – nicht abgeglichen“).

@@ -9,12 +9,13 @@ import {readLabFiles,reportWarnings,type LabReport} from './labreport';
 import {labelkitReport} from './labelkit';
 import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
+import {ort,ortZumSchreiben} from './so';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
 import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.6.0';
+export const APP_VERSION='1.7.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -99,10 +100,10 @@ let folder:ProjectFolder|null=null,scan:Scan|null=null,einstellungen:ResultSetti
 const cache=new Map<string,{report?:LabReport;fehler?:string}>();
 
 async function einlesen(f:ProjectFolder):Promise<Scan>{
- const labor=await findSubdir(f.dir,LABOR),auftraege=await findSubdir(f.dir,AUFTRAEGE);
+ const labor=await findSubdir(f.dir,LABOR),auftraege=(await ort(f.dir,'labelkit')).dir;   // LabelKit-Datei: „Laboraufträge“ oder künftig „_Spektron/LabelKit“
  let auftrag:LabReport|null=null,auftragDatei:DateiStand|null=null,auftragFehler='';
  if(auftraege){const liste=await listFiles(auftraege,/_Daten\.json$/i);   // LabelKit lädt immer die neueste – sie enthält den ganzen Auftrag
-  if(liste[0]){const file=await liste[0].handle.getFile();auftragDatei={name:`${AUFTRAEGE}/${liste[0].name}`,size:file.size,t:file.lastModified};
+  if(liste[0]){const file=await liste[0].handle.getFile();auftragDatei={name:`${AUFTRAEGE}/${liste[0].name}`,size:file.size,t:file.lastModified};   // feste Kennung, auch nach dem Umzug (wie Projektzentrale/FotoKit/PlanKit)
    try{let ohneNummer=false;auftrag=labelkitReport(await file.text(),liste[0].name,f.name,()=>{ohneNummer=true;return true;});
     if(ohneNummer)auftrag.warnings.push(`„${liste[0].name}“ enthält keine Projektnummer (ältere LabelKit-Datei) – sie liegt im Projektordner und wird daher diesem Projekt zugeordnet.`);}
    catch(e){auftragFehler=meldung(e);}}}
@@ -119,13 +120,14 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
   else fehler.push({name:gruppe.map(g=>g.name).join(' + '),text:r.fehler||''});}
  const alle=[...dateien,...(auftragDatei?[auftragDatei]:[])];
  let vorhanden:ErgebnisDatei|null=null,vorhandenFehler='';
- if(labor){try{const file=await fileInfo(labor,DATEI);if(file)vorhanden=liesErgebnisDatei(await file.text());}catch(e){vorhandenFehler=meldung(e);}}
+ const ablage=(await ort(f.dir,'resultkit')).dir;   // _Ergebnisse.json: „Laborergebnisse“ oder künftig „_Spektron/ResultKit“
+ if(ablage){try{const file=await fileInfo(ablage,DATEI);if(file)vorhanden=liesErgebnisDatei(await file.text());}catch(e){vorhandenFehler=meldung(e);}}
  return {auftrag,auftragDatei,auftragFehler,eingaenge,fehler,dateien:alle,stand:standKennung(alle),u:uebersicht(f.nr,auftrag,eingaenge),vorhanden,vorhandenFehler,ohneOrdner:!labor};
 }
 
 /** Bewertungsregel wie in PlanKit/FotoKit: Einstellungen der Ergebniskarte aus dem Probenplan, sonst Nutzung aus _Projekt.json. */
 async function planEinstellungen(f:ProjectFolder):Promise<ResultSettings|null>{
- try{const d=await findSubdir(f.dir,PLAENE),file=d?await fileInfo(d,`Probenplan ${f.name}.probenplan`):null;if(!file)return null;
+ try{const d=(await ort(f.dir,'plankit')).dir,file=d?await fileInfo(d,`Probenplan ${f.name}.probenplan`):null;if(!file)return null;
   const r=JSON.parse(await file.text())?.results;   // Skalen wie in PlanKit geprüft: Farben gelangen ins HTML
   if(r&&typeof r==='object')return {usage:r.usage==='residential'||r.usage==='industrial'?r.usage:undefined,vds:gueltigeSkalen(r.vds),scales:gueltigeSkalen(r.scales)};
  }catch{/* Plan nicht lesbar: Nutzung aus den Projektdaten */}
@@ -414,9 +416,9 @@ async function uebernehmen(){
    if(await frage('Ergebnisse übernehmen?',`${bedenken.join('\n\n')}\n\nPlanKit und FotoKit zeigen dann diesen Zwischenstand. Kommen weitere Berichte, einfach erneut übernehmen.`,['Abbrechen','Trotzdem übernehmen'])!=='Trotzdem übernehmen')return;
    if(folder!==f||scan?.stand!==frisch.stand){toast('Abgebrochen – die Übersicht hat sich inzwischen geändert.',true);return;}
    beschaeftigt=true;render();}
-  const labor=await f.dir.getDirectoryHandle(LABOR,{create:true}) as Dir;
-  const alt=await fileInfo(labor,DATEI);if(alt)await writeFile(labor,VORHER,await alt.text());
-  await writeFile(labor,DATEI,JSON.stringify(ergebnisDatei(u,frisch.auftrag,frisch.dateien,APP_VERSION),null,1));
+  const ablage=(await ortZumSchreiben(f.dir,'resultkit')).dir;   // bisher „Laborergebnisse“, künftig „_Spektron/ResultKit“
+  const alt=await fileInfo(ablage,DATEI);if(alt)await writeFile(ablage,VORHER,await alt.text());
+  await writeFile(ablage,DATEI,JSON.stringify(ergebnisDatei(u,frisch.auftrag,frisch.dateien,APP_VERSION),null,1));
   nachImport=null;toast(`Übernommen: ${standText(u)}. PlanKit und FotoKit verwenden jetzt diesen Stand.`);
   window.MosaikLeiste?.aktualisieren();
  }catch(e){fail(e);}
