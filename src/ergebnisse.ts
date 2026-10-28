@@ -99,19 +99,29 @@ export interface DateiStand {name:string;size:number;t:number}
 export const standKennung=(dateien:DateiStand[])=>[...dateien].sort((a,b)=>a.name.localeCompare(b.name)).map(d=>`${d.name}|${d.size}|${d.t}`).join('\n');
 
 export interface ErgebnisDatei {format:typeof FORMAT;version:typeof VERSION;projekt:string;uebernommen:string;app:{name:'ResultKit';version:string};
- vollstaendig:boolean;stand:string;dateien:DateiStand[];auftrag:{quelle:string;proben:{label:string;typ?:string;ref:string;desc:string}[]}|null;
+ vollstaendig:boolean;stand:string;dateien:DateiStand[];auftrag:{quelle:string;proben:{label:string;typ?:string;ref:string;desc:string;surface?:LabSample['surface'];raum?:string}[]}|null;
  berichte:(LabOrigin&{datum?:string;proben:LabSample[]})[];ersetzt:{bericht:string;durch:string[]}[];offen:string[];hinweise:string[]}
 
 /** Inhalt von „_Ergebnisse.json“: nur geltende Werte (ersetzte entfallen), je Bericht mit Herkunft wie in PlanKit. */
 export function ergebnisDatei(u:Uebersicht,auftrag:LabReport|null,dateien:DateiStand[],app:string,jetzt=new Date()):ErgebnisDatei{
+ // Oberflächenart und Raum kennt nur LabelKit (der Prüfbericht nicht): je Probennummer an die Berichtsproben hängen,
+ // damit PlanKit sie auch bei Proben aus dem Prüfbericht übernimmt (Balken am Plan, Raumbuch). Probenart ebenso, falls fehlend.
+ const ausAuftrag=new Map((auftrag?.rows||[]).filter(r=>r.label).map(r=>[r.label.toUpperCase(),r]));
+ const ergaenzt=(s:LabSample)=>{const a=s.label?ausAuftrag.get(s.label.toUpperCase()):undefined;if(!a)return {};
+  return {...(!s.typ&&a.typ?{typ:a.typ}:{}),...(!s.surface&&a.surface?{surface:a.surface}:{}),...(!s.raum&&a.raum?{raum:a.raum}:{})};};
  const berichte=u.berichte.filter(b=>!b.ersetztDurch).map(b=>({id:b.id,bericht:b.bericht,labor:b.labor,auftragsreferenz:b.auftragsreferenz,...(b.batch?{batch:b.batch}:{}),sources:{...b.sources},...(b.vorlaeufig?{vorlaeufig:true as const}:{}),...(b.datum?{datum:b.datum}:{}),
-  proben:b.proben.filter(s=>!b.ohneWerte?s.werte?.length:true).map(s=>({...s,reportId:b.id,werte:(s.werte||[]).map(w=>({...w}))}))}));
+  proben:b.proben.filter(s=>!b.ohneWerte?s.werte?.length:true).map(s=>({...s,...ergaenzt(s),reportId:b.id,werte:(s.werte||[]).map(w=>({...w}))}))}));
  return {format:FORMAT,version:VERSION,projekt:u.projekt,uebernommen:jetzt.toISOString(),app:{name:'ResultKit',version:app},vollstaendig:vollstaendig(u),stand:standKennung(dateien),dateien:[...dateien],
-  auftrag:auftrag?{quelle:auftrag.quelle,proben:auftrag.rows.map(r=>({label:r.label,...(r.typ?{typ:r.typ}:{}),ref:r.ref,desc:r.desc}))}:null,
+  auftrag:auftrag?{quelle:auftrag.quelle,proben:auftrag.rows.map(r=>({label:r.label,...(r.typ?{typ:r.typ}:{}),ref:r.ref,desc:r.desc,...(r.surface?{surface:r.surface}:{}),...(r.raum?{raum:r.raum}:{})}))}:null,
   berichte,ersetzt:u.berichte.filter(b=>b.ersetztDurch).map(b=>({bericht:b.bericht,durch:b.ersetztDurch!})),
   offen:u.zeilen.filter(z=>z.status==='offen'||z.status==='ohneWerte').map(z=>z.label||z.ref),hinweise:[...u.hinweise,...u.zeilen.flatMap(z=>z.hinweise.map(h=>`${z.label||z.ref}: ${h}`))]};
 }
 
+/** Vor ResultKit 1.5 übernommen: die Datei kennt Oberflächenart/Raum aus LabelKit noch nicht, der Laborauftrag hat sie aber. */
+export function ohneLage(datei:ErgebnisDatei|null,auftrag:LabReport|null):boolean{
+ if(!datei||!auftrag?.rows.some(r=>r.surface||r.raum))return false;
+ return !(datei.auftrag?.proben||[]).some(p=>p.surface||p.raum);
+}
 /** Gelesene „_Ergebnisse.json“ prüfen (für ResultKit selbst und als Muster für PlanKit/FotoKit). */
 export function liesErgebnisDatei(text:string):ErgebnisDatei{
  let v:unknown;try{v=JSON.parse(text);}catch{throw Error(`„${DATEI}“ ist keine gültige JSON-Datei.`);}

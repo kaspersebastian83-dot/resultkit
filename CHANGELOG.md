@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0 · 28.10.2026
+- **Oberflächenart und Raum gehen mit an PlanKit:** `_Ergebnisse.json` trägt an jeder Probe Oberflächenart (Aufsicht/Ansicht/Untersicht) und Raum aus dem LabelKit-Auftrag, dazu die Probenart, wenn der Prüfbericht keine nennt. PlanKit (ab 1.42) zeigt damit den Oberflächen-Balken und füllt das Raumbuch auch bei Proben aus dem Prüfbericht. Werte ändern sich nicht.
+- Wurde ein Projekt vor 1.5 übernommen und hat der Laborauftrag Oberflächenart oder Raum, zeigt „Jetzt dran“ einmal „Bitte einmal erneut übernehmen“.
+
 ## 1.4.0 · 28.10.2026
 - **Ergebnisse „Nach Stelle“** (neuer Standard, Umschalter „Nach Stelle / Je Probenart“ über der Übersicht, gilt je Browser): eine Zeile je Probenahmestelle, eine Spalte je Probenart – PAK und Chlorid derselben Stelle stehen nebeneinander, Asbest und Weitere ebenso. Gleiche Stelle heißt gleiche Bezeichnung aus LabelKit; Fläche (cm²), Oberflächenart und Attribute wie „verrußt“ zählen dafür nicht. Spalten ohne Proben gibt es nicht – ein reines PAK-Projekt sieht aus wie bisher, nur nach Ort sortiert.
 - **Lesen wie in Excel, nichts bearbeitbar:** Spaltenkopf anklicken sortiert (Werte zuerst absteigend, erneut klicken dreht um; < BG unter jedem Messwert, leere Zellen immer zuletzt). Zeilen markieren mit Klick, Umschalt, Strg, Ziehen oder Pfeiltasten (Strg+A alle); Doppelklick oder Enter zeigt alle Parameter, Hinweise und Prüfbericht jeder Probe der Zeile, Esc schließt. **Strg+C** bzw. „⧉ Für Excel kopieren“ kopiert die markierten Zeilen (sonst alle) als Tabelle: in Excel landen die Werte in Zellen, in Word als Tabelle – Werte wie im Prüfbericht, Einheit im Spaltenkopf, ohne Farben. Der Spaltenkopf bleibt beim Blättern stehen.
