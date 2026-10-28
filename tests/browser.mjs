@@ -88,7 +88,7 @@ try{
    await jetzt.getByRole('button',{name:'Ergebnisse übernehmen'}).click();
    const d=page.locator('#frage-dialog');await d.waitFor();assert.match(await d.textContent(),/Noch nicht vollständig: 0 von 4/);
    await d.getByRole('button',{name:'Abbrechen'}).click();
-   assert.equal(await lies(page,'Laborergebnisse/_Ergebnisse.json'),null);
+   assert.equal(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'),null);
   });
 
   await check(`${w}: Import – fremdes Projekt abgewählt; danach „eingelesen – jetzt übernehmen?“`,async()=>{
@@ -182,7 +182,7 @@ try{
    assert.match(await jetzt.locator('h1').textContent(),/^Übernommen am .* ✓$/);
    assert.match(await jetzt.textContent(),/PlanKit und FotoKit verwenden diesen Stand/);
    assert.equal(await jetzt.locator('button.primary').count(),0,'nichts mehr zu tun');
-   const datei=JSON.parse(await lies(page,'Laborergebnisse/_Ergebnisse.json'));
+   const datei=JSON.parse(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'));
    assert.equal(datei.format,'spektron-ergebnisse');assert.equal(datei.projekt,'99.9001');assert.equal(datei.vollstaendig,true);
    assert.deepEqual(datei.berichte.map(b=>b.bericht),['AR-1-02']);assert.equal(datei.berichte[0].datum,'2026-10-12');assert.deepEqual(datei.ersetzt,[{bericht:'AR-1-01',durch:['AR-1-02']}]);
    assert.equal(datei.berichte[0].proben.length,4);assert.equal(datei.berichte[0].proben[0].reportId,datei.berichte[0].id);
@@ -226,7 +226,7 @@ try{
    assert.equal(await page.locator('#berichte-block').evaluate(e=>e.open),true,'Hinweis-Chip klappt die Prüfberichte auf');
    await jetzt.getByRole('button',{name:'Erneut übernehmen'}).click();
    await until(async()=>await art()==='fertig','erneut übernommen');
-   assert.ok(await lies(page,'Laborergebnisse/_Ergebnisse.vorher.json'),'vorige Übernahme bleibt erhalten');
+   assert.ok(await lies(page,'_Spektron/ResultKit/_Ergebnisse.vorher.json'),'vorige Übernahme bleibt erhalten');
   });
 
   await check(`${w}: kein waagrechter Überlauf der Seite`,async()=>{

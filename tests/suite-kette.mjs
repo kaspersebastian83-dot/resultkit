@@ -93,8 +93,9 @@ try{
    renummerieren();renderTable();if(typeof renderChloridTable==='function')renderChloridTable();markUnsaved();
    await schnellSpeichern();
   },STELLEN);
-  const dateien=await until(async()=>{const l=await liste(lk,'Laboraufträge');return l.some(x=>/_Daten\.json$/.test(x))&&l;},'LabelKit-Datei im Projektordner');
-  const daten=JSON.parse(await lies(lk,`Laboraufträge/${dateien.find(x=>/_Daten\.json$/.test(x))}`));
+  // Projekt ab 26.0560 ohne alte App-Dateien → seit der Umstellung schreiben die Apps gleich in „_Spektron/<App>“ (spektron-ordner.js)
+  const dateien=await until(async()=>{const l=await liste(lk,'_Spektron/LabelKit');return l.some(x=>/_Daten\.json$/.test(x))&&l;},'LabelKit-Datei im Spektron-Ordner');
+  const daten=JSON.parse(await lies(lk,`_Spektron/LabelKit/${dateien.find(x=>/_Daten\.json$/.test(x))}`));
   assert.equal(daten.projekt?.nr,NR,'Projektnummer in der LabelKit-Datei');
   assert.deepEqual(daten.proben.map(p=>[p._nr,p.z2]),STELLEN.map(([z2],i)=>[i+1,z2]),'PAK-Proben P1–P3');
   assert.deepEqual(daten.chloridProben.map(p=>[p._nr??p.chloridNr,p.z2]),[[4,'EG Küche']],'Chloridprobe P4');
@@ -126,7 +127,7 @@ try{
   await importieren('AR-9-01.xml',VORL);
   await until(async()=>(await stand())==='0 von 4 Proben mit Ergebnis · 4 nur vorläufig','Stand nach vorläufigem Bericht');
   await uebernehmen();
-  const e=JSON.parse(await lies(rk,'Laborergebnisse/_Ergebnisse.json'));
+  const e=JSON.parse(await lies(rk,'_Spektron/ResultKit/_Ergebnisse.json'));
   assert.equal(e.projekt,NR);assert.equal(e.vollstaendig,false);assert.deepEqual(e.berichte.map(b=>[b.bericht,!!b.vorlaeufig]),[['AR-9-01',true]]);
   assert.deepEqual(e.berichte[0].proben.map(p=>p.label),['P1','P2','P3','P4'],'Probennummern aus dem Bericht = LabelKit');
  });
@@ -147,7 +148,7 @@ try{
  // ---- 4. PlanKit: Plan, Proben aus LabelKit, Werte aus ResultKit ----
  const pk=await neueSeite('PlanKit');
  await pk.addLocatorHandler(pk.locator('#ask-title',{hasText:'Gespeicherte Fassungen prüfen'}),()=>pk.locator('#ask-actions button',{hasText:'Datei verwenden'}).click());
- const planDatei=async()=>JSON.parse(await until(()=>lies(pk,`Pläne/Probenplan ${PROJEKT}.probenplan`),'Plan gespeichert'));
+ const planDatei=async()=>JSON.parse(await until(()=>lies(pk,`_Spektron/PlanKit/Probenplan ${PROJEKT}.probenplan`),'Plan gespeichert'));
  const uebernahme=async(auswahl)=>{await pk.locator('#lab-import').click();await pk.locator(`#lab-folder-dialog ${auswahl}`).first().click();await pk.locator('#lab-review').waitFor();
   const alle=pk.locator('#lab-update-all:visible');if(await alle.count())await alle.click();
   await pk.locator('#lab-confirm:enabled').click();await pk.locator('#lab-review').waitFor({state:'hidden'});await pk.waitForTimeout(1200);};
@@ -173,7 +174,7 @@ try{
   await rk.bringToFront();await importieren('AR-9-02.xml',ENDG);
   await until(async()=>(await stand())==='3 von 4 Proben mit Ergebnis · 1 nur vorläufig','Stand nach endgültigem Bericht');
   await uebernehmen();
-  const e=JSON.parse(await lies(rk,'Laborergebnisse/_Ergebnisse.json'));
+  const e=JSON.parse(await lies(rk,'_Spektron/ResultKit/_Ergebnisse.json'));
   assert.equal(e.vollstaendig,false,'P1 hat noch einen vorläufigen Wert');
   assert.deepEqual(e.berichte.map(b=>b.bericht).sort(),['AR-9-01','AR-9-02'],'vorläufiger Bericht gilt noch für P1/BaP');assert.deepEqual(e.ersetzt,[]);
  });
@@ -214,7 +215,7 @@ try{
   await rk.bringToFront();await importieren('AR-9-03.xml',ENDG2);
   await until(async()=>(await stand())==='4 von 4 Proben mit Ergebnis','Stand vollständig');
   await uebernehmen();
-  const e=JSON.parse(await lies(rk,'Laborergebnisse/_Ergebnisse.json'));assert.equal(e.vollstaendig,true);assert.deepEqual(e.offen,[]);
+  const e=JSON.parse(await lies(rk,'_Spektron/ResultKit/_Ergebnisse.json'));assert.equal(e.vollstaendig,true);assert.deepEqual(e.offen,[]);
   assert.deepEqual(e.ersetzt.map(x=>x.bericht),['AR-9-01'],'vorläufiger Bericht jetzt ganz ersetzt');
  });
 
@@ -229,7 +230,7 @@ try{
   if(!await pz.locator('[data-ab-an="0"]').isChecked())await pz.locator('[data-ab-an="0"]').check();
   assert.match(await pz.locator('[data-ab-details="0"]').inputValue(),/Fiktive Versicherung AG/,'Auftraggeber aus den Projektdaten');
   await pz.locator('[data-ab-los]').click();await pz.locator('#bueroPanel [data-ab-msg]').filter({hasText:'✓ Ans Büro übergeben'}).waitFor();
-  const aufgaben=await liste(pz,'_Buero/aufgaben');assert.equal(aufgaben.length,1,'eine Aufgabe in „_Buero/aufgaben“');
+  const aufgaben=await liste(pz,'_Spektron/Buero/aufgaben');assert.equal(aufgaben.length,1,'eine Aufgabe in „_Spektron/Buero/aufgaben“');
   await pz.locator('#btnRescan').click();await pzStand('laeuft','Beim Büro');
  });
 
@@ -263,7 +264,7 @@ try{
   await bl.locator('#zNeu').click();
   const z=f=>bl.locator(`#zRows tr[data-i="0"] [data-f="${f}"]`);
   await z('datum').fill(HEUTE);await z('stunden').fill('6');
-  await bl.waitForFunction(()=>/gespeichert in „Abrechnung\/Aufwand_SK\.json“/.test(document.getElementById('status').textContent));
+  await bl.waitForFunction(()=>/gespeichert in „_Spektron\/BelegKit\/Aufwand_SK\.json“/.test(document.getElementById('status').textContent));
   await bl.locator('button[data-tab="abrechnung"]').click();await bl.locator('#aStand').click();
   await until(async()=>(await liste(bl,'Abrechnung')).includes(`${NR.replace('.','-')}_Aufwand_${HEUTE}.json`),'Abrechnungsstand gespeichert');
  });
