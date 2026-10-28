@@ -15,7 +15,7 @@ const probe=(n,lines)=>({...labRows[0],label:`P${n}`,ref:`Probe ${n}`,labNr:`999
 const pak=v=>[{p:SUM,r:v,u:U},{p:'Benzo[a]pyren',r:'< 0,5',u:U},{p:'Naphthalin',r:'n. n.',u:U}];
 const labelkit=JSON.stringify({version:'4.41.0',projekt:{nr:'99.9001'},
  proben:[1,2,3].map(i=>({_nr:i,matrix:'Wischprobe',datum:'08.10.2026',z2:`EG Testraum ${i}`,z3:'Wand',z4:'Ansicht',cm2:'400'})),
- chloridProben:[{chloridNr:4,matrix:'Wischprobe',datum:'08.10.2026',z2:'EG Testraum 1',z4:'Aufsicht'}]});
+ chloridProben:[{chloridNr:4,matrix:'Wischprobe',datum:'08.10.2026',z2:'EG Testraum 1',z3:'Wand',z4:'Ansicht'}]});   // gleiche Stelle wie P1 → „Nach Stelle“ eine Zeile
 const vorlaeufig=labXML([probe(1,pak('12')),probe(2,pak('8'))],{vorlaeufig:true,code:'AR-1-01'});
 const endgueltig=labXML([probe(1,pak('14')),probe(2,pak('8,5')),probe(3,pak('< 0,5')),probe(4,[{p:'Chlorid',r:'26',u:'µg/cm²'}])],{code:'AR-1-02'});
 const fremd=labXML([probe(1,pak('3'))],{code:'AR-7-01',ref:'99.9002 Anderswo'});
@@ -44,6 +44,9 @@ try{
  for(const viewport of [{width:1366,height:900},{width:360,height:740}]){
   const context=await browser.newContext({viewport,timezoneId:'Europe/Berlin'});
   await context.addInitScript(projekt=>{window.showDirectoryPicker=async()=>(await navigator.storage.getDirectory()).getDirectoryHandle(projekt);},PROJEKT);
+  // Die Prüfungen der Tabellen je Probenart laufen in „Je Probenart“; „Nach Stelle“ (Standard) hat eine eigene Prüfung.
+  await context.addInitScript(()=>{try{if(localStorage.getItem('resultkit-ansicht')===null)localStorage.setItem('resultkit-ansicht','art');}catch{}});
+  await context.grantPermissions(['clipboard-read','clipboard-write'],{origin:base.replace(/\/$/,'')});
   const page=await context.newPage();page.setDefaultTimeout(15000);
   const fehler=[];page.on('pageerror',e=>fehler.push(e.message));page.on('console',m=>{if(m.type()==='error')fehler.push(m.text());});
   await page.goto(base);
@@ -147,6 +150,29 @@ try{
    assert.deepEqual(await pak.locator('tbody th').allTextContents(),['P1']);assert.deepEqual(await cl.locator('tbody th').allTextContents(),['P4'],'Chlorid oberhalb ist auffällig');
    await page.getByRole('button',{name:'Alle'}).click();
    await page.locator('#u-sort').selectOption('nr');assert.deepEqual(await pak.locator('tbody th').allTextContents(),['P1','P2','P3']);
+  });
+
+  await check(`${w}: Nach Stelle – PAK und Chlorid nebeneinander, sortieren, markieren, Strg+C für Excel, nichts bearbeitbar`,async()=>{
+   await page.getByRole('button',{name:'Nach Stelle'}).click();
+   const t=page.locator('#m-tabelle');await t.waitFor();
+   assert.deepEqual((await t.locator('thead th').allTextContents()).map(x=>x.replace(/[▲▼]/g,'')),['Probe','Probenahmestelle','Σ16 EPA-PAK (µg/m²)','Chlorid (µg/cm²)']);
+   const zeilen=t.locator('tbody tr.m-zeile');assert.equal(await zeilen.count(),3);
+   assert.match(await zeilen.first().textContent(),/P1 · P4.*EG Testraum 1, Wand, Ansicht.*14.*26/s);
+   assert.equal(await t.locator('input,textarea,select,[contenteditable]').count(),0,'nur lesen');
+   await t.getByRole('button',{name:/Σ16 EPA-PAK/}).click();
+   assert.equal(await t.locator('thead th').nth(2).getAttribute('aria-sort'),'descending');
+   assert.deepEqual(await zeilen.locator('th').allTextContents(),['P1 · P4','P2','P3'],'höchster Wert zuerst, < BG zuletzt');
+   await zeilen.nth(1).locator('td').first().click();assert.equal(await zeilen.nth(1).getAttribute('aria-selected'),'true');
+   await page.keyboard.press('Shift+ArrowDown');assert.deepEqual(await zeilen.evaluateAll(r=>r.map(x=>x.getAttribute('aria-selected'))),['false','true','true']);
+   await page.keyboard.press('Control+c');
+   const text=await page.evaluate(()=>navigator.clipboard.readText());
+   assert.deepEqual(text.split(/\r?\n/),['Probe\tProbenahmestelle\tΣ16 EPA-PAK (µg/m²)\tChlorid (µg/cm²)','P2\tEG Testraum 2, Wand, Ansicht\t8,5\t','P3\tEG Testraum 3, Wand, Ansicht\t< 0,5\t']);
+   await page.locator('#toast',{hasText:'2 Zeilen kopiert'}).waitFor();
+   await page.keyboard.press('Enter');await t.locator('.u-detail .u-det').first().waitFor();assert.match(await t.locator('.u-detail').textContent(),/P3 · PAK.*Alle Parameter/s);
+   await page.keyboard.press('Escape');assert.equal(await t.locator('.u-detail').count(),0);
+   await zeilen.first().locator('td').first().dblclick();assert.match(await t.locator('.u-detail').textContent(),/P1 · PAK.*P4 · Chlorid/s,'beide Proben der Stelle');
+   await page.keyboard.press('Escape');await page.keyboard.press('Control+a');assert.equal(await t.locator('tr.m-zeile[aria-selected=true]').count(),3);
+   await page.getByRole('button',{name:'Je Probenart'}).click();assert.equal(await page.locator('#m-tabelle').count(),0);assert.equal(await page.locator('.u-gruppe').count(),2);
   });
 
   await check(`${w}: Ergebnisse übernehmen – Datei für PlanKit/FotoKit, danach grün ohne Hauptknopf`,async()=>{

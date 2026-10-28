@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0 · 28.10.2026
+- **Ergebnisse „Nach Stelle“** (neuer Standard, Umschalter „Nach Stelle / Je Probenart“ über der Übersicht, gilt je Browser): eine Zeile je Probenahmestelle, eine Spalte je Probenart – PAK und Chlorid derselben Stelle stehen nebeneinander, Asbest und Weitere ebenso. Gleiche Stelle heißt gleiche Bezeichnung aus LabelKit; Fläche (cm²), Oberflächenart und Attribute wie „verrußt“ zählen dafür nicht. Spalten ohne Proben gibt es nicht – ein reines PAK-Projekt sieht aus wie bisher, nur nach Ort sortiert.
+- **Lesen wie in Excel, nichts bearbeitbar:** Spaltenkopf anklicken sortiert (Werte zuerst absteigend, erneut klicken dreht um; < BG unter jedem Messwert, leere Zellen immer zuletzt). Zeilen markieren mit Klick, Umschalt, Strg, Ziehen oder Pfeiltasten (Strg+A alle); Doppelklick oder Enter zeigt alle Parameter, Hinweise und Prüfbericht jeder Probe der Zeile, Esc schließt. **Strg+C** bzw. „⧉ Für Excel kopieren“ kopiert die markierten Zeilen (sonst alle) als Tabelle: in Excel landen die Werte in Zellen, in Word als Tabelle – Werte wie im Prüfbericht, Einheit im Spaltenkopf, ohne Farben. Der Spaltenkopf bleibt beim Blättern stehen.
+- Werte und Bezeichnungen lassen sich in ResultKit nicht ändern: Grundlage ist der Prüfbericht des Labors. Ein falscher Wert wird vom Labor mit einem neuen Bericht berichtigt.
+
 ## 1.3.1 · 27.10.2026
 - **Vollständigkeit richtig:** Eine Probe gilt erst als „✓ Ergebnis“, wenn keiner ihrer Werte mehr nur vorläufig ist. Bisher reichte ein endgültiger Wert – kam z. B. PAK endgültig, Chlorid aber nur vorläufig, stand die Probe als fertig da, und das Projekt konnte als „vollständig“ an die Projektzentrale gehen. Jetzt bleibt sie „vorläufig“ mit dem Hinweis, welcher Parameter fehlt („Nur vorläufige Werte für Chlorid …“); `_Ergebnisse.json` meldet dann `vollstaendig: false`.
 

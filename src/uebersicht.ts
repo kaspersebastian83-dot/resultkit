@@ -94,11 +94,76 @@ function geschoss(text:string){
   return {vor:w.slice(0,i).join(' '),rang,rest:w.slice(i+1).join(' ')};}
  return {vor:'',rang:70,rest:text};   // ohne Geschoss: ans Ende
 }
+/** Vergleich nach Ort: Gebäude, Geschoss (unten nach oben), dann Raum/Bauteil wie geschrieben. Ohne Geschoss ans Ende. */
+export function ortVergleich(a:string,b:string){
+ const x=geschoss(a),y=geschoss(b),ohne=(g:{rang:number})=>g.rang===70?1:0;
+ return ohne(x)-ohne(y)||x.vor.localeCompare(y.vor,'de',{numeric:true})||x.rang-y.rang||x.rest.localeCompare(y.rest,'de',{numeric:true});
+}
 /** Sortierung nach Ort: Gebäude, Geschoss (unten nach oben), dann Raum/Bauteil wie geschrieben; sonst nach Probennummer. */
 export function sortiere(zeilen:UZeile[],nach:'ort'|'nr'):UZeile[]{
  const nr=(z:UZeile)=>z.nr??1e9;
  if(nach==='nr')return [...zeilen].sort((a,b)=>nr(a)-nr(b)||a.label.localeCompare(b.label,'de',{numeric:true}));
- const k=new Map(zeilen.map(z=>[z,geschoss(z.stelle)]));
- const ohne=(g:{rang:number})=>g.rang===70?1:0;   // ohne Geschoss ans Ende, auch nach Gebäuden mit Geschoss
- return [...zeilen].sort((a,b)=>{const x=k.get(a)!,y=k.get(b)!;return ohne(x)-ohne(y)||x.vor.localeCompare(y.vor,'de',{numeric:true})||x.rang-y.rang||x.rest.localeCompare(y.rest,'de',{numeric:true})||nr(a)-nr(b);});
+ return [...zeilen].sort((a,b)=>ortVergleich(a.stelle,b.stelle)||nr(a)-nr(b));
 }
+
+/* ---------- Übersicht nach Probenahmestelle (ab 1.4.0) ----------
+   Eine Zeile je Probenahmestelle, eine Spalte je Probenart: PAK und Chlorid derselben Stelle stehen nebeneinander.
+   Nur lesen – Werte und Bezeichnungen kommen unverändert aus Prüfbericht und LabelKit. */
+export interface MZeile {key:string;stelle:string;zellen:Partial<Record<Gruppe,UZeile>>;labels:string[];nr:number|null}
+/** Beschreibungsteile, die nicht zur Stelle gehören: Fläche (cm²), Tiefe. */
+const NEBEN=/^(?:\d+(?:[.,]\d+)?\s*cm\s*(?:²|2)|tiefe\s*:.*)$/i;
+/** Attribute nach der Stelle (Beaufschlagung, Oberflächenart): zählen für „gleiche Stelle“ nicht. */
+const ATTRIBUT=new Set(['verrußt','verrusst','leicht','stark','gereinigt','ungereinigt','aufsicht','ansicht','untersicht']);
+const MIT=new Set(['belag','ruß','russ','kondensat','staub']);
+/** Stelle zum Anzeigen: Beschreibung ohne Fläche und Tiefe. */
+export function stelleText(desc:string){const t=String(desc||'').split(',').map(x=>x.trim()).filter(x=>x&&!NEBEN.test(x)).join(', ');return t||String(desc||'').trim();}
+/** Schlüssel „gleiche Stelle“: Groß-/Kleinschreibung, Satzzeichen, Fläche/Tiefe und Attribute (verrußt, Ansicht …) zählen nicht. */
+export function stelleKey(desc:string){
+ const w=stelleText(desc).toLowerCase().replace(/[,;·/()]+/g,' ').split(/\s+/).filter(Boolean),out:string[]=[];
+ for(let i=0;i<w.length;i++){if(ATTRIBUT.has(w[i]))continue;if(w[i]==='mit'&&MIT.has(w[i+1]||'')){i++;continue;}out.push(w[i]);}
+ return out.join(' ').replace(/(\d+)\s*\.\s*og\b/g,'$1.og');
+}
+/** Gruppen → Zeilen je Stelle. Zwei Proben derselben Art an derselben Stelle bleiben getrennte Zeilen. */
+export function matrix(gruppen:UGruppe[]):MZeile[]{
+ const rows:MZeile[]=[],byKey=new Map<string,MZeile[]>();
+ for(const g of gruppen)for(const z of g.zeilen){
+  const key=stelleKey(z.stelle);let row=key?(byKey.get(key)||[]).find(r=>!r.zellen[g.gruppe]):undefined;
+  if(!row){row={key:`${key||z.label}#${rows.length}`,stelle:stelleText(z.stelle),zellen:{},labels:[],nr:null};rows.push(row);if(key)byKey.set(key,[...(byKey.get(key)||[]),row]);}
+  row.zellen[g.gruppe]=z;row.labels.push(z.label);if(z.nr!==null&&(row.nr===null||z.nr<row.nr))row.nr=z.nr;
+ }
+ return rows;
+}
+export type MSpalte='probe'|'stelle'|Gruppe;
+/** Wert einer Zelle zum Sortieren: Messwert als Zahl, < BG / n. n. kleiner als jeder Messwert; leer oder offen = null (immer ans Ende). */
+export function sortWert(g:Gruppe,z:UZeile|undefined):number|string|null{
+ if(!z||z.ausstehend)return null;
+ if(g==='Asbest')return z.befund?(z.befund.gefunden?1:0):null;
+ const w=g==='Weitere'?z.weitere[0]:z.haupt;if(!w)return null;
+ const q=labQualifier(w.r);if(q==='below'||q==='notDetected')return -1;
+ const n=labNumber(w.r);return Number.isFinite(n)?n:w.r;
+}
+/** Sortierung wie in Excel: auf-/absteigend, leere Zellen immer zuletzt; bei Gleichstand nach Ort. */
+export function sortiereMatrix(rows:MZeile[],spalte:MSpalte,auf:boolean):MZeile[]{
+ const nr=(r:MZeile)=>r.nr??1e9,ort=(a:MZeile,b:MZeile)=>ortVergleich(a.stelle,b.stelle)||nr(a)-nr(b),d=auf?1:-1;
+ if(spalte==='stelle')return [...rows].sort((a,b)=>d*ort(a,b));
+ if(spalte==='probe')return [...rows].sort((a,b)=>d*(nr(a)-nr(b)||a.labels[0].localeCompare(b.labels[0],'de',{numeric:true})));
+ return [...rows].sort((a,b)=>{const x=sortWert(spalte,a.zellen[spalte]),y=sortWert(spalte,b.zellen[spalte]);
+  if(x===null||y===null)return (x===null?1:0)-(y===null?1:0)||ort(a,b);
+  const c=typeof x==='number'&&typeof y==='number'?x-y:typeof x==='number'?-1:typeof y==='number'?1:String(x).localeCompare(String(y),'de',{numeric:true});
+  return d*c||ort(a,b);});
+}
+export const SPALTE_TITEL:Record<Gruppe,string>={PAK:'Σ16 EPA-PAK',Chlorid:'Chlorid',Asbest:'Asbest',Weitere:'Weitere'};
+/** Zelle als Text für Excel/Word: Wert wie im Bericht, Einheit nur wenn sie von der Spalte abweicht. */
+export function zelleText(g:Gruppe,z:UZeile|undefined,einheit:string){
+ if(!z)return '';if(z.ausstehend)return 'ausstehend';
+ if(g==='Asbest')return z.befund?.text||'';
+ if(g==='Weitere')return z.weitere.map(w=>`${w.p} ${w.r}${w.u?` ${w.u}`:''}`).join(' · ');
+ return z.haupt?`${z.haupt.r}${z.haupt.u&&z.haupt.u!==einheit?` ${z.haupt.u}`:''}`:'';
+}
+/** Tabelle zum Kopieren: Kopf und Zeilen (nur Werte, keine Farben oder Hinweise). */
+export function tabelleDaten(rows:MZeile[],gruppen:UGruppe[]):{kopf:string[];zeilen:string[][]}{
+ const kopf=['Probe','Probenahmestelle',...gruppen.map(g=>`${SPALTE_TITEL[g.gruppe]}${g.einheit&&(g.gruppe==='PAK'||g.gruppe==='Chlorid')?` (${g.einheit})`:''}`)];
+ return {kopf,zeilen:rows.map(r=>[r.labels.join(', '),r.stelle,...gruppen.map(g=>zelleText(g.gruppe,r.zellen[g.gruppe],g.einheit))])};
+}
+/** Tabulatorgetrennt: Excel übernimmt das in Zellen. */
+export function alsTSV(d:{kopf:string[];zeilen:string[][]}){const c=(x:string)=>x.replace(/[\t\r\n]+/g,' ');return [d.kopf,...d.zeilen].map(r=>r.map(c).join('\t')).join('\r\n');}

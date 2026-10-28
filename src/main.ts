@@ -11,10 +11,10 @@ import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,standK
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
 import type {ResultSettings,Scale,Wert} from './model';
-import {uebersichtGruppen,sortiere,wertFuer,type UGruppe,type UZeile,type Gruppe} from './uebersicht';
+import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.3.1';
+export const APP_VERSION='1.4.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -65,8 +65,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
   <section id="jetzt" class="jetzt" aria-live="polite" aria-label="Jetzt dran"></section>
   <div id="hinweise"></div>
   <div id="u-kacheln" class="u-kacheln"></div>
-  <div id="u-filter" class="u-filter"><span class="u-chips" role="group" aria-label="Filter"><button type="button" data-filter="alle">Alle</button><button type="button" data-filter="auff">Nur auffällige</button><button type="button" data-filter="offen">Nur offene</button></span>
-   <span class="u-tipp muted klein">Zeile anklicken: alle Parameter, Hinweise und Prüfbericht</span>
+  <div id="u-filter" class="u-filter"><span class="u-ansicht" role="group" aria-label="Ansicht"><button type="button" data-ansicht="stelle" title="Eine Zeile je Probenahmestelle – PAK, Chlorid und Asbest derselben Stelle nebeneinander">Nach Stelle</button><button type="button" data-ansicht="art" title="Eine Tabelle je Probenart (wie bisher)">Je Probenart</button></span><span class="u-chips" role="group" aria-label="Filter"><button type="button" data-filter="alle">Alle</button><button type="button" data-filter="auff">Nur auffällige</button><button type="button" data-filter="offen">Nur offene</button></span>
+   <span class="u-tipp muted klein" id="u-tipp">Zeile anklicken: alle Parameter, Hinweise und Prüfbericht</span>
+   <button type="button" id="u-kopieren" class="u-kopieren" title="Markierte Zeilen (sonst alle) als Tabelle kopieren – in Excel oder Word einfügen">⧉ Für Excel kopieren</button>
    <label class="u-sort">Sortiert nach <select id="u-sort"><option value="ort">Ort (Geschoss, Raum)</option><option value="nr">Probennummer</option></select></label></div>
   <div id="u-tabellen"></div>
   <details id="berichte-block" class="berichte-block"><summary><h2 id="h-berichte">Prüfberichte</h2><span id="berichte-zahl" class="zahl"></span><span id="berichte-kurz" class="berichte-kurz"></span></summary>
@@ -229,7 +230,12 @@ function renderUebersicht(s:Scan){
   const vorl=g.zeilen.filter(z=>z.vorlaeufig).length;
   const teile=[g.gruppe==='Asbest'?`${auff} Asbest nachgewiesen`:auff?`${auff} auffällig`:'',vorl?`${vorl} vorläufig`:'',offen?`${offen} offen`:'',!offen&&!auff&&!vorl?'alle mit Ergebnis':''].filter(Boolean);
   return `<div class="u-kachel"><span class="u-k-name">${esc(GTITEL[g.gruppe])}</span><span class="u-k-zahl">${g.mitErgebnis} / ${n}</span><span class="u-k-text">${esc(teile.join(' · '))}</span></div>`;}).join('');
- $('u-tabellen').innerHTML=gruppen.map(g=>uTabelle(s,g,nach)).join('');
+ const fokusDrin=!!document.activeElement?.closest('#m-tabelle');
+ const stelle=ansicht==='stelle';$('u-sort').hidden=stelle;$('u-kopieren').hidden=!stelle;
+ $('u-tipp').textContent=stelle?'Klick markiert (Umschalt/Strg für mehrere) · Doppelklick oder Enter: Details · Strg+C kopiert für Excel':'Zeile anklicken: alle Parameter, Hinweise und Prüfbericht';
+ document.querySelectorAll<HTMLButtonElement>('[data-ansicht]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.ansicht===ansicht)));
+ $('u-tabellen').innerHTML=stelle?mTabelle(s,gruppen):gruppen.map(g=>uTabelle(s,g,nach)).join('');
+ if(stelle){markierungZeigen();if(fokusDrin)$('m-tabelle')?.focus({preventScroll:true});}
  document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===filter)));
 }
 /** Prüfberichte einer Tabelle mit Datum, z. B. „Prüfbericht AR-1-01 vom 12.10.2026“ oder „Prüfberichte AR-1-01 (12.10.), AR-1-04 (vorläufig, 20.10.)“. */
@@ -238,26 +244,80 @@ function berichtZeile(codes:string[],berichte:Bericht[]){
  if(b.length===1)return `Prüfbericht ${b[0].bericht}${b[0].vorlaeufig?' (vorläufig)':''}${b[0].datum?` vom ${datum(b[0].datum)}`:''}`;
  return `Prüfberichte ${b.map(x=>`${x.bericht}${x.vorlaeufig||x.datum?` (${[x.vorlaeufig?'vorläufig':'',x.datum?datum(x.datum).slice(0,6):''].filter(Boolean).join(', ')})`:''}`).join(', ')}`;
 }
+// ---- Ansicht „Nach Stelle“ (ab 1.4.0): eine Zeile je Probenahmestelle, Lesen wie in Excel ----
+// Nur lesen: sortieren über den Spaltenkopf, Zeilen markieren (Klick, Umschalt, Strg, Ziehen, Pfeiltasten), Details mit
+// Doppelklick oder Enter, Strg+C kopiert als Tabelle für Excel/Word. Werte und Bezeichnungen sind nie bearbeitbar –
+// sie kommen aus dem Prüfbericht des Labors und aus LabelKit.
+let ansicht:'stelle'|'art'=merke('ansicht')==='art'?'art':'stelle';
+let msort:{s:MSpalte;auf:boolean}=(()=>{try{const v=JSON.parse(merke('msort')||'null');if(v&&['probe','stelle','PAK','Chlorid','Asbest','Weitere'].includes(v.s)&&typeof v.auf==='boolean')return v;}catch{/* alt */}return {s:'stelle',auf:true};})();
+let mZeilen:MZeile[]=[],mGruppen:UGruppe[]=[],cursor:string|null=null,anker:string|null=null;
+const markiert=new Set<string>();
+const mFilter=(r:MZeile)=>filter==='offen'?Object.values(r.zellen).some(z=>z!.ausstehend):filter==='auff'?Object.values(r.zellen).some(z=>auffaellig(z!)):true;
+function mTabelle(s:Scan,gruppen:UGruppe[]){
+ mGruppen=gruppen;
+ mZeilen=sortiereMatrix(matrix(gruppen),msort.s,msort.auf).filter(mFilter);
+ const keys=new Set(mZeilen.map(r=>r.key));for(const k of [...markiert])if(!keys.has(k))markiert.delete(k);if(cursor&&!keys.has(cursor))cursor=null;
+ const spalten=gruppen.map(g=>g.gruppe),n=2+spalten.length;
+ const kopf=(id:MSpalte,titel:string)=>{const an=msort.s===id;return `<th scope="col" aria-sort="${an?(msort.auf?'ascending':'descending'):'none'}"><button type="button" class="m-sort" data-msort="${id}" title="Sortieren${an?` – erneut klicken: ${msort.auf?'absteigend':'aufsteigend'}`:''}">${esc(titel)}<span class="m-pfeil" aria-hidden="true">${an?(msort.auf?'▲':'▼'):''}</span></button></th>`;};
+ const titel=(g:UGruppe)=>`${SPALTE_TITEL[g.gruppe]}${g.einheit&&(g.gruppe==='PAK'||g.gruppe==='Chlorid')?` (${g.einheit})`:''}`;
+ const codes=[...new Set(gruppen.flatMap(g=>g.zeilen.flatMap(z=>z.berichte)))];
+ const leer=`<tr><td colspan="${n}" class="muted">${filter==='offen'?'Keine offenen Proben.':filter==='auff'?'Keine auffälligen Proben.':'Keine Proben.'}</td></tr>`;
+ const zeile=(r:MZeile)=>{const key=`M|${r.key}`,auf=aufgeklappt.has(key),proben=gruppen.map(g=>({g,z:r.zellen[g.gruppe]})).filter(x=>x.z);
+  const zellen=gruppen.map(g=>{const z=r.zellen[g.gruppe];return `<td>${z?`${ergebnis(g.gruppe,g.einheit,z)}${hinweis(z,quelleVon(s,z))}`:'<span class="m-leer" aria-label="keine Probe">–</span>'}</td>`;}).join('');
+  const det=auf?`<tr class="u-detail"><td colspan="${n}">${proben.map(({g,z})=>{const q=quelleVon(s,z!);return q?`<h3 class="m-det-titel">${esc(z!.label)} · ${esc(GTITEL[g.gruppe])}</h3>${probeDetails(s,q)}`:'';}).join('')}</td></tr>`:'';
+  return `<tr class="u-zeile m-zeile${auf?' auf':''}" data-m="${esc(r.key)}" aria-selected="false"><th scope="row"><button type="button" class="u-auf" tabindex="-1" aria-expanded="${auf}" title="${auf?'Details zuklappen':'Alle Parameter, Hinweise und Prüfbericht zeigen'}">${esc(r.labels.join(' · '))}</button></th><td>${esc(r.stelle)}</td>${zellen}</tr>${det}`;};
+ return `<section class="u-gruppe m-gruppe" aria-label="Ergebnisse nach Probenahmestelle"><h2>Nach Probenahmestelle <small>${mZeilen.length} Zeile${mZeilen.length===1?'':'n'}${codes.length?` · ${esc(berichtZeile(codes,s.u.berichte))}`:''}</small></h2>${gruppen.map(g=>legendeFuer(g,gruppen.length>1)).join('')}
+  <div class="m-scroll" id="m-tabelle" tabindex="0" aria-label="Ergebnistabelle: Pfeiltasten wählen, Enter zeigt Details, Strg+C kopiert"><table class="u-tabelle m-tabelle" role="grid" aria-multiselectable="true" aria-readonly="true"><thead><tr>${kopf('probe','Probe')}${kopf('stelle','Probenahmestelle')}${gruppen.map(g=>kopf(g.gruppe,titel(g))).join('')}</tr></thead>
+  <tbody>${mZeilen.map(zeile).join('')||leer}</tbody></table></div></section>`;
+}
+/** Markierung und Cursor ohne neues Zeichnen anzeigen. */
+function markierungZeigen(){
+ document.querySelectorAll<HTMLElement>('#m-tabelle tr.m-zeile').forEach(tr=>{const k=tr.dataset.m!;tr.classList.toggle('sel',markiert.has(k));tr.classList.toggle('cur',k===cursor);tr.setAttribute('aria-selected',String(markiert.has(k)));});
+ if(cursor)document.querySelector(`#m-tabelle tr.m-zeile[data-m="${CSS.escape(cursor)}"]`)?.scrollIntoView({block:'nearest'});
+}
+function markiere(key:string,art:'eins'|'bereich'|'umschalten'){
+ const idx=(k:string|null)=>k?mZeilen.findIndex(r=>r.key===k):-1;
+ if(art==='bereich'&&anker&&idx(anker)>=0){const a=idx(anker),b=idx(key);markiert.clear();for(let i=Math.min(a,b);i<=Math.max(a,b);i++)markiert.add(mZeilen[i].key);}
+ else if(art==='umschalten'){if(markiert.has(key))markiert.delete(key);else markiert.add(key);anker=key;}
+ else{markiert.clear();markiert.add(key);anker=key;}
+ cursor=key;markierungZeigen();
+}
+function detailUmschalten(key:string){if(!scan)return;const k=`M|${key}`;if(aufgeklappt.has(k))aufgeklappt.delete(k);else aufgeklappt.add(k);cursor=key;renderUebersicht(scan);$('m-tabelle')?.focus({preventScroll:true});}
+/** Markierte Zeilen (sonst alle sichtbaren) als Tabelle: Text mit Tabulatoren für Excel, HTML-Tabelle für Word. */
+function kopierDaten(){
+ const rows=markiert.size?mZeilen.filter(r=>markiert.has(r.key)):mZeilen,d=tabelleDaten(rows,mGruppen);
+ const html=`<table><thead><tr>${d.kopf.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${d.zeilen.map(z=>`<tr>${z.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+ return {text:alsTSV(d),html,n:rows.length};
+}
+const kopiertText=(n:number)=>`${n} Zeile${n===1?'':'n'} kopiert – in Excel oder Word einfügen (Strg+V).`;
+/** Hinweise an einem Ergebnis: ausstehend, vorläufig, nicht beauftragt, ⚠ Hinweis. */
+const hinweis=(z:UZeile,q:Zeile|undefined)=>`${z.ausstehend?'<span class="u-aus">ausstehend</span>':''}${!z.ausstehend&&z.vorlaeufig?' <small class="u-vorl">vorläufig</small>':''}${z.nichtBeauftragt?' <small class="u-nb" title="Steht im Prüfbericht, aber nicht im Laborauftrag aus LabelKit">nicht beauftragt</small>':''}${q&&zeilenHinweise(q).length?` <small class="u-hw" title="${esc(zeilenHinweise(q).join(' '))}">⚠ Hinweis</small>`:''}`;
+/** Legende einer Probenart: die Kategorien der verwendeten Skalen mit Bereich – die Werte selbst tragen die Farbe. */
+function legendeFuer(g:UGruppe,mitName=false){
+ const skalen=new Map<string,{scale:Scale;u:string}>();let bg=false;
+ for(const z of g.zeilen)if(z.bewertet){const w=z.bewertet,q=labQualifier(w.r);if(q==='below'||q==='notDetected')bg=true;if(q==='measured'){const k=skala(w.p,w.u);if(k.scale)skalen.set(`${k.scale.name}|${w.u}`,{scale:k.scale,u:w.u});}}
+ const vor=mitName?`<b>${esc(GTITEL[g.gruppe])}</b> · `:'';
+ return g.gruppe==='Asbest'?`<p class="u-legende">${vor}Befund wie im Prüfbericht · ${pastell(ASBEST_ROT,'Asbest nachgewiesen')}</p>`
+  :(g.gruppe==='PAK'||g.gruppe==='Chlorid')?(skalen.size?[...skalen.values()].map(({scale,u})=>`<p class="u-legende">${vor}${esc(scale.name)}: ${scale.cats.map((c,i)=>pastell(c.color||UNRATED,`${esc(c.name)} <small>${esc(rangeText(scale,i,u))}</small>`)).join(' ')}${bg?` ${pastell(BELOW_LIMIT,'&lt; BG')}`:''}</p>`).join(''):`<p class="u-legende">${vor}ohne Bewertungsskala</p>`):'';
+}
+/** Ergebnis einer Probe als Zelle (Farbe nach Skala, Asbest-Befund leicht rot) – in beiden Ansichten gleich. */
+function ergebnis(gruppe:Gruppe,einheit:string,z:UZeile){
+ if(gruppe==='Asbest')return z.befund?(z.befund.gefunden?pastell(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen'):esc(z.befund.text)):'';
+ if(gruppe!=='Weitere'&&!z.haupt)return z.ausstehend?'':`<span class="u-aus">kein ${gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
+ if(gruppe==='Weitere')return z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
+ const w=z.haupt!,b=z.bewertet?bewertung(z.bewertet):null,text=`${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}`;
+ const titel=[b?.text,z.original?`laut Bericht ${z.original}`:''].filter(Boolean).join(' · ');
+ return b?pastell(b.farbe,`<span class="u-wert">${text}</span>`,titel):`<span class="u-wert"${titel?` title="${esc(titel)}"`:''}>${text}</span>`;
+}
 function uTabelle(s:Scan,g:UGruppe,nach:'ort'|'nr'){
  const berichte=s.u.berichte;
  let zeilen=sortiere(g.zeilen,nach);
  if(filter==='offen')zeilen=zeilen.filter(z=>z.ausstehend);else if(filter==='auff')zeilen=zeilen.filter(auffaellig);
- const hinweis=(z:UZeile,q:Zeile|undefined)=>`${z.ausstehend?'<span class="u-aus">ausstehend</span>':''}${!z.ausstehend&&z.vorlaeufig?' <small class="u-vorl">vorläufig</small>':''}${z.nichtBeauftragt?' <small class="u-nb" title="Steht im Prüfbericht, aber nicht im Laborauftrag aus LabelKit">nicht beauftragt</small>':''}${q&&zeilenHinweise(q).length?` <small class="u-hw" title="${esc(zeilenHinweise(q).join(' '))}">⚠ Hinweis</small>`:''}`;
- // Legende: die Kategorien der verwendeten Skalen mit Bereich – die Werte selbst tragen die Farbe
- const skalen=new Map<string,{scale:Scale;u:string}>();let bg=false;
- for(const z of g.zeilen)if(z.bewertet){const w=z.bewertet,q=labQualifier(w.r);if(q==='below'||q==='notDetected')bg=true;if(q==='measured'){const k=skala(w.p,w.u);if(k.scale)skalen.set(`${k.scale.name}|${w.u}`,{scale:k.scale,u:w.u});}}
- const legende=g.gruppe==='Asbest'?`<p class="u-legende">Befund wie im Prüfbericht · ${pastell(ASBEST_ROT,'Asbest nachgewiesen')}</p>`
-  :(g.gruppe==='PAK'||g.gruppe==='Chlorid')?(skalen.size?[...skalen.values()].map(({scale,u})=>`<p class="u-legende">${esc(scale.name)}: ${scale.cats.map((c,i)=>pastell(c.color||UNRATED,`${esc(c.name)} <small>${esc(rangeText(scale,i,u))}</small>`)).join(' ')}${bg?` ${pastell(BELOW_LIMIT,'&lt; BG')}`:''}</p>`).join(''):'<p class="u-legende">ohne Bewertungsskala</p>'):'';
+ const legende=legendeFuer(g);
  const codes=[...new Set(g.zeilen.flatMap(z=>z.berichte))];
  const kopf=g.gruppe==='PAK'?`Σ16 EPA-PAK${g.einheit?` (${g.einheit})`:''}`:g.gruppe==='Chlorid'?`Chlorid${g.einheit?` (${g.einheit})`:''}`:g.gruppe==='Asbest'?'Befund':'Ergebnis';
  const leer=`<tr><td colspan="3" class="muted">${filter==='offen'?'Keine offenen Proben.':filter==='auff'?'Keine auffälligen Proben.':''}</td></tr>`;
- const zeile=(z:UZeile)=>{let erg='';const q=quelleVon(s,z),key=`${g.gruppe}|${z.label}`,auf=aufgeklappt.has(key);
-  if(g.gruppe==='Asbest')erg=z.befund?(z.befund.gefunden?pastell(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen'):esc(z.befund.text)):'';
-  else if(g.gruppe!=='Weitere'&&!z.haupt)erg=z.ausstehend?'':`<span class="u-aus">kein ${g.gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
-  else if(g.gruppe==='Weitere')erg=z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
-  else if(z.haupt){const w=z.haupt,b=z.bewertet?bewertung(z.bewertet):null,text=`${esc(w.r)}${w.u&&w.u!==g.einheit?` <small>${esc(w.u)}</small>`:''}`;
-   const titel=[b?.text,z.original?`laut Bericht ${z.original}`:''].filter(Boolean).join(' · ');
-   erg=b?pastell(b.farbe,`<span class="u-wert">${text}</span>`,titel):`<span class="u-wert"${titel?` title="${esc(titel)}"`:''}>${text}</span>`;}
+ const zeile=(z:UZeile)=>{const erg=ergebnis(g.gruppe,g.einheit,z),q=quelleVon(s,z),key=`${g.gruppe}|${z.label}`,auf=aufgeklappt.has(key);
   return `<tr class="u-zeile${z.ausstehend?' u-offen':''}${auf?' auf':''}" data-zeile="${esc(key)}"><th scope="row"><button type="button" class="u-auf" aria-expanded="${auf}" title="${auf?'Details zuklappen':'Alle Parameter, Hinweise und Prüfbericht zeigen'}">${esc(z.label)}</button></th><td>${esc(z.stelle)}</td><td>${erg}${hinweis(z,q)}</td></tr>${auf&&q?`<tr class="u-detail"><td colspan="3">${probeDetails(s,q)}</td></tr>`:''}`;};
  return `<section class="u-gruppe" aria-label="${esc(GTITEL[g.gruppe])}"><h2>${esc(GTITEL[g.gruppe])} <small>${g.zeilen.length} Probe${g.zeilen.length===1?'':'n'}${codes.length?` · ${esc(berichtZeile(codes,berichte))}`:''}</small></h2>${legende}
   <div class="tabelle-scroll"><table class="u-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">${g.gruppe==='Asbest'?'Material und Stelle':'Probenahmestelle'}</th><th scope="col">${esc(kopf)}</th></tr></thead>
@@ -417,6 +477,10 @@ $('btn-projekt').onclick=$('start-projekt').onclick=()=>void projektWaehlen();
 $('btn-neu').onclick=()=>void neuEinlesen();
 $('projekt').addEventListener('click',e=>{const t=e.target as HTMLElement;
  const f=t.closest<HTMLElement>('[data-filter]');if(f){filter=f.dataset.filter as Filter;merke('filter',filter);if(scan)renderUebersicht(scan);return;}
+ const an=t.closest<HTMLElement>('[data-ansicht]');if(an){ansicht=an.dataset.ansicht==='art'?'art':'stelle';merke('ansicht',ansicht);if(scan)renderUebersicht(scan);return;}
+ const so=t.closest<HTMLElement>('[data-msort]');if(so){const sp=so.dataset.msort as MSpalte;msort=msort.s===sp?{s:sp,auf:!msort.auf}:{s:sp,auf:sp==='probe'||sp==='stelle'};   // Werte: zuerst die höchsten
+  merke('msort',JSON.stringify(msort));if(scan)renderUebersicht(scan);$('m-tabelle')?.focus({preventScroll:true});return;}
+ const mz=t.closest<HTMLElement>('tr.m-zeile');if(mz){if(t.closest('.u-auf'))detailUmschalten(mz.dataset.m!);return;}   // Markieren: über mousedown
  const a=t.closest<HTMLButtonElement>('[data-aktion]');
  if(a){const aktion=a.dataset.aktion as Aktion;
   if(aktion==='uebernehmen')void uebernehmen();
@@ -429,6 +493,32 @@ $('projekt').addEventListener('click',e=>{const t=e.target as HTMLElement;
  const key=tr.dataset.zeile!;if(aufgeklappt.has(key))aufgeklappt.delete(key);else aufgeklappt.add(key);
  renderUebersicht(scan);
  document.querySelector<HTMLButtonElement>(`tr.u-zeile[data-zeile="${CSS.escape(key)}"] .u-auf`)?.focus({preventScroll:true});});
+// Nach Stelle: markieren mit Maus (auch Ziehen), Tastatur und Kopieren – nur lesen.
+let ziehMarkierung=false;
+$('u-tabellen').addEventListener('mousedown',e=>{const tr=(e.target as HTMLElement).closest<HTMLElement>('tr.m-zeile');if(!tr||e.button>0||(e.target as HTMLElement).closest('.u-auf'))return;
+ e.preventDefault();$('m-tabelle')?.focus({preventScroll:true});const k=tr.dataset.m!;markiere(k,e.shiftKey?'bereich':e.ctrlKey||e.metaKey?'umschalten':'eins');ziehMarkierung=!e.ctrlKey&&!e.metaKey;});
+$('u-tabellen').addEventListener('mouseover',e=>{if(!ziehMarkierung)return;const tr=(e.target as HTMLElement).closest<HTMLElement>('tr.m-zeile');if(tr&&tr.dataset.m!==cursor)markiere(tr.dataset.m!,'bereich');});
+window.addEventListener('mouseup',()=>{ziehMarkierung=false;});
+$('u-tabellen').addEventListener('dblclick',e=>{const tr=(e.target as HTMLElement).closest<HTMLElement>('tr.m-zeile');if(tr&&!(e.target as HTMLElement).closest('.u-auf'))detailUmschalten(tr.dataset.m!);});
+$('u-tabellen').addEventListener('keydown',e=>{
+ if(!(e.target as HTMLElement).closest('#m-tabelle')||!mZeilen.length)return;
+ const i=cursor?mZeilen.findIndex(r=>r.key===cursor):-1,geh=(j:number)=>{const k=mZeilen[Math.max(0,Math.min(mZeilen.length-1,j))].key;markiere(k,e.shiftKey?'bereich':'eins');};
+ if(e.key==='ArrowDown'){e.preventDefault();geh(i<0?0:i+1);}
+ else if(e.key==='ArrowUp'){e.preventDefault();geh(i<0?0:i-1);}
+ else if(e.key==='PageDown'){e.preventDefault();geh(i+10);}
+ else if(e.key==='PageUp'){e.preventDefault();geh(i-10);}
+ else if(e.key==='Home'){e.preventDefault();geh(0);}
+ else if(e.key==='End'){e.preventDefault();geh(mZeilen.length-1);}
+ else if(e.key==='Enter'&&cursor){e.preventDefault();detailUmschalten(cursor);}
+ else if(e.key==='Escape'){if(cursor&&aufgeklappt.has(`M|${cursor}`)){e.preventDefault();detailUmschalten(cursor);}else if(markiert.size){e.preventDefault();markiert.clear();markierungZeigen();}}
+ else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){e.preventDefault();markiert.clear();for(const r of mZeilen)markiert.add(r.key);markierungZeigen();}
+});
+// Strg+C in der Tabelle: Tabelle statt markiertem Text (markierter Text in den Details wird normal kopiert)
+document.addEventListener('copy',e=>{if(ansicht!=='stelle'||!document.activeElement?.closest('#m-tabelle')||String(getSelection()||'').trim()||!e.clipboardData)return;
+ const d=kopierDaten();e.preventDefault();e.clipboardData.setData('text/plain',d.text);e.clipboardData.setData('text/html',d.html);toast(kopiertText(d.n));});
+$('u-kopieren').onclick=async()=>{const d=kopierDaten();
+ try{if('ClipboardItem' in window)await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([d.text],{type:'text/plain'}),'text/html':new Blob([d.html],{type:'text/html'})})]);else await navigator.clipboard.writeText(d.text);toast(kopiertText(d.n));}
+ catch{toast('Kopieren wurde vom Browser blockiert. In der Tabelle Strg+C drücken.',true);}};
 $('u-sort').onchange=()=>{merke('sortierung',($('u-sort') as HTMLSelectElement).value);if(scan)renderUebersicht(scan);};
 const wahl=$<HTMLInputElement>('datei-wahl');
 $('btn-import').onclick=$('ablage-wahl').onclick=()=>{wahl.value='';wahl.click();};
