@@ -233,9 +233,9 @@ try{
   await pz.locator('#btnRescan').click();await pzStand('laeuft','Beim Büro');
  });
 
- // ---- 9. BüroKit: gegenlesen, PDF, Versand → erledigt ----
+ // ---- 9. BüroKit: gegenlesen, PDF, Versand → „Versandt – Rechnung schreiben“ (BüroKit 1.1) ----
  const bk=await neueSeite('BüroKit');
- await schritt('BüroKit','Aufgabe aus der Projektzentrale abarbeiten: Gegenlesen, PDF, Versand → erledigt',async()=>{
+ await schritt('BüroKit','Aufgabe aus der Projektzentrale abarbeiten: Gegenlesen, PDF, Versand → Rechnung schreiben',async()=>{
   await bk.goto(`${base}/buerokit/`);
   const karte=bk.locator('.aufgabe',{hasText:NR});await karte.waitFor();
   assert.match(await karte.textContent(),/Kettenort/);
@@ -246,7 +246,8 @@ try{
   await karte.locator('button.schritt[data-mehr]').click();
   const empf=karte.locator('.empf input');const anzahl=await empf.count();assert.ok(anzahl>=1,'Empfänger aus der Übergabe');
   for(let i=0;i<anzahl;i++){await karte.locator('.empf input').nth(i).check();await fertig();}
-  await bk.locator('#erledigtBox').waitFor();
+  // Seit BüroKit 1.1 ist ein Gutachten erst nach der Rechnung erledigt: nach dem Versand steht es unter „Rechnung schreiben“.
+  await bk.locator('section.rechnung .aufgabe',{hasText:NR}).waitFor();assert.equal(await bk.locator('#erledigtBox').count(),0,'noch nicht erledigt');
  });
  await schritt('Projektzentrale','nach dem Versand: „Versandt · Abrechnung offen“',async()=>{
   await pz.bringToFront();await pz.locator('#btnRescan').click();await pzStand('dich','Versandt · Abrechnung offen');
@@ -265,6 +266,17 @@ try{
   await bl.waitForFunction(()=>/gespeichert in „Abrechnung\/Aufwand_SK\.json“/.test(document.getElementById('status').textContent));
   await bl.locator('button[data-tab="abrechnung"]').click();await bl.locator('#aStand').click();
   await until(async()=>(await liste(bl,'Abrechnung')).includes(`${NR.replace('.','-')}_Aufwand_${HEUTE}.json`),'Abrechnungsstand gespeichert');
+ });
+ await schritt('Projektzentrale','nach dem Abrechnungsstand: „Versandt · Rechnung beim Büro“',async()=>{
+  await pz.bringToFront();await pz.reload();await pzStand('laeuft','Versandt · Rechnung beim Büro');
+ });
+
+ // ---- 11. BüroKit: Rechnung nach dem BelegKit-Stand abhaken → erledigt ----
+ await schritt('BüroKit','Rechnung nach dem BelegKit-Stand abhaken → erledigt',async()=>{
+  await bk.bringToFront();await bk.reload();await bk.locator('#ich').selectOption('Nad');
+  const karte=bk.locator('section.rechnung .aufgabe',{hasText:NR});await karte.waitFor();
+  await karte.locator('input[data-s="rechnung"]').check();
+  await bk.locator('#erledigtBox').waitFor();assert.equal(await bk.locator('section.rechnung').count(),0);
  });
  await schritt('Projektzentrale','Projekt „Versandt und abgerechnet“, abgeschlossen; Fortschritt seit dem Spektron-Start',async()=>{
   await pz.bringToFront();await pz.reload();
