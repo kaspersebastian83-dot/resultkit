@@ -5,6 +5,7 @@
 //    (alle Apps unter kaspersebastian83-dot.github.io teilen diese Datenbank)
 //  • Projektordner „<JJ>.<Nummer> <Schadenort> <Kürzel>“, Pläne im Unterordner „Pläne“, Laborberichte in „Laborergebnisse“
 //  • _Projekt.json im Projektordner: gemeinsame Projektdaten – PlanKit liest sie nur.
+import {ort} from './so';
 type Mode={mode:'read'|'readwrite'};
 type Handle=FileSystemHandle&{queryPermission?:(m:Mode)=>Promise<PermissionState>;requestPermission?:(m:Mode)=>Promise<PermissionState>};
 export type Dir=FileSystemDirectoryHandle&{values():AsyncIterable<FileSystemHandle>;resolve(h:FileSystemHandle):Promise<string[]|null>};
@@ -61,8 +62,9 @@ export async function fileInfo(dir:Dir,name:string){try{const h=await dir.getFil
 export async function writeFile(dir:Dir,name:string,data:Blob|string){const h=await dir.getFileHandle(name,{create:true}),w=await h.createWritable();try{await w.write(data);await w.close();}catch(e){await w.abort().catch(()=>{});throw e;}return (await h.getFile()).lastModified;}
 /** Read errors must propagate; an empty object is only valid JSON or a verified missing file. */
 export async function readProjectData(f:{dir:Dir}):Promise<Record<string,unknown>>{
- const file=await fileInfo(f.dir,PJ_FILE);
- if(!file){for await(const h of f.dir.values())if(h.name===PJ_FILE)throw Error('Die vorhandene _Projekt.json ist nicht lesbar.');return {};}
+ const d=(await ort(f.dir,'projekt')).dir;if(!d)return {};   // _Projekt.json im Projektordner oder künftig in „_Spektron“
+ const file=await fileInfo(d,PJ_FILE);
+ if(!file){for await(const h of d.values())if(h.name===PJ_FILE)throw Error('Die vorhandene _Projekt.json ist nicht lesbar.');return {};}
  const data:unknown=JSON.parse(await file.text());
  if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Ungültige gemeinsame Projektdaten.');
  return data as Record<string,unknown>;
