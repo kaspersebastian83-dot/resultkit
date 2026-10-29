@@ -35,7 +35,7 @@ function ordner(dateien){
   {
     const dateien = { '_Ergebnisse.json': '{"synthetisch":"ALT"}' }, ablage = Object.assign(ordner(dateien), {
       async getFileHandle(n, o){ if (!(n in dateien)){ if (!(o && o.create)) throw Object.assign(Error('fehlt'), { name: 'NotFoundError' }); dateien[n] = ''; } return { ...this.datei(n), createWritable: async () => { let t = ''; return { write: async v => { t = v; }, close: async () => { dateien[n] = t; }, abort: async () => {} }; } }; } });
-    const angehalten = warte(), weiter = warte(), scan = { stand: 'S1', u: { berichte: [] }, auftrag: null, dateien: [] }, f = { name: '99.9001 A', dir: {} };
+    const angehalten = warte(), weiter = warte(), scan = { stand: 'S1', u: { berichte: [] }, auftrag: null, dateien: [], vorhandenText: '{"synthetisch":"ALT"}' }, f = { name: '99.9001 A', dir: {} };
     let fehler = '';
     const c = { console, folder: f, scan, beschaeftigt: false, navigator: {}, permission: async () => true, render: () => {}, einlesen: async () => scan, vollstaendig: () => true,
       ort: async () => ({ dir: ablage }), ortZumSchreiben: async () => { angehalten.auf(); await weiter.p; return { dir: ablage }; },
@@ -50,8 +50,12 @@ function ordner(dateien){
     assert.match(fehler, /inzwischen an anderer Stelle übernommen/);
     assert.equal(dateien['_Ergebnisse.json'], '{"synthetisch":"NEU VON WOANDERS"}', 'neuerer Stand bleibt');
     assert.ok(!('_Ergebnisse.vorher.json' in dateien), 'keine Sicherung angelegt');
-    // ohne Zwischenfunk: normaler Ablauf schreibt und sichert den vorigen Stand
-    fehler = ''; c.ortZumSchreiben = async () => ({ dir: ablage }); await c.uebernehmen();
+    // jemand übernimmt zwischen Anzeige und Klick → ebenfalls nichts überschrieben
+    fehler = ''; c.ortZumSchreiben = async () => ({ dir: ablage }); dateien['_Ergebnisse.json'] = '{"synthetisch":"NOCH NEUER"}';
+    await c.uebernehmen(); assert.match(fehler, /inzwischen an anderer Stelle übernommen/); assert.equal(dateien['_Ergebnisse.json'], '{"synthetisch":"NOCH NEUER"}');
+    // nach neuem Einlesen (Anzeige zeigt den Stand der Platte): normaler Ablauf schreibt und sichert den vorigen Stand
+    dateien['_Ergebnisse.json'] = '{"synthetisch":"NEU VON WOANDERS"}'; scan.vorhandenText = dateien['_Ergebnisse.json'];
+    fehler = ''; await c.uebernehmen();
     assert.equal(fehler, ''); assert.match(dateien['_Ergebnisse.json'], /MEIN ÄLTERES BILD/); assert.match(dateien['_Ergebnisse.vorher.json'], /NEU VON WOANDERS/);
   }
   console.log('OK Übernehmen: Cache je Projekt, verzögertes Übernehmen überschreibt keinen neueren Stand');

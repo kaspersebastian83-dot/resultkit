@@ -94,7 +94,7 @@ function frage(titel:string,text:string,wahl:string[]):Promise<string>{return ne
  d.onclose=()=>resolve(wahl[0]);d.showModal();});}
 
 // ---- Zustand ----
-interface Scan {auftrag:LabReport|null;auftragDatei:DateiStand|null;auftragFehler:string;eingaenge:Eingang[];fehler:{name:string;text:string}[];dateien:DateiStand[];stand:string;u:Uebersicht;vorhanden:ErgebnisDatei|null;vorhandenFehler:string;ohneOrdner:boolean}
+interface Scan {auftrag:LabReport|null;auftragDatei:DateiStand|null;auftragFehler:string;eingaenge:Eingang[];fehler:{name:string;text:string}[];dateien:DateiStand[];stand:string;u:Uebersicht;vorhanden:ErgebnisDatei|null;vorhandenText:string|null;vorhandenFehler:string;ohneOrdner:boolean}
 let folder:ProjectFolder|null=null,scan:Scan|null=null,einstellungen:ResultSettings|null=null,laeuft=0,beschaeftigt=false;
 /** Gelesene Berichte je Dateistand – PDFs werden nicht bei jedem Einlesen neu ausgewertet. */
 const cache=new WeakMap<ProjectFolder,Map<string,{report?:LabReport;fehler?:string}>>();   // je geöffnetem Projekt – ein spät fertiges Einlesen von A landet nie im Cache von B (F07)
@@ -120,10 +120,10 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
   if(r.report)eingaenge.push({report:r.report,geaendert:Math.max(...gruppe.map(g=>g.file.lastModified))});
   else fehler.push({name:gruppe.map(g=>g.name).join(' + '),text:r.fehler||''});}
  const alle=[...dateien,...(auftragDatei?[auftragDatei]:[])];
- let vorhanden:ErgebnisDatei|null=null,vorhandenFehler='';
+ let vorhanden:ErgebnisDatei|null=null,vorhandenText:string|null=null,vorhandenFehler='';
  const ablage=(await ort(f.dir,'resultkit')).dir;   // _Ergebnisse.json: „Laborergebnisse“ oder künftig „_Spektron/ResultKit“
- if(ablage){try{const file=await fileInfo(ablage,DATEI);if(file)vorhanden=liesErgebnisDatei(await file.text());}catch(e){vorhandenFehler=meldung(e);}}
- return {auftrag,auftragDatei,auftragFehler,eingaenge,fehler,dateien:alle,stand:standKennung(alle),u:uebersicht(f.nr,auftrag,eingaenge),vorhanden,vorhandenFehler,ohneOrdner:!labor};
+ if(ablage){try{const file=await fileInfo(ablage,DATEI);if(file){vorhandenText=await file.text();vorhanden=liesErgebnisDatei(vorhandenText);}}catch(e){vorhandenFehler=meldung(e);}}
+ return {auftrag,auftragDatei,auftragFehler,eingaenge,fehler,dateien:alle,stand:standKennung(alle),u:uebersicht(f.nr,auftrag,eingaenge),vorhanden,vorhandenText,vorhandenFehler,ohneOrdner:!labor};
 }
 
 /** Bewertungsregel wie in PlanKit/FotoKit: Einstellungen der Ergebniskarte aus dem Probenplan, sonst Nutzung aus _Projekt.json. */
@@ -409,9 +409,9 @@ async function uebernehmen(){
  beschaeftigt=true;render();
  try{
   if(!await recht)throw Error('Ohne Schreibzugriff auf den Projektordner kann ResultKit nichts übernehmen.');
-  // Stand von _Ergebnisse.json beim Klick merken: Übernimmt inzwischen jemand anderes (anderes Fenster, anderer Rechner),
-  // wird dessen neuerer Stand nicht mit diesem älteren Bild überschrieben (Prüfbericht 29.10., F08).
-  const ausgang=(await ort(f.dir,'resultkit')).dir,vorherDatei=ausgang?await fileInfo(ausgang,DATEI):null,vorherText=vorherDatei?await vorherDatei.text():null;
+  // Stand von _Ergebnisse.json, wie er beim Anzeigen der Übersicht gelesen wurde: Übernimmt inzwischen jemand anderes (anderes
+  // Fenster, anderer Rechner), wird dessen neuerer Stand nicht mit diesem älteren Bild überschrieben (Prüfbericht 29.10., F08).
+  const vorherText=scan.vorhandenText;
   const frisch=await einlesen(f);if(folder!==f)return;
   if(frisch.stand!==scan.stand){scan=frisch;toast('Im Ordner hat sich gerade etwas geändert – bitte die Übersicht prüfen und erneut auf „Ergebnisse übernehmen“ klicken.',true);return;}
   scan=frisch;const u=frisch.u;
