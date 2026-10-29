@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0 · 29.10.2026
+- **Übernehmen überschreibt keinen neueren Stand mehr** (Prüfbericht 29.10.): Hat jemand anderes (anderes Fenster, anderer Rechner) die Ergebnisse inzwischen übernommen, oder ändert sich ein Bericht im Ordner, während die Rückfrage „Trotzdem übernehmen?“ offen ist, schreibt ResultKit nichts und meldet es.
+- Gelesene Berichte werden je geöffnetem Projekt zwischengespeichert – ein verspätet fertiges Einlesen eines vorher geöffneten Projekts kann nicht mehr in ein anderes Projekt geraten.
+- Gemeinsame Skalen: Hat ein Kollege die Datei inzwischen geändert, wird nichts überschrieben; die eigene Skala bleibt „noch nicht geteilt“ und geht beim nächsten Mal mit. Änderungen während des Teilens bleiben erhalten (gleich wie FotoKit und PlanKit).
+
 ## 1.8.1 · 29.10.2026
 - Gemeinsames Modul spektron-ordner.js: Beim Umzug und bei der Ortswahl zählen in „Abrechnung“ nur noch die Dateien, die BelegKit selbst schreibt (Aufwand_<Kürzel>.json, _Abrechnung.json, <Nr>_Aufwand_<Datum>.json, _BelegKit_Sicherungen) – andere JSON dort bleiben liegen. Für ResultKit ändert sich nichts.
 

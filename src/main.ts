@@ -15,7 +15,7 @@ import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.8.1';
+export const APP_VERSION='1.9.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -94,12 +94,13 @@ function frage(titel:string,text:string,wahl:string[]):Promise<string>{return ne
  d.onclose=()=>resolve(wahl[0]);d.showModal();});}
 
 // ---- Zustand ----
-interface Scan {auftrag:LabReport|null;auftragDatei:DateiStand|null;auftragFehler:string;eingaenge:Eingang[];fehler:{name:string;text:string}[];dateien:DateiStand[];stand:string;u:Uebersicht;vorhanden:ErgebnisDatei|null;vorhandenFehler:string;ohneOrdner:boolean}
+interface Scan {auftrag:LabReport|null;auftragDatei:DateiStand|null;auftragFehler:string;eingaenge:Eingang[];fehler:{name:string;text:string}[];dateien:DateiStand[];stand:string;u:Uebersicht;vorhanden:ErgebnisDatei|null;vorhandenText:string|null;vorhandenFehler:string;ohneOrdner:boolean}
 let folder:ProjectFolder|null=null,scan:Scan|null=null,einstellungen:ResultSettings|null=null,laeuft=0,beschaeftigt=false;
 /** Gelesene Berichte je Dateistand – PDFs werden nicht bei jedem Einlesen neu ausgewertet. */
-const cache=new Map<string,{report?:LabReport;fehler?:string}>();
+const cache=new WeakMap<ProjectFolder,Map<string,{report?:LabReport;fehler?:string}>>();   // je geöffnetem Projekt – ein spät fertiges Einlesen von A landet nie im Cache von B (F07)
 
 async function einlesen(f:ProjectFolder):Promise<Scan>{
+ let berichteCache=cache.get(f);if(!berichteCache){berichteCache=new Map();cache.set(f,berichteCache);}
  const labor=await findSubdir(f.dir,LABOR),auftraege=(await ort(f.dir,'labelkit')).dir;   // LabelKit-Datei: „Laboraufträge“ oder künftig „_Spektron/LabelKit“
  let auftrag:LabReport|null=null,auftragDatei:DateiStand|null=null,auftragFehler='';
  if(auftraege){const liste=await listFiles(auftraege,/_Daten\.json$/i);   // LabelKit lädt immer die neueste – sie enthält den ganzen Auftrag
@@ -114,15 +115,15 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
   const key=h.name.replace(/\.(xml|pdf)$/i,'').normalize('NFC').toLowerCase();gruppen.set(key,[...(gruppen.get(key)||[]),{file,name:h.name}]);}
  const eingaenge:Eingang[]=[],fehler:{name:string;text:string}[]=[];
  for(const gruppe of [...gruppen.values()].sort((a,b)=>a[0].name.localeCompare(b[0].name,'de',{numeric:true}))){
-  const key=gruppe.map(g=>`${g.name}|${g.file.size}|${g.file.lastModified}`).sort().join('\n');let r=cache.get(key);
-  if(!r){try{const report=await readLabFiles(gruppe.map(g=>g.file));r=!report.rows.length&&!report.bericht?{fehler:report.warnings.join(' ')||'Kein Prüfbericht erkannt.'}:{report};}catch(e){r={fehler:meldung(e)};}cache.set(key,r);}
+  const key=gruppe.map(g=>`${g.name}|${g.file.size}|${g.file.lastModified}`).sort().join('\n');let r=berichteCache.get(key);
+  if(!r){try{const report=await readLabFiles(gruppe.map(g=>g.file));r=!report.rows.length&&!report.bericht?{fehler:report.warnings.join(' ')||'Kein Prüfbericht erkannt.'}:{report};}catch(e){r={fehler:meldung(e)};}berichteCache.set(key,r);}
   if(r.report)eingaenge.push({report:r.report,geaendert:Math.max(...gruppe.map(g=>g.file.lastModified))});
   else fehler.push({name:gruppe.map(g=>g.name).join(' + '),text:r.fehler||''});}
  const alle=[...dateien,...(auftragDatei?[auftragDatei]:[])];
- let vorhanden:ErgebnisDatei|null=null,vorhandenFehler='';
+ let vorhanden:ErgebnisDatei|null=null,vorhandenText:string|null=null,vorhandenFehler='';
  const ablage=(await ort(f.dir,'resultkit')).dir;   // _Ergebnisse.json: „Laborergebnisse“ oder künftig „_Spektron/ResultKit“
- if(ablage){try{const file=await fileInfo(ablage,DATEI);if(file)vorhanden=liesErgebnisDatei(await file.text());}catch(e){vorhandenFehler=meldung(e);}}
- return {auftrag,auftragDatei,auftragFehler,eingaenge,fehler,dateien:alle,stand:standKennung(alle),u:uebersicht(f.nr,auftrag,eingaenge),vorhanden,vorhandenFehler,ohneOrdner:!labor};
+ if(ablage){try{const file=await fileInfo(ablage,DATEI);if(file){vorhandenText=await file.text();vorhanden=liesErgebnisDatei(vorhandenText);}}catch(e){vorhandenFehler=meldung(e);}}
+ return {auftrag,auftragDatei,auftragFehler,eingaenge,fehler,dateien:alle,stand:standKennung(alle),u:uebersicht(f.nr,auftrag,eingaenge),vorhanden,vorhandenText,vorhandenFehler,ohneOrdner:!labor};
 }
 
 /** Bewertungsregel wie in PlanKit/FotoKit: Einstellungen der Ergebniskarte aus dem Probenplan, sonst Nutzung aus _Projekt.json. */
@@ -378,7 +379,7 @@ async function neuEinlesen(still=false){
 }
 async function oeffnen(dir:Dir){
  let f:ProjectFolder;try{f=await openFolder(dir);}catch(e){fail(e);return;}
- folder=f;scan=null;einstellungen=null;cache.clear();nachImport=null;aufgeklappt.clear();($('berichte-block') as HTMLDetailsElement).open=false;$('ordner-frage').hidden=true;render();PROJEKT_URL.setzen(f.name);
+ folder=f;scan=null;einstellungen=null;nachImport=null;aufgeklappt.clear();($('berichte-block') as HTMLDetailsElement).open=false;$('ordner-frage').hidden=true;render();PROJEKT_URL.setzen(f.name);
  window.MosaikLeiste?.aktualisieren();
  let nutzung:unknown='';try{nutzung=(await readProjectData(f)).nutzung;}catch{/* ohne Projektdaten */}
  if(folder!==f)return;setNutzung(nutzung);   // inzwischen ein anderes Projekt geöffnet
@@ -408,6 +409,9 @@ async function uebernehmen(){
  beschaeftigt=true;render();
  try{
   if(!await recht)throw Error('Ohne Schreibzugriff auf den Projektordner kann ResultKit nichts übernehmen.');
+  // Stand von _Ergebnisse.json, wie er beim Anzeigen der Übersicht gelesen wurde: Übernimmt inzwischen jemand anderes (anderes
+  // Fenster, anderer Rechner), wird dessen neuerer Stand nicht mit diesem älteren Bild überschrieben (Prüfbericht 29.10., F08).
+  const vorherText=scan.vorhandenText;
   const frisch=await einlesen(f);if(folder!==f)return;
   if(frisch.stand!==scan.stand){scan=frisch;toast('Im Ordner hat sich gerade etwas geändert – bitte die Übersicht prüfen und erneut auf „Ergebnisse übernehmen“ klicken.',true);return;}
   scan=frisch;const u=frisch.u;
@@ -417,8 +421,18 @@ async function uebernehmen(){
    if(folder!==f||scan?.stand!==frisch.stand){toast('Abgebrochen – die Übersicht hat sich inzwischen geändert.',true);return;}
    beschaeftigt=true;render();}
   const ablage=(await ortZumSchreiben(f.dir,'resultkit')).dir;   // bisher „Laborergebnisse“, künftig „_Spektron/ResultKit“
-  const alt=await fileInfo(ablage,DATEI);if(alt)await writeFile(ablage,VORHER,await alt.text());
-  await writeFile(ablage,DATEI,JSON.stringify(ergebnisDatei(u,frisch.auftrag,frisch.dateien,APP_VERSION),null,1));
+  // Unter Sperre (im selben Browser) unmittelbar vor dem Schreiben: Quellen und _Ergebnisse.json noch genau wie oben?
+  const schreiben=async()=>{
+   const zuletzt=await einlesen(f);if(folder!==f)throw Error('Projekt inzwischen gewechselt – nicht übernommen.');
+   if(zuletzt.stand!==frisch.stand)throw Error('Im Ordner hat sich gerade etwas geändert – nichts übernommen. Bitte die Übersicht prüfen und erneut übernehmen.');
+   const alt=await fileInfo(ablage,DATEI),altText=alt?await alt.text():null;
+   if(altText!==vorherText)throw Error('Die Ergebnisse wurden inzwischen an anderer Stelle übernommen – nichts überschrieben. Bitte die Übersicht prüfen und bei Bedarf erneut übernehmen.');
+   if(alt)await writeFile(ablage,VORHER,altText!);
+   const jetzt=await fileInfo(ablage,DATEI);
+   if((jetzt?await jetzt.text():null)!==vorherText)throw Error('Die Ergebnisse wurden gerade eben an anderer Stelle übernommen – nichts überschrieben.');
+   await writeFile(ablage,DATEI,JSON.stringify(ergebnisDatei(u,frisch.auftrag,frisch.dateien,APP_VERSION),null,1));
+  };
+  if(navigator.locks)await navigator.locks.request('resultkit:projekt:'+f.name.normalize('NFC'),schreiben);else await schreiben();
   nachImport=null;toast(`Übernommen: ${standText(u)}. PlanKit und FotoKit verwenden jetzt diesen Stand.`);
   window.MosaikLeiste?.aktualisieren();
  }catch(e){fail(e);}

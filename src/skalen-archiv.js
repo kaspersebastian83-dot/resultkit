@@ -28,11 +28,13 @@ async function skalenArchiv(modus, fragen){
 async function skalenDatei(a){
   let f;
   try{ f = await (await a.getFileHandle(SKALEN_DATEI)).getFile(); }catch(e){ if (e && e.name === 'NotFoundError') return { skalen: null, roh: null }; throw e; }
-  const o = JSON.parse(await f.text());
+  const text = await f.text();
+  if (!text.trim()) return { skalen: null, roh: null, text };   // leer (abgebrochenes erstes Anlegen) = noch keine gemeinsamen Skalen
+  const o = JSON.parse(text);
   if (!o || o.format !== 'spektron-skalen' || !o.skalen || typeof o.skalen !== 'object' || Array.isArray(o.skalen)) throw Error(SKALEN_DATEI + ': unbekanntes Format');
   const skalen = {};
   for (const [k, v] of Object.entries(o.skalen)) if (skalaGueltig(v)) skalen[k] = v;
-  return { skalen, roh: o };
+  return { skalen, roh: o, text };
 }
 /** Stand der Datei plus eigene, noch nicht geteilte Änderungen (und beim ersten Mal: eigene Skalen, die dort fehlen). */
 function skalenZusammen(datei, lokal, offen, erst){
@@ -42,20 +44,36 @@ function skalenZusammen(datei, lokal, offen, erst){
   return { skalen: s, offen: o };
 }
 let skalenTimer = null, skalenWartend = [], skalenLaeuft = Promise.resolve();
+/** Nach dem Schreiben: Dateistand in die Arbeitskopie. Was während des Schreibens geändert wurde, bleibt lokal und offen –
+   erledigt sind nur hochgeladene Skalen, die seitdem unverändert sind. */
+function skalenNachHochladen(skalen, hochgeladen, lokalVorher){
+  const lokal = skLesen(SKALEN_LOKAL, {}), offen = skLesen(SKALEN_OFFEN, {}), rest = {};
+  for (const [k, v] of Object.entries(offen)) if (!(k in hochgeladen) || hochgeladen[k] !== v || JSON.stringify(lokal[k]) !== JSON.stringify(lokalVorher[k])) rest[k] = v;
+  skSchreiben(SKALEN_LOKAL, skalenZusammen(skalen, lokal, rest, false).skalen); skSchreiben(SKALEN_OFFEN, rest);
+}
 /** Datei schreiben, wenn Schreibrecht da ist (fragen = nach einem Klick nachfragen dürfen). true = geteilt. */
 function skalenHochladen(fragen){
-  skalenLaeuft = skalenLaeuft.then(async () => {
+  const lauf = async () => {
     const a = await skalenArchiv('readwrite', fragen); if (!a) return false;
     try{
-      const d = await skalenDatei(a), z = skalenZusammen(d.skalen, skLesen(SKALEN_LOKAL, {}), skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
+      const d = await skalenDatei(a), lokal = skLesen(SKALEN_LOKAL, {}), z = skalenZusammen(d.skalen, lokal, skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
       if (!Object.keys(z.offen).length){ if (d.skalen) skSchreiben(SKALEN_LOKAL, z.skalen); return true; }
       const o = Object.assign({}, d.roh || {}, { format: 'spektron-skalen', version: 1, geaendert: new Date().toISOString(), skalen: z.skalen });
       const w = await (await a.getFileHandle(SKALEN_DATEI, { create: true })).createWritable();
-      await w.write(JSON.stringify(o, null, 2)); await w.close();
-      skSchreiben(SKALEN_LOKAL, z.skalen); skSchreiben(SKALEN_OFFEN, {}); localStorage.setItem(SKALEN_MERKER, '1');
+      // Direkt vor dem Schreiben: hat inzwischen jemand anderes geteilt? Dann nichts überschreiben – die eigenen Skalen bleiben
+      // „offen“ und gehen beim nächsten Abgleich mit. „create“ legt eine leere Datei an – leer = es gab noch keine.
+      try{
+        const jetzt = await (await (await a.getFileHandle(SKALEN_DATEI)).getFile()).text();
+        if (jetzt !== (d.text || '')) throw Error('Gemeinsame Skalen inzwischen geändert.');
+        const text = JSON.stringify(o, null, 2); await w.write(text); await w.close();
+        if ((await skalenDatei(a)).text !== text) throw Error('Gemeinsame Skalen konnten nicht bestätigt werden.');
+      }catch(e){ await w.abort().catch(() => {}); throw e; }
+      skalenNachHochladen(z.skalen, z.offen, lokal); localStorage.setItem(SKALEN_MERKER, '1');
       return true;
     }catch(e){ return false; }
-  });
+  };
+  const sperre = typeof navigator !== 'undefined' && navigator.locks;   // dieselbe Sperre in FotoKit, ResultKit und PlanKit
+  skalenLaeuft = skalenLaeuft.catch(() => false).then(() => sperre ? sperre.request('spektron:skalen', lauf) : lauf());
   return skalenLaeuft;
 }
 /** Beim Öffnen eines Projekts: gemeinsame Skalen holen. 'datei' = Stand des Archivordners, 'lokal' = ohne Archiv/Recht. */
