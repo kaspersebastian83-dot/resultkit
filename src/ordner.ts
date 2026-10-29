@@ -5,7 +5,7 @@
 //    (alle Apps unter kaspersebastian83-dot.github.io teilen diese Datenbank)
 //  • Projektordner „<JJ>.<Nummer> <Schadenort> <Kürzel>“, Pläne im Unterordner „Pläne“, Laborberichte in „Laborergebnisse“
 //  • _Projekt.json im Projektordner: gemeinsame Projektdaten – PlanKit liest sie nur.
-import {ort} from './so';
+import {ort,SO} from './so';
 type Mode={mode:'read'|'readwrite'};
 type Handle=FileSystemHandle&{queryPermission?:(m:Mode)=>Promise<PermissionState>;requestPermission?:(m:Mode)=>Promise<PermissionState>};
 export type Dir=FileSystemDirectoryHandle&{values():AsyncIterable<FileSystemHandle>;resolve(h:FileSystemHandle):Promise<string[]|null>};
@@ -57,8 +57,8 @@ export async function archiv():Promise<Dir|null>{try{const db=await suite();try{
 export async function permission(h:FileSystemHandle,request=false){const x=h as Handle,o:Mode={mode:'readwrite'};try{if(!x.queryPermission||await x.queryPermission(o)==='granted')return true;return request&&!!x.requestPermission&&await x.requestPermission(o)==='granted';}catch{return false;}}
 
 export async function findSubdir(dir:Dir,name:string):Promise<Dir|null>{try{return await dir.getDirectoryHandle(name) as Dir;}catch{/* Schreibweise abweichend? */}const want=name.normalize('NFC').toLowerCase();for await(const h of dir.values())if(h.kind==='directory'&&h.name.normalize('NFC').toLowerCase()===want)return h as Dir;return null;}
-export async function listFiles(dir:Dir,pattern:RegExp):Promise<FolderFile[]>{const out:FolderFile[]=[];for await(const h of dir.values())if(h.kind==='file'&&pattern.test(h.name)){const f=await (h as FileSystemFileHandle).getFile();out.push({name:h.name,handle:h as FileSystemFileHandle,lastModified:f.lastModified});}return out.sort((a,b)=>b.lastModified-a.lastModified);}
-export async function fileInfo(dir:Dir,name:string){try{const h=await dir.getFileHandle(name);return await h.getFile();}catch(e){if((e as DOMException).name==='NotFoundError')return null;throw e;}}
+export async function listFiles(dir:Dir,pattern:RegExp):Promise<FolderFile[]>{const out:FolderFile[]=[];for await(const h of dir.values())if(h.kind==='file'&&pattern.test(h.name)){const f=await SO.dateiLesen(dir,h as FileSystemFileHandle);out.push({name:h.name,handle:h as FileSystemFileHandle,lastModified:f.lastModified});}return out.sort((a,b)=>b.lastModified-a.lastModified);}
+export async function fileInfo(dir:Dir,name:string){try{const h=await dir.getFileHandle(name);return await SO.dateiLesen(dir,h);}catch(e){if((e as DOMException).name==='NotFoundError')return null;throw e;}}
 export async function writeFile(dir:Dir,name:string,data:Blob|string){const h=await dir.getFileHandle(name,{create:true}),w=await h.createWritable();try{await w.write(data);await w.close();}catch(e){await w.abort().catch(()=>{});throw e;}return (await h.getFile()).lastModified;}
 /** Read errors must propagate; an empty object is only valid JSON or a verified missing file. */
 export async function readProjectData(f:{dir:Dir}):Promise<Record<string,unknown>>{

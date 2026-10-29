@@ -5,7 +5,7 @@ import './spektron-ordner.js';
 import type {Dir} from './ordner';
 export type Bereich='projekt'|'fotokit'|'fotokitPruefsummen'|'labelkit'|'labelkitAblage'|'resultkit'|'plankit'|'belegkit'|'buero'|'anlagenProtokoll';
 export interface Ort{dir:Dir|null;wo:'neu'|'alt';pfad:string;konflikt:boolean;umgezogen:boolean;bereich:Bereich}
-interface Api{ORDNER:string;AB:string;UMSTELLUNG:boolean;ort(dir:Dir,bereich:Bereich,o?:{anlegen?:boolean}):Promise<Ort>;istSpektronProjekt(dir:Dir):Promise<boolean>}
+interface Api{dateiLesen(dir:Dir,h:FileSystemFileHandle):Promise<File>;ORDNER:string;AB:string;UMSTELLUNG:boolean;ort(dir:Dir,bereich:Bereich,o?:{anlegen?:boolean}):Promise<Ort>;istSpektronProjekt(dir:Dir):Promise<boolean>}
 export const SO=(globalThis as unknown as {SpektronOrdner:Api}).SpektronOrdner;
 /** Wo liegt der Bereich? Nur lesen – legt nichts an. */
 export const ort=(dir:Dir,bereich:Bereich)=>SO.ort(dir,bereich);

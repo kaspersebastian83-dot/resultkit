@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.0 – 29. Oktober 2026
+
+- Berichtscache getrennt je geöffnetem Projekt; Übernehmen prüft Quellen und bereits übernommene Ergebnisse nochmals. Umgezogene LabelKit-Dateien behalten ihren Zeitstand. Gemeinsame Skalen schützen noch nicht geteilte Änderungen.
+
 ## 1.8.0 · 28.10.2026
 - **Spektron-Ordner ist da:** Neue Projekte (ab 26.0560) und per Projektzentrale umgezogene Projekte haben `_Ergebnisse.json` jetzt unter `_Spektron/ResultKit`; noch nicht umgezogene Projekte werden weiter am bisherigen Ort gelesen und geschrieben (`spektron-ordner.js`, Umstellung aktiv). Prüfberichte bleiben in „Laborergebnisse“.
 

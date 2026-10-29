@@ -15,7 +15,7 @@ import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.8.0';
+export const APP_VERSION='1.9.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -97,13 +97,14 @@ function frage(titel:string,text:string,wahl:string[]):Promise<string>{return ne
 interface Scan {auftrag:LabReport|null;auftragDatei:DateiStand|null;auftragFehler:string;eingaenge:Eingang[];fehler:{name:string;text:string}[];dateien:DateiStand[];stand:string;u:Uebersicht;vorhanden:ErgebnisDatei|null;vorhandenFehler:string;ohneOrdner:boolean}
 let folder:ProjectFolder|null=null,scan:Scan|null=null,einstellungen:ResultSettings|null=null,laeuft=0,beschaeftigt=false;
 /** Gelesene Berichte je Dateistand – PDFs werden nicht bei jedem Einlesen neu ausgewertet. */
-const cache=new Map<string,{report?:LabReport;fehler?:string}>();
+const cache=new WeakMap<ProjectFolder,Map<string,{report?:LabReport;fehler?:string}>>();
 
 async function einlesen(f:ProjectFolder):Promise<Scan>{
+ let berichteCache=cache.get(f);if(!berichteCache){berichteCache=new Map();cache.set(f,berichteCache);}
  const labor=await findSubdir(f.dir,LABOR),auftraege=(await ort(f.dir,'labelkit')).dir;   // LabelKit-Datei: „Laboraufträge“ oder künftig „_Spektron/LabelKit“
  let auftrag:LabReport|null=null,auftragDatei:DateiStand|null=null,auftragFehler='';
  if(auftraege){const liste=await listFiles(auftraege,/_Daten\.json$/i);   // LabelKit lädt immer die neueste – sie enthält den ganzen Auftrag
-  if(liste[0]){const file=await liste[0].handle.getFile();auftragDatei={name:`${AUFTRAEGE}/${liste[0].name}`,size:file.size,t:file.lastModified};   // feste Kennung, auch nach dem Umzug (wie Projektzentrale/FotoKit/PlanKit)
+  if(liste[0]){const file=(await fileInfo(auftraege,liste[0].name))!;auftragDatei={name:`${AUFTRAEGE}/${liste[0].name}`,size:file.size,t:file.lastModified};   // feste Kennung, auch nach dem Umzug (wie Projektzentrale/FotoKit/PlanKit)
    try{let ohneNummer=false;auftrag=labelkitReport(await file.text(),liste[0].name,f.name,()=>{ohneNummer=true;return true;});
     if(ohneNummer)auftrag.warnings.push(`„${liste[0].name}“ enthält keine Projektnummer (ältere LabelKit-Datei) – sie liegt im Projektordner und wird daher diesem Projekt zugeordnet.`);}
    catch(e){auftragFehler=meldung(e);}}}
@@ -114,8 +115,8 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
   const key=h.name.replace(/\.(xml|pdf)$/i,'').normalize('NFC').toLowerCase();gruppen.set(key,[...(gruppen.get(key)||[]),{file,name:h.name}]);}
  const eingaenge:Eingang[]=[],fehler:{name:string;text:string}[]=[];
  for(const gruppe of [...gruppen.values()].sort((a,b)=>a[0].name.localeCompare(b[0].name,'de',{numeric:true}))){
-  const key=gruppe.map(g=>`${g.name}|${g.file.size}|${g.file.lastModified}`).sort().join('\n');let r=cache.get(key);
-  if(!r){try{const report=await readLabFiles(gruppe.map(g=>g.file));r=!report.rows.length&&!report.bericht?{fehler:report.warnings.join(' ')||'Kein Prüfbericht erkannt.'}:{report};}catch(e){r={fehler:meldung(e)};}cache.set(key,r);}
+  const key=gruppe.map(g=>`${g.name}|${g.file.size}|${g.file.lastModified}`).sort().join('\n');let r=berichteCache.get(key);
+  if(!r){try{const report=await readLabFiles(gruppe.map(g=>g.file));r=!report.rows.length&&!report.bericht?{fehler:report.warnings.join(' ')||'Kein Prüfbericht erkannt.'}:{report};}catch(e){r={fehler:meldung(e)};}berichteCache.set(key,r);}
   if(r.report)eingaenge.push({report:r.report,geaendert:Math.max(...gruppe.map(g=>g.file.lastModified))});
   else fehler.push({name:gruppe.map(g=>g.name).join(' + '),text:r.fehler||''});}
  const alle=[...dateien,...(auftragDatei?[auftragDatei]:[])];
@@ -378,7 +379,7 @@ async function neuEinlesen(still=false){
 }
 async function oeffnen(dir:Dir){
  let f:ProjectFolder;try{f=await openFolder(dir);}catch(e){fail(e);return;}
- folder=f;scan=null;einstellungen=null;cache.clear();nachImport=null;aufgeklappt.clear();($('berichte-block') as HTMLDetailsElement).open=false;$('ordner-frage').hidden=true;render();PROJEKT_URL.setzen(f.name);
+ folder=f;scan=null;einstellungen=null;nachImport=null;aufgeklappt.clear();($('berichte-block') as HTMLDetailsElement).open=false;$('ordner-frage').hidden=true;render();PROJEKT_URL.setzen(f.name);
  window.MosaikLeiste?.aktualisieren();
  let nutzung:unknown='';try{nutzung=(await readProjectData(f)).nutzung;}catch{/* ohne Projektdaten */}
  if(folder!==f)return;setNutzung(nutzung);   // inzwischen ein anderes Projekt geöffnet
@@ -408,6 +409,8 @@ async function uebernehmen(){
  beschaeftigt=true;render();
  try{
   if(!await recht)throw Error('Ohne Schreibzugriff auf den Projektordner kann ResultKit nichts übernehmen.');
+  const outputDir=(await ort(f.dir,'resultkit')).dir;
+  const outputBefore=outputDir?await fileInfo(outputDir,DATEI):null,outputText=outputBefore?await outputBefore.text():null;
   const frisch=await einlesen(f);if(folder!==f)return;
   if(frisch.stand!==scan.stand){scan=frisch;toast('Im Ordner hat sich gerade etwas geändert – bitte die Übersicht prüfen und erneut auf „Ergebnisse übernehmen“ klicken.',true);return;}
   scan=frisch;const u=frisch.u;
@@ -417,8 +420,17 @@ async function uebernehmen(){
    if(folder!==f||scan?.stand!==frisch.stand){toast('Abgebrochen – die Übersicht hat sich inzwischen geändert.',true);return;}
    beschaeftigt=true;render();}
   const ablage=(await ortZumSchreiben(f.dir,'resultkit')).dir;   // bisher „Laborergebnisse“, künftig „_Spektron/ResultKit“
-  const alt=await fileInfo(ablage,DATEI);if(alt)await writeFile(ablage,VORHER,await alt.text());
-  await writeFile(ablage,DATEI,JSON.stringify(ergebnisDatei(u,frisch.auftrag,frisch.dateien,APP_VERSION),null,1));
+  const publish=async()=>{
+   const finalScan=await einlesen(f);if(folder!==f)throw Error('Projekt inzwischen gewechselt – nicht übernommen.');
+   if(finalScan.stand!==frisch.stand)throw Error('Quelldateien inzwischen geändert – bitte neu einlesen und prüfen.');
+   const alt=await fileInfo(ablage,DATEI),altText=alt?await alt.text():null;
+   if(altText!==outputText)throw Error('Ergebnisse inzwischen anderweitig übernommen – bitte neu einlesen und prüfen.');
+   if(alt)await writeFile(ablage,VORHER,altText!);
+   const latest=await fileInfo(ablage,DATEI);
+   if((latest?await latest.text():null)!==outputText)throw Error('Ergebnisse inzwischen geändert – nicht übernommen.');
+   await writeFile(ablage,DATEI,JSON.stringify(ergebnisDatei(u,frisch.auftrag,frisch.dateien,APP_VERSION),null,1));
+  };
+  if(navigator.locks)await navigator.locks.request('resultkit:projekt:'+f.name.normalize('NFC'),publish);else await publish();
   nachImport=null;toast(`Übernommen: ${standText(u)}. PlanKit und FotoKit verwenden jetzt diesen Stand.`);
   window.MosaikLeiste?.aktualisieren();
  }catch(e){fail(e);}
