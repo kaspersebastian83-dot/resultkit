@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.1 · 29.10.2026
+- Gemeinsames Modul spektron-ordner.js: Beim Umzug und bei der Ortswahl zählen in „Abrechnung“ nur noch die Dateien, die BelegKit selbst schreibt (Aufwand_<Kürzel>.json, _Abrechnung.json, <Nr>_Aufwand_<Datum>.json, _BelegKit_Sicherungen) – andere JSON dort bleiben liegen. Für ResultKit ändert sich nichts.
+
 ## 1.8.0 · 28.10.2026
 - **Spektron-Ordner ist da:** Neue Projekte (ab 26.0560) und per Projektzentrale umgezogene Projekte haben `_Ergebnisse.json` jetzt unter `_Spektron/ResultKit`; noch nicht umgezogene Projekte werden weiter am bisherigen Ort gelesen und geschrieben (`spektron-ordner.js`, Umstellung aktiv). Prüfberichte bleiben in „Laborergebnisse“.
 
