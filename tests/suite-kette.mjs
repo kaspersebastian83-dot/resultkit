@@ -229,7 +229,13 @@ try{
   await pz.locator('[data-ab-word]').selectOption('Mitteilungen/Gutachten 26.0601.docx');
   if(!await pz.locator('[data-ab-an="0"]').isChecked())await pz.locator('[data-ab-an="0"]').check();
   assert.match(await pz.locator('[data-ab-details="0"]').inputValue(),/Fiktive Versicherung AG/,'Auftraggeber aus den Projektdaten');
-  await pz.locator('[data-ab-los]').click();await pz.locator('#bueroPanel [data-ab-msg]').filter({hasText:'✓ Ans Büro übergeben'}).waitFor();
+  await pz.locator('[data-ab-los]').click();
+  // Ab Projektzentrale 1.38 prüft „Ans Büro übergeben“ die Word-Datei auf Lücken. Die synthetische Datei ist kein echtes .docx
+  // → Rückfrage „Word-Datei nicht geprüft“; ältere Fassungen übergeben ohne Rückfrage.
+  const uebergeben=pz.locator('#bueroPanel [data-ab-msg]').filter({hasText:'✓ Ans Büro übergeben'}),nachfrage=pz.locator('#dYes',{hasText:'Trotzdem übergeben'});
+  await uebergeben.or(nachfrage).first().waitFor();
+  if(await nachfrage.isVisible()){assert.match(await pz.locator('h3',{hasText:'nicht geprüft'}).textContent(),/Word-Datei nicht geprüft/);await nachfrage.click();}
+  await uebergeben.waitFor();
   const aufgaben=await liste(pz,'_Spektron/Buero/aufgaben');assert.equal(aufgaben.length,1,'eine Aufgabe in „_Spektron/Buero/aufgaben“');
   await pz.locator('#btnRescan').click();await pzStand('laeuft','Beim Büro');
  });

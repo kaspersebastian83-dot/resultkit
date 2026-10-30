@@ -19,6 +19,11 @@ function description(p:Probe){
 }
 function isoDate(v:unknown){const s=str(v);if(validDate(s))return s;const m=/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s);if(m){const iso=`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;if(validDate(iso))return iso;}return '';}
 
+/** Projektnummer „26.0512“ aus dem LabelKit-Feld „Projektnummer“. Das Feld ist Freitext – ältere Projekte tragen dort oft die
+ *  Adresse mit („26.0512 Stegerwaldstraße Leverkusen“). Verglichen wird dann nur die Nummer; ohne Nummer der ganze Text wie bisher.
+ *  Gleiche Regel in BerichtKit (bericht-text.js) und LabelKit. */
+export const projektNummer=(s:string)=>s.match(/(?<!\d)\d{2}\.\d{3,6}(?!\d)/)?.[0]||'';
+
 /** LabelKit-Projektdatei → Prüfliste (ohne Messwerte). null bezeichnet ausdrücklich einen freien Plan ohne Projektzuordnung. */
 export function labelkitReport(text:string,quelle:string,project:string|null,confirmMissingProject?:(message:string)=>boolean):LabReport{
   let data:Record<string,unknown>;try{data=JSON.parse(text);}catch{throw Error(`„${quelle}“ ist keine gültige LabelKit-Projektdatei.`);}
@@ -26,7 +31,7 @@ export function labelkitReport(text:string,quelle:string,project:string|null,con
   const target=project===null?undefined:parseProjName(project)?.nr;
   const nr=String((data.projekt as {nr?:unknown}|null)?.nr??'').trim();
   if(project!==null&&!target)throw Error('LabelKit-Import blockiert: Die Projektnummer des aktiven Projekts ist nicht erkennbar. Bitte den passenden Projektordner öffnen.');
-  if(target&&nr&&nr!==target)throw Error(`Projektzuordnung blockiert: „${quelle}“ gehört zu Projekt ${nr}, das aktive Projekt zu ${target}. Bitte die Datei und den Projektordner prüfen und das passende Projekt öffnen.`);
+  if(target&&nr&&(projektNummer(nr)||nr)!==target)throw Error(`Projektzuordnung blockiert: „${quelle}“ gehört zu Projekt ${nr}, das aktive Projekt zu ${target}. Bitte die Datei und den Projektordner prüfen und das passende Projekt öffnen.`);
   if(!nr&&!confirmMissingProject?.(`„${quelle}“ enthält keine Projektnummer (ältere Datei). ${target?`Die Zugehörigkeit zu Projekt ${target}`:'Die Zugehörigkeit zum geöffneten freien Plan'} kann nicht automatisch geprüft werden.\n\nHaben Sie die Datei geprüft und gehört sie zu diesem Projekt? Nur dann mit OK übernehmen.`))throw Error('LabelKit-Import abgebrochen: Die Datei ohne Projektnummer wurde nicht ausdrücklich dem aktiven Projekt zugeordnet.');
   const report=blankReport();report.quelle=quelle;report.labor='LabelKit (Probenerfassung)';report.bericht='';report.auftragsreferenz=nr||target||'';report.sources={};
   const seen=new Set<number>();let rueckstell=0;

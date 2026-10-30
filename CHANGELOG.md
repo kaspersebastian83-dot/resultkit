@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.12.1 · 30.10.2026
+- **Projektzuordnung beim LabelKit-Auftrag:** Steht im LabelKit-Feld „Projektnummer“ zusätzlich die Adresse (ältere Projekte, z. B. „26.0512 Stegerwaldstraße Leverkusen“), wurde der Auftrag fälschlich als „gehört zu einem anderen Projekt“ blockiert – dann fehlten Probenliste und Beschreibungsabgleich. Jetzt zählt nur die Projektnummer; eine andere Nummer blockiert weiter. Bitte bei betroffenen Projekten einmal erneut übernehmen.
+
 ## 1.12.0 · 30.10.2026
 - **Beschreibung LabelKit ↔ Prüfbericht:** Eurofins schreibt den Text der Laborübergabe wörtlich zurück (geprüft an 15 echten Asbestproben, sogar Tippfehler bleiben stehen). Weicht er bei einer Probe von LabelKit ab, steht an der Probe jetzt „Beschreibung: LabelKit „…“, Bericht … „…“ – stimmt die Zuordnung?“. Das fängt umnummerierte oder nachträglich geänderte Proben ab, bevor ein Wert der falschen Stelle zugeordnet wird – für PAK, Chlorid, Asbest und Sonstige. Nur Hinweis, nichts wird geändert; der Hinweis geht mit nach `_Ergebnisse.json`.
 - Angeglichen werden nur Leerraum, Groß-/Kleinschreibung, Striche und Anführungszeichen; Bohrkerne (andere Reihenfolge in der Übergabe) und Proben ohne Beschreibung werden nicht verglichen, „Tiefe: …“ am Ende zählt nicht.
