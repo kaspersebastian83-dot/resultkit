@@ -221,4 +221,14 @@ ok('ohneNwg: alte Datei ohne NWG, Berichte mit NWG – erneut übernehmen; neue 
  assert.equal(E.ohneNwg(altGemischt,gemischt),true,'alte Übernahme: Probe 6 hat jetzt eine NWG');
 });
 
+ok('Projektnummer mit Adresse im LabelKit-Feld: nur die Nummer zählt',()=>{
+ const mit=nr=>labelkit.replace('"projekt":{"nr":"99.9001"}',`"projekt":{"nr":${JSON.stringify(nr)}}`);
+ assert.notEqual(mit('x'),labelkit,'Testdaten enthalten das Projektfeld');
+ assert.equal(labelkitReport(mit('99.9001 Stegerwaldstraße Leverkusen'),'a.json','99.9001 Musterort').rows.length>0,true);
+ assert.equal(labelkitReport(mit('99.9001_Stegerwaldstraße_Leverkusen'),'a.json','99.9001 Musterort').rows.length>0,true);
+ assert.throws(()=>labelkitReport(mit('99.9002 Stegerwaldstraße Leverkusen'),'a.json','99.9001 Musterort'),/Projektzuordnung blockiert/);
+ assert.throws(()=>labelkitReport(mit('99.90010'),'a.json','99.9001 Musterort'),/Projektzuordnung blockiert/);
+ assert.throws(()=>labelkitReport(mit('PAK'),'a.json','99.9001 Musterort'),/Projektzuordnung blockiert/,'ohne Nummer wie bisher');
+});
+
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);
