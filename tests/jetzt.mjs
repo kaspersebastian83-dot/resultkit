@@ -56,4 +56,9 @@ ok('übernommen vor 1.5 (ohne Oberflächenart/Raum) → einmal erneut übernehme
  assert.equal(r.art,'geaendert');assert.equal(r.haupt.aktion,'uebernehmen');assert.match(r.text,/Oberflächenart/);
 });
 
+ok('übernommen vor 1.10 (Asbest ohne Nachweisgrenze) → einmal erneut übernehmen',()=>{
+ const r=j({vorhanden:{stand:'S1',uebernommen:'2026-10-29T14:05:00Z',vollstaendig:true,ohneNwg:true}});
+ assert.equal(r.art,'geaendert');assert.equal(r.haupt.aktion,'uebernehmen');assert.match(r.text,/Nachweisgrenze/);assert.doesNotMatch(r.text,/Oberflächenart/);
+});
+
 console.log(`${n} Prüfungen „Jetzt dran“ bestanden`);

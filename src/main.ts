@@ -7,7 +7,7 @@ import './suite-bar';
 import {skalenAbgleich} from './skalen-archiv.js';
 import {readLabFiles,reportWarnings,type LabReport} from './labreport';
 import {labelkitReport} from './labelkit';
-import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
+import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
 import {ort,ortZumSchreiben} from './so';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
@@ -15,7 +15,7 @@ import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.9.0';
+export const APP_VERSION='1.10.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -142,13 +142,16 @@ function skala(p:string,u:string):{scale?:Scale;quelle:string}{
 }
 function wertZelle(w:Wert,kurz=false){
  const q=labQualifier(w.r),einheit=w.u?` ${esc(w.u)}`:'',name=kurz?`<span class="wp">${esc(shortParameter(w.p))}</span> `:'';
+ // Einordnung (unter BG, n. n., Skala) vorn, danach immer NWG und Norm aus dem Bericht – die Einordnung ersetzt sie nicht.
  let farbe='',titel=w.loq?`BG ${w.loq}${w.u?` ${w.u}`:''}`:'';
  if(q==='below'){farbe=BELOW_LIMIT;titel=`unter der Bestimmungsgrenze${w.loq?` (BG ${w.loq} ${w.u})`:''}`;}
  else if(q==='notDetected'){farbe=NOT_DETECTED;titel='nicht nachweisbar';}
  else if(q==='notDetermined'){farbe=NOT_DETERMINED;titel='nicht bestimmt';}
  else if(q==='measured'){const s=skala(w.p,w.u);if(s.scale){const i=rate(s.scale,labNumber(w.r));if(i>=0){farbe=s.scale.cats[i].color||UNRATED;titel=`${s.scale.cats[i].name} – ${s.scale.name} (${s.quelle})`;}}}
+ titel=[titel,w.nwg?`NWG ${w.nwg}`:'',w.norm||''].filter(Boolean).join(' · ');
  if(farbe)farbe=farbeSicher(farbe);const stil=farbe?` style="--c:${farbe};--t:${ink(farbe)}"`:'';
- return `<span class="wert${farbe?' bewertet':''}"${stil}${titel?` title="${esc(titel)}"`:''}>${name}<b>${esc(w.r)}</b>${kurz?einheit:''}</span>`;
+ const nwg=kurz&&w.nwg?` <span class="wp">(NWG ${esc(w.nwg)})</span>`:'';
+ return `<span class="wert${farbe?' bewertet':''}"${stil}${titel?` title="${esc(titel)}"`:''}>${name}<b>${esc(w.r)}</b>${kurz?einheit:''}${nwg}</span>`;
 }
 /** Kernwerte einer Probe: Σ16 EPA-PAK, BaP, Chlorid, Asbest – sonst die ersten beiden Parameter. */
 const KERN=[/^Summe\s*16\s*EPA[-– ]PAK/i,/^Benzo\[a\]pyren$/i,/chlorid/i,/asbest/i];
@@ -180,7 +183,7 @@ function render(){
 function renderJetzt(s:Scan){
  const gueltig=s.u.berichte.filter(b=>!b.ersetztDurch&&!b.ohneWerte).length;
  const j=jetztDran({proben:s.u.zeilen.length,berichte:s.u.berichte.length,gueltig,auftrag:!!s.auftrag,stand:s.stand,
-  vorhanden:s.vorhanden?{stand:s.vorhanden.stand,uebernommen:s.vorhanden.uebernommen,vollstaendig:s.vorhanden.vollstaendig,ohneLage:ohneLage(s.vorhanden,s.auftrag)}:null,vorhandenFehler:s.vorhandenFehler,
+  vorhanden:s.vorhanden?{stand:s.vorhanden.stand,uebernommen:s.vorhanden.uebernommen,vollstaendig:s.vorhanden.vollstaendig,ohneLage:ohneLage(s.vorhanden,s.auftrag),ohneNwg:ohneNwg(s.vorhanden,s.u)}:null,vorhandenFehler:s.vorhandenFehler,
   hinweise:hinweisZahl(s),importiert:nachImport});
  const knopf=(k:Knopf|undefined,haupt:boolean)=>k?`<button type="button"${haupt&&k.aktion==='uebernehmen'?' id="btn-uebernehmen"':''} class="${haupt?'primary':''}" data-aktion="${k.aktion}"${beschaeftigt&&k.aktion!=='ansehen'?' disabled':''}>${esc(k.text)}</button>`:'';
  const chip=(c:Chip)=>`<button type="button" class="chip ${c.art}" data-aktion="${c.aktion}" title="Proben und Berichte mit Hinweisen aufklappen">${esc(c.text)}</button>`;

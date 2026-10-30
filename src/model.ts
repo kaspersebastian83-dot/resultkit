@@ -2,8 +2,10 @@
 // Ergebnisse aus „_Ergebnisse.json“ ohne Umbau in seine Projektdatei übernehmen kann.
 export interface LabSources {xml?:string;pdf?:string}
 export interface LabOrigin {id:string;bericht:string;labor:string;auftragsreferenz:string;batch?:string;sources:LabSources;vorlaeufig?:true}
-/** Ein Messwert: Parameter, Ergebnis wie im Bericht (Text), Einheit; loq = Bestimmungsgrenze (BG) laut Bericht. */
-export interface Wert {p:string;r:string;u:string;loq?:string}
+/** Ein Messwert: Parameter, Ergebnis wie im Bericht (Text), Einheit; loq = Bestimmungsgrenze (BG) laut Bericht.
+ *  nwg = Nachweisgrenze des Verfahrens laut Bericht (ab 1.10, z. B. Asbest „0,001 %“ – Eurofins nennt sie nur im Gruppen-/Testnamen),
+ *  norm = Prüfnorm laut Bericht (ab 1.10, z. B. „VDI 3866-5:2017-06 Anhang B“). Beide nur, wenn der Bericht sie nennt. */
+export interface Wert {p:string;r:string;u:string;loq?:string;nwg?:string;norm?:string}
 export interface LabData {ref:string;desc:string;art?:string;labNr?:string;datum?:string;bericht?:string;reportId?:string;werte?:Wert[]}
 export type Surface='floor'|'wall'|'ceiling';
 export interface LabSample extends LabData {label:string;typ?:string;surface?:Surface;raum?:string}

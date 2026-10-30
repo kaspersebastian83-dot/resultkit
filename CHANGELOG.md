@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.0 · 30.10.2026
+- **Nachweisgrenze an jedem Asbestwert:** Eurofins nennt die Nachweisgrenze (VDI 3866-5) nicht im Feld BG, sondern im Gruppen-/Testnamen („Asbestfasern [NWG 0,001%]“). ResultKit liest sie jetzt mit und schreibt sie als `nwg` („0,001 %“, „0,1 %“, „1 %“) an den Wert in `_Ergebnisse.json`, dazu die Prüfnorm als `norm` („VDI 3866-5:2017-06 Anhang B“). Grundlage für den Asbest-Bericht: „Kein Asbest nachgewiesen“ heißt je nach Verfahren unter 0,001 % oder unter 1 %.
+- Aufgeklappte Probe: hinter dem Asbestwert steht „(NWG 0,001 %)“; der Tooltip jedes Werts nennt BG, NWG und Norm, soweit der Bericht sie hat.
+- Wurden Asbestergebnisse vor 1.10 übernommen, zeigt „Jetzt dran“ einmal „Bitte einmal erneut übernehmen“ – Werte ändern sich dadurch nicht.
+- Neue Felder sind optional, Format `spektron-ergebnisse` bleibt Version 1; PlanKit und FotoKit lesen die Datei unverändert.
+
 ## 1.9.0 · 29.10.2026
 - **Übernehmen überschreibt keinen neueren Stand mehr** (Prüfbericht 29.10.): Hat jemand anderes (anderes Fenster, anderer Rechner) die Ergebnisse inzwischen übernommen, oder ändert sich ein Bericht im Ordner, während die Rückfrage „Trotzdem übernehmen?“ offen ist, schreibt ResultKit nichts und meldet es.
 - Gelesene Berichte werden je geöffnetem Projekt zwischengespeichert – ein verspätet fertiges Einlesen eines vorher geöffneten Projekts kann nicht mehr in ein anderes Projekt geraten.

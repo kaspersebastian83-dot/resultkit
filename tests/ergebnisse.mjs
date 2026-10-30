@@ -10,6 +10,7 @@ registerHooks({
 });
 const E=await import('../src/ergebnisse.ts');
 const {labelkitReport}=await import('../src/labelkit.ts');
+const {nachweisgrenze}=await import('../src/labreport.ts');
 let n=0;const ok=(name,fn)=>{fn();n++;console.log('OK Ergebnisse: '+name);};
 
 const SUM='Summe 16 EPA-PAK exkl. BG',U='µg/m²';
@@ -174,4 +175,29 @@ ok('Abgleich: einzeln ersetzter Wert meldet nichts mehr, der noch geltende schon
  assert.equal(h.length,1);assert.match(h[0],/Chlorid/,'PAK ist ersetzt, Chlorid gilt noch');
  const b=u.berichte.find(x=>x.bericht==='AR-1-01');assert.equal(b.wertAbgleich.abweichend,1);assert.match(b.hinweise.find(x=>x.startsWith(L.ABGLEICH)),/1 Wert weicht ab/);
 });
+// Nachweisgrenze (ab 1.10): Eurofins nennt sie bei Asbest nur im Gruppen-/Test-/Methodennamen. Ergebniszeile als Mini-Element.
+const zeileEl=felder=>({children:Object.entries(felder).map(([localName,textContent])=>({localName,textContent,children:[]}))});
+ok('nachweisgrenze: aus Gruppe, sonst Test, sonst Methode; Schreibweise „0,001 %“',()=>{
+ assert.equal(nachweisgrenze(zeileEl({GroupLevel1Name:'Asbestfasern [NWG 0,001%]',TestName:'Asbest [Einzelprobe, Nachweisgrenze 0,001 %]'})),'0,001 %');
+ assert.equal(nachweisgrenze(zeileEl({GroupLevel1Name:'Asbestfasern [NWG 1%]'})),'1 %');
+ assert.equal(nachweisgrenze(zeileEl({TestName:'Asbest [erweiterte Probenpräparation, NWG 0,1%]'})),'0,1 %');
+ assert.equal(nachweisgrenze(zeileEl({Method:'Asbest [Einzelprobe, VDI 3866-5:2017-06 Anhang B, Nachweisgrenze 0,001 %]'})),'0,001 %');
+ assert.equal(nachweisgrenze(zeileEl({GroupLevel1Name:'PAK',TestName:'PAK (16 EPA)'})),'','ohne Angabe nichts erfinden');
+});
+ok('ohneNwg: alte Datei ohne NWG, Berichte mit NWG – erneut übernehmen; neue Datei oder ohne Asbest nicht',()=>{
+ const asb=nwg=>[{p:'Asbestgehalt',r:'-',u:'%',...(nwg?{nwg}:{})},{p:'Asbest',r:'Kein Asbest nachgewiesen',u:'',...(nwg?{nwg}:{})}];
+ const u=E.uebersicht('99.9001',null,[{report:report('AR-5-01',[[6,asb('0,001 %')]]),geaendert:1}]);
+ const alt=E.ergebnisDatei(E.uebersicht('99.9001',null,[{report:report('AR-5-01',[[6,asb()]]),geaendert:1}]),null,[],'1.9.0');
+ const neu=E.ergebnisDatei(u,null,[],'1.10.0');
+ assert.equal(neu.berichte[0].proben[0].werte[0].nwg,'0,001 %','NWG geht in _Ergebnisse.json');
+ assert.equal(E.ohneNwg(alt,u),true);assert.equal(E.ohneNwg(neu,u),false);assert.equal(E.ohneNwg(null,u),false);
+ const nurPak=E.uebersicht('99.9001',null,[{report:report('AR-6-01',[[1,pak('3')]]),geaendert:1}]);
+ assert.equal(E.ohneNwg(E.ergebnisDatei(nurPak,null,[],'1.9.0'),nurPak),false);
+ // Review PR #21: ein Asbestwert, für den der Bericht keine NWG nennt, darf den Hinweis nach frischer Übernahme nicht auslösen
+ const gemischt=E.uebersicht('99.9001',null,[{report:report('AR-5-01',[[6,asb('0,001 %')],[7,asb()]]),geaendert:1}]);
+ assert.equal(E.ohneNwg(E.ergebnisDatei(gemischt,null,[],'1.10.0'),gemischt),false,'frisch übernommen: kein Hinweis');
+ const altGemischt=E.ergebnisDatei(E.uebersicht('99.9001',null,[{report:report('AR-5-01',[[6,asb()],[7,asb()]]),geaendert:1}]),null,[],'1.9.0');
+ assert.equal(E.ohneNwg(altGemischt,gemischt),true,'alte Übernahme: Probe 6 hat jetzt eine NWG');
+});
+
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);
