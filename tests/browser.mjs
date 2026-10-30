@@ -11,7 +11,7 @@ const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'@playwright/test');
 
 const PROJEKT='99.9001 Musterort',SUM='Summe 16 EPA-PAK exkl. BG',U='µg/m²';
-const probe=(n,lines)=>({...labRows[0],label:`P${n}`,ref:`Probe ${n}`,labNr:`999-2099-${String(n).padStart(8,'0')}`,desc:`Testbereich ${n}, fiktive Oberfläche`,lines});
+const probe=(n,lines)=>({...labRows[0],label:`P${n}`,ref:`Probe ${n}`,labNr:`999-2099-${String(n).padStart(8,'0')}`,desc:n===4?'EG Testraum 1, Wand, Ansicht':`EG Testraum ${n}, Wand, Ansicht, 400 cm²`,lines});
 const pak=v=>[{p:SUM,r:v,u:U},{p:'Benzo[a]pyren',r:'< 0,5',u:U},{p:'Naphthalin',r:'n. n.',u:U}];
 const labelkit=JSON.stringify({version:'4.41.0',projekt:{nr:'99.9001'},
  proben:[1,2,3].map(i=>({_nr:i,matrix:'Wischprobe',datum:'08.10.2026',z2:`EG Testraum ${i}`,z3:'Wand',z4:'Ansicht',cm2:'400'})),
