@@ -137,9 +137,13 @@ export function ohneLage(datei:ErgebnisDatei|null,auftrag:LabReport|null):boolea
 /** Vor ResultKit 1.10 übernommen: Asbestwerte ohne Nachweisgrenze, obwohl die Prüfberichte sie nennen (für den Asbest-Bericht nötig). */
 export function ohneNwg(datei:ErgebnisDatei|null,u:Uebersicht):boolean{
  if(!datei)return false;
- const asbest=(w:Wert)=>/asbest/i.test(w.p);
- if(!u.zeilen.some(z=>z.werte.some(w=>asbest(w)&&w.nwg)))return false;
- return datei.berichte.some(b=>b.proben.some(s=>(s.werte||[]).some(w=>asbest(w)&&!w.nwg)));
+ // Je Wert vergleichen (Bericht, Probe, Parameter, Einheit): nur ein gespeicherter Asbestwert ohne NWG, dessen aktueller
+ // Gegenpart eine NWG hat, zählt – ein Wert, für den der Bericht keine nennt, löst den Hinweis nicht immer wieder aus.
+ const asbest=(w:Wert)=>/asbest/i.test(w.p),key=(bericht:string,probe:string,w:Wert)=>[bericht,probe,tidy(w.p),tidy(w.u)].join('\u0000');
+ const mitNwg=new Set<string>();
+ for(const z of u.zeilen)for(const w of z.werte)if(asbest(w)&&w.nwg)mitNwg.add(key(w.bericht,z.label||norm(z.ref),w));
+ if(!mitNwg.size)return false;
+ return datei.berichte.some(b=>b.proben.some(s=>(s.werte||[]).some(w=>asbest(w)&&!w.nwg&&mitNwg.has(key(b.bericht,s.label||norm(s.ref),w)))));
 }
 /** Gelesene „_Ergebnisse.json“ prüfen (für ResultKit selbst und als Muster für PlanKit/FotoKit). */
 export function liesErgebnisDatei(text:string):ErgebnisDatei{

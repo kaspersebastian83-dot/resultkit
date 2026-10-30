@@ -193,6 +193,11 @@ ok('ohneNwg: alte Datei ohne NWG, Berichte mit NWG – erneut übernehmen; neue 
  assert.equal(E.ohneNwg(alt,u),true);assert.equal(E.ohneNwg(neu,u),false);assert.equal(E.ohneNwg(null,u),false);
  const nurPak=E.uebersicht('99.9001',null,[{report:report('AR-6-01',[[1,pak('3')]]),geaendert:1}]);
  assert.equal(E.ohneNwg(E.ergebnisDatei(nurPak,null,[],'1.9.0'),nurPak),false);
+ // Review PR #21: ein Asbestwert, für den der Bericht keine NWG nennt, darf den Hinweis nach frischer Übernahme nicht auslösen
+ const gemischt=E.uebersicht('99.9001',null,[{report:report('AR-5-01',[[6,asb('0,001 %')],[7,asb()]]),geaendert:1}]);
+ assert.equal(E.ohneNwg(E.ergebnisDatei(gemischt,null,[],'1.10.0'),gemischt),false,'frisch übernommen: kein Hinweis');
+ const altGemischt=E.ergebnisDatei(E.uebersicht('99.9001',null,[{report:report('AR-5-01',[[6,asb()],[7,asb()]]),geaendert:1}]),null,[],'1.9.0');
+ assert.equal(E.ohneNwg(altGemischt,gemischt),true,'alte Übernahme: Probe 6 hat jetzt eine NWG');
 });
 
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);

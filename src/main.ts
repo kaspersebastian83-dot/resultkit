@@ -142,11 +142,13 @@ function skala(p:string,u:string):{scale?:Scale;quelle:string}{
 }
 function wertZelle(w:Wert,kurz=false){
  const q=labQualifier(w.r),einheit=w.u?` ${esc(w.u)}`:'',name=kurz?`<span class="wp">${esc(shortParameter(w.p))}</span> `:'';
- let farbe='',titel=[w.loq?`BG ${w.loq}${w.u?` ${w.u}`:''}`:'',w.nwg?`NWG ${w.nwg}`:'',w.norm||''].filter(Boolean).join(' · ');
+ // Einordnung (unter BG, n. n., Skala) vorn, danach immer NWG und Norm aus dem Bericht – die Einordnung ersetzt sie nicht.
+ let farbe='',titel=w.loq?`BG ${w.loq}${w.u?` ${w.u}`:''}`:'';
  if(q==='below'){farbe=BELOW_LIMIT;titel=`unter der Bestimmungsgrenze${w.loq?` (BG ${w.loq} ${w.u})`:''}`;}
  else if(q==='notDetected'){farbe=NOT_DETECTED;titel='nicht nachweisbar';}
  else if(q==='notDetermined'){farbe=NOT_DETERMINED;titel='nicht bestimmt';}
  else if(q==='measured'){const s=skala(w.p,w.u);if(s.scale){const i=rate(s.scale,labNumber(w.r));if(i>=0){farbe=s.scale.cats[i].color||UNRATED;titel=`${s.scale.cats[i].name} – ${s.scale.name} (${s.quelle})`;}}}
+ titel=[titel,w.nwg?`NWG ${w.nwg}`:'',w.norm||''].filter(Boolean).join(' · ');
  if(farbe)farbe=farbeSicher(farbe);const stil=farbe?` style="--c:${farbe};--t:${ink(farbe)}"`:'';
  const nwg=kurz&&w.nwg?` <span class="wp">(NWG ${esc(w.nwg)})</span>`:'';
  return `<span class="wert${farbe?' bewertet':''}"${stil}${titel?` title="${esc(titel)}"`:''}>${name}<b>${esc(w.r)}</b>${kurz?einheit:''}${nwg}</span>`;
