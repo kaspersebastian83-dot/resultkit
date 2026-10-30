@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.11.0 · 30.10.2026
+- Spektron-Leiste: neuer Schritt „BerichtKit“ (Asbest-Untersuchungsbericht) zwischen PlanKit und BelegKit – Haken, sobald ein Bericht in „Mitteilungen“ liegt. Gemeinsames Modul spektron-ordner.js: neuer Bereich „BerichtKit“ (Angaben zum Bericht in „_Spektron/BerichtKit“).
+
 ## 1.10.0 · 30.10.2026
 - **Nachweisgrenze an jedem Asbestwert:** Eurofins nennt die Nachweisgrenze (VDI 3866-5) nicht im Feld BG, sondern im Gruppen-/Testnamen („Asbestfasern [NWG 0,001%]“). ResultKit liest sie jetzt mit und schreibt sie als `nwg` („0,001 %“, „0,1 %“, „1 %“) an den Wert in `_Ergebnisse.json`, dazu die Prüfnorm als `norm` („VDI 3866-5:2017-06 Anhang B“). Grundlage für den Asbest-Bericht: „Kein Asbest nachgewiesen“ heißt je nach Verfahren unter 0,001 % oder unter 1 %.
 - Aufgeklappte Probe: hinter dem Asbestwert steht „(NWG 0,001 %)“; der Tooltip jedes Werts nennt BG, NWG und Norm, soweit der Bericht sie hat.
