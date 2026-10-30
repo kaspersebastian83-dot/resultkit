@@ -1,11 +1,11 @@
 // @ts-nocheck
-/* ===== MOSAIK-LEISTE v1 – in allen Apps der Familie identisch halten (LabelKit, FotoKit, ResultKit, PlanKit, BelegKit) =====
+/* ===== MOSAIK-LEISTE v1 – in allen Apps der Familie identisch halten (LabelKit, FotoKit, ResultKit, PlanKit, BerichtKit, BelegKit) =====
    Links steht der Name der App-Suite „Spektron“ (Arbeitsname war „Mosaik“; interne Kennungen bleiben).
-   Schmale Leiste oben: Projekt (mit Wechsel zu den zuletzt benutzten), die fünf Arbeitsschritte mit Haken und nächstem Schritt,
+   Schmale Leiste oben: Projekt (mit Wechsel zu den zuletzt benutzten), die sechs Arbeitsschritte mit Haken und nächstem Schritt,
    „Weiter“-Knopf. Ohne geöffnetes Projekt: „Mit <letztes Projekt> weitermachen“.
    Teilt sich mit den anderen Apps nur den Browser-Speicher: IndexedDB „mosaik-suite“ / „kv“, Schlüssel „archiv“ (Ordner-Handle)
    und „zuletzt“ (Liste der zuletzt geöffneten Projektnamen). Liest den Ordner nur, schreibt nie hinein und fragt nie selbst
-   nach Ordnerrechten – ohne Recht (oder ohne Ordnerzugriff, z. B. Safari) fehlen nur die Haken. Aufruf: MosaikLeiste.start('label'|'fotos'|'ergebnis'|'plan'|'beleg'[, {kompakt: true}]),
+   nach Ordnerrechten – ohne Recht (oder ohne Ordnerzugriff, z. B. Safari) fehlen nur die Haken. Aufruf: MosaikLeiste.start('label'|'fotos'|'ergebnis'|'plan'|'bericht'|'beleg'[, {kompakt: true}]),
    danach MosaikLeiste.aktualisieren() nach dem Öffnen oder Wechseln eines Projekts.
    Optional opt.projektName: Funktion, die die bestätigte Projektzuordnung statt der angeforderten URL liefert (FotoKit).
    Optional opt.version: Version der App (Text oder Funktion) für „💬 Rückmeldung“ rechts in der Leiste und im Projektmenü – öffnet
@@ -18,9 +18,10 @@
     ['fotos', 'FotoKit',   'bildumbenenner', '../Bildumbenenner/', '#2f87a6'],
     ['ergebnis', 'ResultKit', 'resultkit',   '../resultkit/',      '#7a5ca8'],
     ['plan',  'PlanKit',   'plankit',        '../Probenplan/',     '#4179b2'],
+    ['bericht', 'BerichtKit', 'berichtkit',  '../berichtkit/',     '#b0683c'],
     ['beleg', 'BelegKit',  'aufwandkit',     '../aufwandkit/',     '#2f7d6d']
   ];
-  var ZENTRALE = '../Projektzentrale/', MAX = 6, RUECKMELDUNG = '../rueckmeldung/', RM_APP = { label: 'labelkit', fotos: 'fotokit', ergebnis: 'resultkit', plan: 'plankit', beleg: 'belegkit' };
+  var ZENTRALE = '../Projektzentrale/', MAX = 6, RUECKMELDUNG = '../rueckmeldung/', RM_APP = { label: 'labelkit', fotos: 'fotokit', ergebnis: 'resultkit', plan: 'plankit', bericht: 'berichtkit', beleg: 'belegkit' };
   var ich = '', kompakt = false, projektName = null, version = null, name = '', stand = null, zuletzt = [], bar = null, pop = null, timer = 0, lauf = 0;
   var nfc = function(s){ try{ return String(s).normalize('NFC'); }catch(e){ return String(s); } };
   /* Kurzfassung von SPEKTRON-ORDNERNAME v1 (Projektzentrale): Kürzel am Ende des Ordnernamens anhand der Mitarbeiterliste */
@@ -126,7 +127,7 @@
     if (!proj) return null;
     /* Spektron-Ordner (spektron-ordner.js, falls geladen): App-Daten künftig in „_Spektron/…“; sonst wie bisher. */
     async function bereich(b, alt){ var SO = window.SpektronOrdner; if (SO) try{ return (await SO.ort(proj, b)).dir; }catch(eb){} return alt ? unterordner(proj, alt) : proj; }
-    var s = { label: false, fotos: false, ergebnis: false, plan: false, beleg: false, objekt: '', anzeige: '', person: '' }, zust = null;
+    var s = { label: false, fotos: false, ergebnis: false, plan: false, bericht: false, beleg: false, objekt: '', anzeige: '', person: '' }, zust = null;
     var activeData = window.SpektronProjectData && window.SpektronProjectData(name);
     if (activeData){ var activeObjekt = typeof activeData.data.objekt === 'string' ? activeData.data.objekt : activeData.data.daten && activeData.data.daten.objekt; if (typeof activeObjekt === 'string') s.objekt = activeObjekt.trim(); zust = activeData.data.zustaendig; }
     else try{
@@ -144,6 +145,10 @@
       var pl = await bereich('plankit', 'Pläne');
       if (pl) for await (var g of pl.values()) if (g.kind === 'file' && /\.probenplan$/i.test(g.name) && !/ \((vorher|Wiederherstellung|Speicherkandidat|Kopie)\b[^)]*\)\.probenplan$/i.test(g.name)){ s.plan = true; break; }
     }catch(e6){}
+    try{   // Bericht in „Mitteilungen“ (bleibt dort, auch in Spektron-Projekten): „1._Mitteilung_26.0528.docx“ (BerichtKit) wie „1__Mitteilung.docx“
+      var mi = await unterordner(proj, 'Mitteilungen');
+      if (mi) for await (var m of mi.values()) if (m.kind === 'file' && /^\d+[._\s]*Mitteilung(?![a-zäöüß]).*\.docx$/i.test(nfc(m.name))){ s.bericht = true; break; }
+    }catch(e9){}
     try{
       var ab = await bereich('belegkit', 'Abrechnung');
       if (ab) for await (var k of ab.values()) if (k.kind === 'file' && /_Aufwand_.*\.json$/i.test(k.name)){ s.beleg = true; break; }
