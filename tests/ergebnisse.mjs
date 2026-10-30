@@ -19,11 +19,32 @@ const labelkit=JSON.stringify({version:'4.41.0',projekt:{nr:'99.9001'},
  proben:[1,2,3].map(i=>({_nr:i,matrix:'Wischprobe',datum:'08.10.2026',z2:`EG Testraum ${i}`,z3:'Wand',z4:'Ansicht',cm2:'400'})),
  chloridProben:[{chloridNr:4,matrix:'Wischprobe',datum:'08.10.2026',z2:'EG Testraum 1',z4:'Aufsicht'}],
  sonstigeProben:[{_nr:5,matrix:'Bohrkern',bkStatus:'R',bkId:'BK-1'}]});
+// So schreibt Eurofins den Text der Laborübergabe zurück (wörtlich) – Proben außerhalb des Auftrags: frei erfunden.
+const DESC={1:'EG Testraum 1, Wand, Ansicht, 400 cm²',2:'EG Testraum 2, Wand, Ansicht, 400 cm²',3:'EG Testraum 3, Wand, Ansicht, 400 cm²',4:'EG Testraum 1, Aufsicht'};
 const auftrag=()=>labelkitReport(labelkit,'99.9001_08.10.2026_Daten.json','99.9001 Musterort');
 const report=(bericht,proben,{vorlaeufig=false,ref='99.9001 Musterort',xml=true}={})=>({bericht,labor:'Eurofins',auftragsreferenz:ref,quelle:`${bericht}.xml`,batch:'',sources:xml?{xml:`${bericht}.xml`,pdf:`${bericht}.pdf`}:{pdf:`${bericht}.pdf`},
- rows:proben.map(([nr,werte])=>({label:`P${nr}`,ref:`Probe ${nr}`,desc:`Testbereich ${nr}`,art:'Wischprobe',labNr:`999-${nr}`,datum:'2026-10-08',...(werte?{werte}:{})})),expected:proben.length,references:[],warnings:[],results:[],...(vorlaeufig?{vorlaeufig:true}:{})});
+ rows:proben.map(([nr,werte])=>({label:`P${nr}`,ref:`Probe ${nr}`,desc:DESC[nr]??`Testbereich ${nr}`,art:'Wischprobe',labNr:`999-${nr}`,datum:'2026-10-08',...(werte?{werte}:{})})),expected:proben.length,references:[],warnings:[],results:[],...(vorlaeufig?{vorlaeufig:true}:{})});
 const pak=v=>[{p:SUM,r:v,u:U,loq:'0,5'},{p:'Benzo[a]pyren',r:'< 0,5',u:U,loq:'0,5'}];
 
+ok('Beschreibung: gleicher Text still, Abweichung als Hinweis an der Probe und in _Ergebnisse.json',()=>{
+ const r=report('AR-9-01',[[1,pak('14')],[2,pak('8')]]);
+ r.rows[0].desc='eg  testraum 1, Wand, Ansicht, 400 cm²';   // Leerraum/Schreibung zählen nicht
+ r.rows[1].desc='EG Testraum 3, Wand, Ansicht, 400 cm²';    // vertauscht/umnummeriert
+ const u=E.uebersicht('99.9001',auftrag(),[{report:r,geaendert:1}]);
+ const z=Object.fromEntries(u.zeilen.map(z=>[z.label,z]));
+ assert.equal(z.P1.hinweise.filter(h=>h.startsWith('Beschreibung')).length,0);
+ assert.deepEqual(z.P2.hinweise,['Beschreibung: LabelKit „EG Testraum 2, Wand, Ansicht, 400 cm²“, Bericht AR-9-01 „EG Testraum 3, Wand, Ansicht, 400 cm²“ – stimmt die Zuordnung? In LabelKit oder beim Labor klären.']);
+ assert.equal(z.P2.desc,'EG Testraum 2, Wand, Ansicht, 400 cm²','die Beschreibung aus LabelKit bleibt stehen');
+ assert.ok(E.ergebnisDatei(u,auftrag(),[],'1.12.0').hinweise.some(h=>h.startsWith('P2: Beschreibung')));
+});
+ok('beschreibungWeichtAb: Striche/Anführungszeichen, Tiefe am Ende, Bohrkern und leere Texte nie',()=>{
+ assert.equal(E.beschreibungWeichtAb('Zugestellte Probe vom 13.10.2026 - Kaminski','Zugestellte Probe vom 13.10.2026 – Kaminski'),false);
+ assert.equal(E.beschreibungWeichtAb('Keller, „Altbau“','Keller, "Altbau"'),false);
+ assert.equal(E.beschreibungWeichtAb('EG Flur, Wand, Tiefe: 0–2 cm','EG Flur, Wand'),false);
+ assert.equal(E.beschreibungWeichtAb('BK-1 · Beton · 0–5 cm','BK-1 · 0–5 cm · Beton','Sonstige · Bohrkern'),false);
+ assert.equal(E.beschreibungWeichtAb('EG Flur','',''),false);assert.equal(E.beschreibungWeichtAb('','EG Flur'),false);
+ assert.equal(E.beschreibungWeichtAb('3. OG, Wohnzimmer, Spachtelmassel Zimmerdecke','3. OG, Wohnzimmer, Spachtelmasse Zimmerdecke'),true,'auch ein Buchstabe zählt');
+});
 ok('Laborauftrag: Rückstellprobe zählt nicht, Probe 4 als Chlorid',()=>{
  const a=auftrag();assert.deepEqual(a.rows.map(r=>[r.label,r.typ]),[['P1','PAK'],['P2','PAK'],['P3','PAK'],['P4','Chlorid']]);
 });

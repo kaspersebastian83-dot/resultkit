@@ -12,6 +12,17 @@ import type {LabOrigin,LabSample,Wert} from './model';
 
 export const FORMAT='spektron-ergebnisse',VERSION=1,DATEI='_Ergebnisse.json';
 const tidy=(s:unknown)=>String(s??'').normalize('NFC').replace(/\s+/g,' ').trim();
+/** Probenbeschreibung vergleichbar machen. Eurofins übernimmt den Text der LabelKit-Laborübergabe wörtlich (geprüft an 15 echten
+    Asbestproben, 30.10.2026 – sogar Tippfehler bleiben stehen); angeglichen werden nur Leerraum, Groß-/Kleinschreibung, Striche
+    und Anführungszeichen. In BerichtKit (bericht-text.js) gleich halten. */
+export const beschreibungKey=(s:unknown)=>tidy(s).toLowerCase().replace(/[\u2010-\u2015\u2212]/g,'-').replace(/[\u201E\u201C\u201D\u201A\u2018\u2019\u00AB\u00BB"']/g,'"');
+/** Weicht die Beschreibung im Prüfbericht von der aus LabelKit ab? Nie bei fehlendem Text und bei Bohrkernen (andere Reihenfolge
+    in der Übergabe); „Tiefe: …“ am Ende zählt nicht (LabelKit übergibt sie nur bei Bohrmehl). */
+export function beschreibungWeichtAb(auftrag:unknown,bericht:unknown,art=''){
+ if(!tidy(auftrag)||!tidy(bericht)||/bohrkern/i.test(art))return false;
+ const a=beschreibungKey(auftrag),b=beschreibungKey(bericht);
+ return a!==b&&a.replace(/, tiefe: [^,]*$/,'')!==b;
+}
 const norm=(s:unknown)=>tidy(s).toLocaleLowerCase('de').replace(/[^\p{L}\p{N}]/gu,'');
 const nummer=(label:string)=>{const n=Number(label.replace(/^P/i,''));return Number.isSafeInteger(n)&&n>0?n:null;};
 
@@ -73,6 +84,9 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
  for(const s of auftrag?.rows||[])zeile(s,true);
  for(const b of berichte)for(const s of b.proben){const z=zeile(s,false);
   if(!z.berichte.includes(b.bericht))z.berichte.push(b.bericht);
+  // Beschreibung: Der Text aus der Laborübergabe kommt wörtlich zurück – weicht er ab, gehört der Wert evtl. zu einer anderen Stelle
+  // (umnummeriert, nachträglich geändert). Nur Hinweis; berichtigt wird in LabelKit oder beim Labor, nie hier.
+  if(z.erwartet&&beschreibungWeichtAb(z.desc,s.desc,z.art))z.hinweise.push(`Beschreibung: LabelKit „${z.desc}“, Bericht ${b.bericht||b.sources.xml||b.sources.pdf||''} „${tidy(s.desc)}“ – stimmt die Zuordnung? In LabelKit oder beim Labor klären.`);
   if(!z.desc)z.desc=tidy(s.desc);if(!z.art&&s.art)z.art=tidy(s.art);
   if(z.erwartet&&z.datum&&s.datum&&z.datum!==s.datum)z.hinweise.push(`Probenahmedatum: LabelKit ${z.datum}, Bericht ${b.bericht} ${s.datum}.`);
   if(!z.datum&&s.datum)z.datum=s.datum;

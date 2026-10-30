@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.0 · 30.10.2026
+- **Beschreibung LabelKit ↔ Prüfbericht:** Eurofins schreibt den Text der Laborübergabe wörtlich zurück (geprüft an 15 echten Asbestproben, sogar Tippfehler bleiben stehen). Weicht er bei einer Probe von LabelKit ab, steht an der Probe jetzt „Beschreibung: LabelKit „…“, Bericht … „…“ – stimmt die Zuordnung?“. Das fängt umnummerierte oder nachträglich geänderte Proben ab, bevor ein Wert der falschen Stelle zugeordnet wird – für PAK, Chlorid, Asbest und Sonstige. Nur Hinweis, nichts wird geändert; der Hinweis geht mit nach `_Ergebnisse.json`.
+- Angeglichen werden nur Leerraum, Groß-/Kleinschreibung, Striche und Anführungszeichen; Bohrkerne (andere Reihenfolge in der Übergabe) und Proben ohne Beschreibung werden nicht verglichen, „Tiefe: …“ am Ende zählt nicht.
+
 ## 1.11.0 · 30.10.2026
 - Spektron-Leiste: neuer Schritt „BerichtKit“ (Asbest-Untersuchungsbericht) zwischen PlanKit und BelegKit – Haken, sobald ein Bericht in „Mitteilungen“ liegt. Gemeinsames Modul spektron-ordner.js: neuer Bereich „BerichtKit“ (Angaben zum Bericht in „_Spektron/BerichtKit“).
 
