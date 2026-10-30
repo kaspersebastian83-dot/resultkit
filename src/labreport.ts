@@ -4,7 +4,7 @@ import type {LabSample,LabSources} from './model';
 export function sourceFilename(value:string){return value.split(/[\\/]/).at(-1)||'';}
 export interface TextItem {text:string;x:number;y:number;width:number;height:number}
 export interface TextPage {width:number;height:number;items:TextItem[]}
-export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;quelle:string;batch:string;sources:LabSources;rows:LabSample[];expected:number|null;references:string[];warnings:string[];vorlaeufig?:boolean;/** Datum des Prüfberichts (Unterschrift, sonst Bearbeitungsende), JJJJ-MM-TT */datum?:string;results:{ref:string;parameter:string;result:string;unit:string;loq:string}[];
+export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;quelle:string;batch:string;sources:LabSources;rows:LabSample[];expected:number|null;references:string[];warnings:string[];vorlaeufig?:boolean;/** Datum des Prüfberichts (Unterschrift, sonst Bearbeitungsende), JJJJ-MM-TT */datum?:string;results:{ref:string;parameter:string;result:string;unit:string;loq:string;nwg:string;norm:string}[];
  /** PDF (ab 1.6): Hauptwerte aus der Ergebnistabelle je Probenreferenz (norm) – nur zum Abgleich mit der XML, nie als Messwert. */
  pdfWerte?:Record<string,PdfWert[]>;
  /** XML↔PDF-Abgleich der Hauptwerte: geprüfte Werte und Abweichungen je Probenreferenz (norm). */
@@ -28,6 +28,16 @@ export function blankReport(quelle=''):LabReport{quelle=sourceFilename(quelle);r
 const children=(el:Element,name:string)=>[...el.children].filter(e=>e.localName===name);
 const child=(el:Element,name:string)=>children(el,name)[0];
 const value=(el:Element,name:string)=>tidy(child(el,name)?.textContent||'');
+/** Nachweisgrenze (NWG) einer Ergebniszeile. Eurofins nennt sie bei Asbest (VDI 3866-5) nicht im Feld LOQ, sondern im
+ *  Gruppen-, Test- oder Methodennamen: „Asbestfasern [NWG 0,001%]“, „Asbest [Einzelprobe, Nachweisgrenze 0,001 %]“.
+ *  Rückgabe wie im Bericht mit Einheit, nur einheitlich mit Leerzeichen: „0,001 %“. Nichts gefunden → ''. */
+export function nachweisgrenze(line:Element){
+ for(const name of ['GroupLevel1Name','TestName','Method']){
+  const m=/\b(?:NWG|Nachweisgrenze)\s*:?\s*(\d+(?:[.,]\d+)?)\s*(%)?/i.exec(value(line,name));
+  if(m)return `${m[1]}${m[2]?` ${m[2]}`:''}`;
+ }
+ return '';
+}
 export function parseLabXML(text:string,quelle=''):LabReport{
  if(text.length>10*1024*1024)throw Error('XML zu groß (maximal 10 MB).');
  if(/<!DOCTYPE|<!ENTITY/i.test(text))throw Error('XML mit Dokumenttyp/Entitäten wird nicht unterstützt. Bitte den PDF-Bericht verwenden.');
@@ -46,10 +56,10 @@ export function parseLabXML(text:string,quelle=''):LabReport{
    if(date&&!row.datum)report.warnings.push(`Probenahmedatum für ${ref||row.labNr} konnte nicht erkannt werden.`);
    const order=value(sample,'SampleOrder');rows.push({row,order:order&&Number.isFinite(Number(order))?Number(order):Infinity,index:rows.length});
    const resultStart=report.results.length,raw=(el:Element,name:string)=>child(el,name)?.textContent||'';
-   const lines=child(sample,'Lines');for(const line of lines?children(lines,'AnalyticalReportLine'):[])report.results.push({ref,parameter:value(line,'ParameterName')||value(line,'ParameterDescription'),result:raw(line,'Result'),unit:raw(line,'Unit'),loq:value(line,'LOQ')});
+   const lines=child(sample,'Lines');for(const line of lines?children(lines,'AnalyticalReportLine'):[])report.results.push({ref,parameter:value(line,'ParameterName')||value(line,'ParameterDescription'),result:raw(line,'Result'),unit:raw(line,'Unit'),loq:value(line,'LOQ'),nwg:nachweisgrenze(line),norm:value(line,'Standard')});
    const results=report.results.slice(resultStart).filter(r=>r.parameter&&r.result);
-   if(results.length>MAX_WERTE||results.some(r=>r.parameter.length>160||r.result.length>40||r.unit.length>40))throw Error('Laborwerte überschreiten die unterstützte Länge oder Anzahl; Originalwerte wurden nicht gekürzt.');
-   const werte=results.map(r=>({p:r.parameter,r:r.result,u:r.unit,...(r.loq?{loq:r.loq}:{})}));if(werte.length)row.werte=werte;
+   if(results.length>MAX_WERTE||results.some(r=>r.parameter.length>160||r.result.length>40||r.unit.length>40||r.nwg.length>40||r.norm.length>160))throw Error('Laborwerte überschreiten die unterstützte Länge oder Anzahl; Originalwerte wurden nicht gekürzt.');
+   const werte=results.map(r=>({p:r.parameter,r:r.result,u:r.unit,...(r.loq?{loq:r.loq}:{}),...(r.nwg?{nwg:r.nwg}:{}),...(r.norm?{norm:r.norm}:{})}));if(werte.length)row.werte=werte;
   }
  }
  if(rows.length>1000)throw Error('Mehr als 1000 Proben. Bitte einen kleineren Export verwenden.');

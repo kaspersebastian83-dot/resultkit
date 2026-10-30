@@ -134,6 +134,13 @@ export function ohneLage(datei:ErgebnisDatei|null,auftrag:LabReport|null):boolea
  if(!datei||!auftrag?.rows.some(r=>r.surface||r.raum))return false;
  return !(datei.auftrag?.proben||[]).some(p=>p.surface||p.raum);
 }
+/** Vor ResultKit 1.10 übernommen: Asbestwerte ohne Nachweisgrenze, obwohl die Prüfberichte sie nennen (für den Asbest-Bericht nötig). */
+export function ohneNwg(datei:ErgebnisDatei|null,u:Uebersicht):boolean{
+ if(!datei)return false;
+ const asbest=(w:Wert)=>/asbest/i.test(w.p);
+ if(!u.zeilen.some(z=>z.werte.some(w=>asbest(w)&&w.nwg)))return false;
+ return datei.berichte.some(b=>b.proben.some(s=>(s.werte||[]).some(w=>asbest(w)&&!w.nwg)));
+}
 /** Gelesene „_Ergebnisse.json“ prüfen (für ResultKit selbst und als Muster für PlanKit/FotoKit). */
 export function liesErgebnisDatei(text:string):ErgebnisDatei{
  let v:unknown;try{v=JSON.parse(text);}catch{throw Error(`„${DATEI}“ ist keine gültige JSON-Datei.`);}
