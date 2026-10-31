@@ -229,6 +229,33 @@ try{
    assert.ok(await lies(page,'_Spektron/ResultKit/_Ergebnisse.vorher.json'),'vorige Übernahme bleibt erhalten');
   });
 
+  await check(`${w}: Storno in LabelKit (4.49.0) – Probe fällt aus Auftrag und Zählung, Laborwert nur als Hinweis; Setzen und Aufheben zählen als „geändert“`,async()=>{
+   const schreibe=text=>page.evaluate(async ([projekt,text])=>{const d=await (await (await navigator.storage.getDirectory()).getDirectoryHandle(projekt)).getDirectoryHandle('Laboraufträge');const w=await (await d.getFileHandle('99.9001_08.10.2026_Daten.json')).createWritable();await w.write(text);await w.close();},[PROJEKT,text]);
+   const d=JSON.parse(labelkit);d.nrSchutz=1;for(const p of d.proben)p.nrFest={am:'2026-10-29T08:00:00.000Z',anlass:'Etiketten'};
+   d.proben[2].storniert={am:'2026-10-30T10:00:00.000Z',kuerzel:'Te',grund:'doppelt'};   // P3 hat im Bericht AR-1-02 einen Wert
+   await schreibe(JSON.stringify(d));
+   await page.getByRole('button',{name:'⟳ Neu einlesen'}).click();
+   await until(async()=>await art()==='geaendert','Storno gesetzt → geändert');
+   assert.equal(await stand.textContent(),'3 von 3 Proben mit Ergebnis');
+   assert.match(await page.locator('#hinweise').textContent(),/P3 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe \(Prüfbericht AR-1-02\)\. ResultKit übernimmt ihn nicht; gilt die Probe doch, heb das Storno in LabelKit auf\./);
+   assert.deepEqual(await page.locator('.u-gruppe').first().locator('tbody tr.u-zeile th').allTextContents(),['P1','P2'],'P3 nicht in der Ergebnistabelle');
+   assert.match(await page.locator('#berichte article.bericht:not(.ersetzt)').first().textContent(),/P3 storniert/,'Prüfbericht kennzeichnet die Probe');
+   await jetzt.getByRole('button',{name:'Erneut übernehmen'}).click();
+   await until(async()=>await art()==='fertig','übernommen ohne P3');
+   let datei=JSON.parse(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'));
+   assert.equal(datei.vollstaendig,true);assert.deepEqual(datei.auftrag.proben.map(p=>p.label),['P1','P2','P4']);
+   assert.deepEqual(datei.berichte.find(b=>b.bericht==='AR-1-02').proben.map(p=>p.label),['P1','P2','P4']);
+   assert.ok(datei.hinweise.some(h=>h.startsWith('P3 ist in LabelKit storniert')));
+   await schreibe(labelkit);   // Storno aufgehoben
+   await page.getByRole('button',{name:'⟳ Neu einlesen'}).click();
+   await until(async()=>await art()==='geaendert','Storno aufgehoben → geändert');
+   assert.equal(await stand.textContent(),'4 von 4 Proben mit Ergebnis');
+   await jetzt.getByRole('button',{name:'Erneut übernehmen'}).click();
+   await until(async()=>await art()==='fertig','übernommen mit P3');
+   datei=JSON.parse(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'));
+   assert.equal(datei.auftrag.proben.length,4);assert.ok(!datei.hinweise.some(h=>/storniert/.test(h)));
+  });
+
   await check(`${w}: kein waagrechter Überlauf der Seite`,async()=>{
    const breit=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth?[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&!e.closest('.tabelle-scroll')).map(e=>`${e.tagName}.${e.className}#${e.id} ${Math.round(e.getBoundingClientRect().right)}`).slice(0,12):[]);
    assert.deepEqual(breit,[],'Elemente ragen über den Rand');

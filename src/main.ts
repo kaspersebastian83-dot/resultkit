@@ -7,7 +7,7 @@ import './suite-bar';
 import {skalenAbgleich} from './skalen-archiv.js';
 import {readLabFiles,reportWarnings,type LabReport} from './labreport';
 import {labelkitReport} from './labelkit';
-import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
+import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
 import {ort,ortZumSchreiben} from './so';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
@@ -15,7 +15,7 @@ import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.12.1';
+export const APP_VERSION='1.13.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -183,7 +183,7 @@ function render(){
 function renderJetzt(s:Scan){
  const gueltig=s.u.berichte.filter(b=>!b.ersetztDurch&&!b.ohneWerte).length;
  const j=jetztDran({proben:s.u.zeilen.length,berichte:s.u.berichte.length,gueltig,auftrag:!!s.auftrag,stand:s.stand,
-  vorhanden:s.vorhanden?{stand:s.vorhanden.stand,uebernommen:s.vorhanden.uebernommen,vollstaendig:s.vorhanden.vollstaendig,ohneLage:ohneLage(s.vorhanden,s.auftrag),ohneNwg:ohneNwg(s.vorhanden,s.u)}:null,vorhandenFehler:s.vorhandenFehler,
+  vorhanden:s.vorhanden?{stand:s.vorhanden.stand,uebernommen:s.vorhanden.uebernommen,vollstaendig:s.vorhanden.vollstaendig,ohneLage:ohneLage(s.vorhanden,s.auftrag),ohneNwg:ohneNwg(s.vorhanden,s.u),mitStorniert:mitStorniert(s.vorhanden,s.u)}:null,vorhandenFehler:s.vorhandenFehler,
   hinweise:hinweisZahl(s),importiert:nachImport});
  const knopf=(k:Knopf|undefined,haupt:boolean)=>k?`<button type="button"${haupt&&k.aktion==='uebernehmen'?' id="btn-uebernehmen"':''} class="${haupt?'primary':''}" data-aktion="${k.aktion}"${beschaeftigt&&k.aktion!=='ansehen'?' disabled':''}>${esc(k.text)}</button>`:'';
  const chip=(c:Chip)=>`<button type="button" class="chip ${c.art}" data-aktion="${c.aktion}" title="Proben und Berichte mit Hinweisen aufklappen">${esc(c.text)}</button>`;
@@ -351,14 +351,15 @@ function renderBerichte(s:Scan){
  const codes=gueltig.map(x=>x.bericht).filter(Boolean);
  $('berichte-kurz').textContent=[b.length?berichtZeile(codes,b):'Noch keine',ersetzt?`${ersetzt} ersetzt`:'',s.fehler.length?`${s.fehler.length} nicht lesbar`:'','Neue hier ablegen'].filter(Boolean).join(' · ');
  if(!b.length||s.fehler.length)($('berichte-block') as HTMLDetailsElement).open=true;
- $('berichte').innerHTML=b.length?[...b].sort((x,y)=>(x.ersetztDurch?1:0)-(y.ersetztDurch?1:0)||y.geaendert-x.geaendert).map(berichtKarte).join(''):`<p class="leer">${s.ohneOrdner?`Noch kein Ordner „${esc(LABOR)}“ im Projekt – er wird beim ersten Import angelegt.`:`Noch keine Prüfberichte in „${esc(LABOR)}“.`}</p>`;
+ const storniert=new Set(s.u.storniert);   // ab 1.13: in LabelKit stornierte Proben im Bericht kennzeichnen
+ $('berichte').innerHTML=b.length?[...b].sort((x,y)=>(x.ersetztDurch?1:0)-(y.ersetztDurch?1:0)||y.geaendert-x.geaendert).map(x=>berichtKarte(x,storniert)).join(''):`<p class="leer">${s.ohneOrdner?`Noch kein Ordner „${esc(LABOR)}“ im Projekt – er wird beim ersten Import angelegt.`:`Noch keine Prüfberichte in „${esc(LABOR)}“.`}</p>`;
 }
 /** XML↔PDF-Abgleich der Hauptwerte in einem Satz (ab 1.6). */
 function wertAbgleichText(b:Bericht){const w=b.wertAbgleich;if(!w)return '';
  if(w.abweichend)return `⚠ ${w.abweichend} von ${w.geprueft} Hauptwert${w.geprueft===1?'':'en'} weich${w.abweichend===1?'t':'en'} im PDF ab`;
  if(w.geprueft)return `Hauptwerte XML↔PDF: ${w.geprueft} geprüft ✓`;
  return w.erkannt?'Hauptwerte im PDF nicht zuzuordnen':'Werte im PDF nicht erkannt – nicht abgeglichen';}
-function berichtKarte(b:Bericht){
+function berichtKarte(b:Bericht,storniert:Set<string>){
  const proben=b.proben,daten=[...new Set(proben.map(p=>p.datum).filter(Boolean))].sort() as string[];
  const zustand=b.ersetztDurch?['ersetzt','ersetzt']:b.ohneWerte?['ohne Messwerte','offen']:b.vorlaeufig?['vorläufig','vorl']:['endgültig','ok'];
  const spalten=[...new Map(proben.flatMap(p=>kernwerte(p.werte||[])).map(w=>[`${w.p}|${w.u}`,w])).values()].slice(0,5);
@@ -369,7 +370,7 @@ function berichtKarte(b:Bericht){
  const hinweise=b.hinweise.length?`<ul class="bericht-hinweise">${b.hinweise.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:'';
  if(b.ersetztDurch)return `<article class="bericht ersetzt"><details><summary>${kopf}</summary>${hinweise}</details></article>`;
  const tabelle=proben.length?`<div class="tabelle-scroll"><table class="werte-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">Beschreibung</th>${spalten.map(w=>`<th scope="col">${esc(shortParameter(w.p))}<small>${esc(w.u)}</small></th>`).join('')}</tr></thead>
-  <tbody>${proben.map(p=>`<tr><th scope="row">${esc(p.label||p.ref)}</th><td class="beschreibung">${esc(p.desc)}</td>${spalten.map(w=>`<td>${zelle(p.werte,w.p,w.u)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'';
+  <tbody>${proben.map(p=>`<tr><th scope="row">${esc(p.label||p.ref)}${p.label&&storniert.has(p.label)?' <small class="u-nb" title="In LabelKit storniert – der Wert wird nicht übernommen">storniert</small>':''}</th><td class="beschreibung">${esc(p.desc)}</td>${spalten.map(w=>`<td>${zelle(p.werte,w.p,w.u)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'';
  const voll=alle.length>spalten.length?`<details class="alle"><summary>Alle Parameter (${alle.length})</summary><div class="tabelle-scroll"><table class="werte-tabelle alle-tabelle"><thead><tr><th scope="col">Parameter</th><th scope="col">Einheit</th>${proben.map(p=>`<th scope="col">${esc(p.label||p.ref)}</th>`).join('')}</tr></thead>
   <tbody>${alle.map(w=>`<tr><th scope="row">${esc(w.p)}</th><td>${esc(w.u)}</td>${proben.map(p=>`<td>${zelle(p.werte,w.p,w.u)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`:'';
  return `<article class="bericht">${kopf}${hinweise}${tabelle}${voll}</article>`;

@@ -8,7 +8,8 @@ export interface JetztEingabe {
  auftrag:boolean;stand:string;
  vorhanden:{stand:string;uebernommen:string;vollstaendig:boolean;
   /** übernommen vor 1.5: Oberflächenart/Raum fehlen für PlanKit */ohneLage?:boolean;
-  /** übernommen vor 1.10: Nachweisgrenze der Asbestwerte fehlt */ohneNwg?:boolean}|null;vorhandenFehler:string;
+  /** übernommen vor 1.10: Nachweisgrenze der Asbestwerte fehlt */ohneNwg?:boolean;
+  /** übernommen vor 1.13: führt eine in LabelKit stornierte Probe (offen, im Auftrag oder mit Werten) */mitStorniert?:boolean}|null;vorhandenFehler:string;
  /** Hinweise insgesamt (Ordner, Laborauftrag, Berichte, Proben) */hinweise:number;
  /** Gerade importierte Berichte (bis „Übernehmen“ oder „Erst ansehen“) */importiert:string[]|null;
 }
@@ -32,11 +33,12 @@ export function jetztDran(e:JetztEingabe):Jetzt{
   return {...basis,art:'warten',titel:'Beim Labor – noch keine Prüfberichte',text:e.auftrag?'Die Proben sind beauftragt; sobald die Prüfberichte da sind, hier importieren.':'Kein Laborauftrag aus LabelKit gefunden – Prüfberichte können trotzdem importiert werden.',haupt:IMPORT};
  }
  if(e.vorhandenFehler)return {...basis,art:'unlesbar',titel:'Ergebnisse erneut übernehmen',text:`„_Ergebnisse.json“ ist nicht lesbar: ${e.vorhandenFehler} Erneut übernehmen schreibt eine neue Datei (die alte bleibt als „_Ergebnisse.vorher.json“).`,haupt:{aktion:'uebernehmen',text:'Erneut übernehmen'},neben:IMPORT};
- if(e.vorhanden&&e.vorhanden.stand===e.stand&&(e.vorhanden.ohneLage||e.vorhanden.ohneNwg)){
+ if(e.vorhanden&&e.vorhanden.stand===e.stand&&(e.vorhanden.ohneLage||e.vorhanden.ohneNwg||e.vorhanden.mitStorniert)){
   const neu=[e.vorhanden.ohneLage?'Oberflächenart und Raum aus LabelKit gehen mit an PlanKit (Balken am Plan, Raumbuch)':'',
-   e.vorhanden.ohneNwg?'Asbestwerte tragen die Nachweisgrenze aus dem Prüfbericht (0,001 % / 0,1 % / 1 %)':''].filter(Boolean).join('; ');
+   e.vorhanden.ohneNwg?'Asbestwerte tragen die Nachweisgrenze aus dem Prüfbericht (0,001 % / 0,1 % / 1 %)':'',
+   e.vorhanden.mitStorniert?'in LabelKit stornierte Proben zählen nicht mehr als offen und gehen nicht an PlanKit und FotoKit':''].filter(Boolean).join('; ');
   return {...basis,art:'geaendert',titel:'Bitte einmal erneut übernehmen',
-   text:'Neu: '+neu+'. Die Übernahme vom '+uhr(e.vorhanden.uebernommen)+' enthält das noch nicht – Werte ändern sich dadurch nicht.',haupt:{aktion:'uebernehmen',text:'Erneut übernehmen'},neben:IMPORT};}
+   text:'Neu: '+neu+'. Die Übernahme vom '+uhr(e.vorhanden.uebernommen)+' enthält das noch nicht – '+(e.vorhanden.mitStorniert?'die Werte der übrigen Proben ändern sich dadurch nicht.':'Werte ändern sich dadurch nicht.'),haupt:{aktion:'uebernehmen',text:'Erneut übernehmen'},neben:IMPORT};}
  if(e.vorhanden&&e.vorhanden.stand===e.stand)
   return {...basis,art:'fertig',eyebrow:'Übernommen',ok:true,titel:`Übernommen am ${uhr(e.vorhanden.uebernommen)} ✓`,
    text:e.vorhanden.vollstaendig?'PlanKit und FotoKit verwenden diesen Stand.':'Zwischenstand – kommen weitere Berichte, einfach importieren und erneut übernehmen.',neben:IMPORT};

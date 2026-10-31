@@ -61,4 +61,12 @@ ok('übernommen vor 1.10 (Asbest ohne Nachweisgrenze) → einmal erneut überneh
  assert.equal(r.art,'geaendert');assert.equal(r.haupt.aktion,'uebernehmen');assert.match(r.text,/Nachweisgrenze/);assert.doesNotMatch(r.text,/Oberflächenart/);
 });
 
+ok('vor 1.13 übernommen, Datei führt eine stornierte Probe → einmal erneut übernehmen (Werte der übrigen Proben bleiben)',()=>{
+ const r=j({vorhanden:{stand:'S1',uebernommen:'2026-10-30T14:05:00Z',vollstaendig:false,mitStorniert:true}});
+ assert.equal(r.art,'geaendert');assert.equal(r.titel,'Bitte einmal erneut übernehmen');assert.equal(r.haupt.aktion,'uebernehmen');
+ assert.match(r.text,/^Neu: in LabelKit stornierte Proben zählen nicht mehr als offen und gehen nicht an PlanKit und FotoKit\. Die Übernahme vom .* enthält das noch nicht – die Werte der übrigen Proben ändern sich dadurch nicht\.$/);
+ assert.equal(j({vorhanden:{stand:'S1',uebernommen:'2026-10-30T14:05:00Z',vollstaendig:true,mitStorniert:false}}).art,'fertig');
+ assert.equal(j({stand:'S2',vorhanden:{stand:'S1',uebernommen:'2026-10-30T14:05:00Z',vollstaendig:true,mitStorniert:true}}).titel,'Geändert seit der Übernahme – bitte erneut übernehmen','neuer Dateistand geht vor');
+});
+
 console.log(`${n} Prüfungen „Jetzt dran“ bestanden`);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.0 · 31.10.2026
+- **Stornierte Proben aus LabelKit** (Folge zu LabelKit 4.49.0 „Proben stornieren“): Eine in LabelKit stornierte Probe ist keine Probe mehr. ResultKit lässt sie im Laborauftrag weg – sie zählt nicht als offen oder ausstehend, nicht im Stand („3 von 3 Proben mit Ergebnis“) und nicht für „vollständig“. Ihre Nummer bleibt vergeben und wird keiner anderen Probe zugeordnet.
+- **Laborwert für eine stornierte Probe:** Steht sie trotzdem im Prüfbericht, erscheint oben der Hinweis „P7 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe (Prüfbericht …). ResultKit übernimmt ihn nicht; gilt die Probe doch, heb das Storno in LabelKit auf.“ – statt „nicht beauftragt“. Der Wert steht nicht in der Ergebnistabelle und geht nicht nach `_Ergebnisse.json` (PlanKit, FotoKit); der Hinweis geht mit. In der Prüfberichtskarte ist die Probe als „storniert“ gekennzeichnet.
+- Storno setzen und aufheben schreibt die LabelKit-Datei neu – ResultKit zeigt dann „Geändert seit der Übernahme“. Wurde schon vorher (mit ResultKit vor 1.13) übernommen und führt `_Ergebnisse.json` noch eine stornierte Probe, zeigt „Jetzt dran“ einmal „Bitte einmal erneut übernehmen“.
+
 ## 1.12.1 · 30.10.2026
 - **Projektzuordnung beim LabelKit-Auftrag:** Steht im LabelKit-Feld „Projektnummer“ zusätzlich die Adresse (ältere Projekte, z. B. „26.0512 Stegerwaldstraße Leverkusen“), wurde der Auftrag fälschlich als „gehört zu einem anderen Projekt“ blockiert – dann fehlten Probenliste und Beschreibungsabgleich. Jetzt zählt nur die Projektnummer; eine andere Nummer blockiert weiter. Bitte bei betroffenen Projekten einmal erneut übernehmen.
 

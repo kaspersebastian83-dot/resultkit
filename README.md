@@ -24,6 +24,7 @@ PlanKit, FotoKit und die Projektzentrale lesen nur diese Datei. Die vorige Über
 - Chlorid: VdS 2357, 5–10 µg/cm² korrosionschemisch relevante Größenordnung (< 5 grün, 5 – < 10 amber, ≥ 10 rot), unabhängig von der Nutzung; in ResultKit, PlanKit und FotoKit gleich (Block KORROSION-CHLORID v1). Ältere Berichte in mg/m² werden umgerechnet (1 µg/cm² = 10 mg/m²).
 - Bewertung nur aus vorhandenen Skalen: Ergebniskarten-Einstellungen aus PlanKit, sonst VdS-2357-Referenz nach der Nutzung in `_Projekt.json`,
   sonst die Büro-Skalen (`_Spektron-Skalen.json`). Ohne Skala bleibt ein Wert unbewertet – ResultKit erfindet keine Grenzwerte.
+- **In LabelKit stornierte Proben** (ab LabelKit 4.49.0, Feld `storniert`) sind keine Proben mehr: Sie fehlen im Laborauftrag, zählen nicht als offen oder ausstehend und gehen nicht nach `_Ergebnisse.json`. Ihre Nummer bleibt vergeben – nennt ein Prüfbericht trotzdem einen Wert dafür, erscheint oben der Hinweis „P7 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe …“; der Wert wird nicht übernommen.
 - Ändert sich der Ordner nach der Übernahme (neuer Bericht, neue LabelKit-Datei), zeigt ResultKit „bitte erneut übernehmen“.
 
 ## `_Ergebnisse.json` (Format `spektron-ergebnisse`, Version 1)

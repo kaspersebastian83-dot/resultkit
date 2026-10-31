@@ -8,7 +8,10 @@ export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;
  /** PDF (ab 1.6): Hauptwerte aus der Ergebnistabelle je Probenreferenz (norm) – nur zum Abgleich mit der XML, nie als Messwert. */
  pdfWerte?:Record<string,PdfWert[]>;
  /** XML↔PDF-Abgleich der Hauptwerte: geprüfte Werte und Abweichungen je Probenreferenz (norm). */
- wertAbgleich?:WertAbgleich}
+ wertAbgleich?:WertAbgleich;
+ /** Nur Laborauftrag aus LabelKit (ab 1.13): Probennummern, die in LabelKit storniert sind („P7“). Sie sind keine Proben mehr,
+  *  die Nummer bleibt aber vergeben – ein Laborwert dafür gehört zu keiner offenen Probe. */
+ storniert?:string[]}
 /** Ein Wert aus der PDF-Ergebnistabelle: Text links (Parameter, ggf. Einheit/BG) und der Wert in der Spalte der Probe. */
 export interface PdfWert {zeile:string;r:string}
 export interface Abweichung {p:string;u:string;text:string}
