@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.0 · 31.10.2026
+- **Prüfungen auch beim Einlesen des Ordners:** Bisher liefen die Hinweise zum Bericht („3 Proben erkannt, laut Bericht 4“, doppelte Probenreferenz, doppelte P-Nummer) nur beim Import über den Dialog. Berichte, die du direkt im Ordner `Laborergebnisse` ablegst, werden jetzt genauso geprüft – der Hinweis steht am Prüfbericht und zählt bei den Hinweisen mit.
+- **Gleichnamige XML und PDF aus verschiedenen Berichten:** Heißen `AR-123.xml` und `AR-123.pdf` gleich, gehören aber nicht zum selben Bericht (andere Berichtsnummer, Auftragsreferenz oder Batchkennung), hat ResultKit beim Einlesen des Ordners beide Dateien verworfen. Jetzt werden sie getrennt gelesen und erscheinen als zwei Prüfberichte, jeweils mit dem Hinweis „… heißen gleich, gehören aber nicht zum selben Bericht … – ResultKit liest sie getrennt. Bitte prüfen, ob beide Dateien hierher gehören.“ Der Import-Dialog fragt weiter wie bisher nach getrenntem Import.
+- ResultKit ändert dabei nichts an den Werten: Es sind reine Hinweise.
+
 ## 1.13.0 · 31.10.2026
 - **Stornierte Proben aus LabelKit** (Folge zu LabelKit 4.49.0 „Proben stornieren“): Eine in LabelKit stornierte Probe ist keine Probe mehr. ResultKit lässt sie im Laborauftrag weg – sie zählt nicht als offen oder ausstehend, nicht im Stand („3 von 3 Proben mit Ergebnis“) und nicht für „vollständig“. Ihre Nummer bleibt vergeben und wird keiner anderen Probe zugeordnet.
 - **Laborwert für eine stornierte Probe:** Steht sie trotzdem im Prüfbericht, erscheint oben der Hinweis „P7 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe (Prüfbericht …). ResultKit übernimmt ihn nicht; gilt die Probe doch, heb das Storno in LabelKit auf.“ – statt „nicht beauftragt“. Der Wert steht nicht in der Ergebnistabelle und geht nicht nach `_Ergebnisse.json` (PlanKit, FotoKit); der Hinweis geht mit. In der Prüfberichtskarte ist die Probe als „storniert“ gekennzeichnet.

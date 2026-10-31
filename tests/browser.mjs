@@ -256,6 +256,21 @@ try{
    assert.equal(datei.auftrag.proben.length,4);assert.ok(!datei.hinweise.some(h=>/storniert/.test(h)));
   });
 
+  await check(`${w}: Ordner einlesen – gleichnamige XML+PDF aus verschiedenen Berichten und doppelte P-Nummer werden gemeldet, nichts fällt still weg`,async()=>{
+   // AR-X.xml (Bericht …02) und AR-X.pdf (Bericht …01) heißen gleich, gehören aber nicht zusammen; AR-D.xml führt P1 doppelt.
+   const b64=x=>Buffer.from(x).toString('base64');
+   const neu={'AR-X.xml':b64(labXML([probe(1,pak('3')),probe(2,pak('4'))],{code:'AR-999-2099-000002-01'})),'AR-X.pdf':b64(labPDF()),
+    'AR-D.xml':b64(labXML([probe(1,pak('5')),{...probe(1,pak('6')),labNr:'999-2099-00000099'}],{code:'AR-999-2099-000003-01'}))};
+   await page.evaluate(async ([projekt,neu])=>{const d=await (await (await navigator.storage.getDirectory()).getDirectoryHandle(projekt)).getDirectoryHandle('Laborergebnisse');
+    for(const [n,t] of Object.entries(neu)){const w=await (await d.getFileHandle(n,{create:true})).createWritable();await w.write(Uint8Array.from(atob(t),c=>c.charCodeAt(0)));await w.close();}},[PROJEKT,neu]);
+   await page.getByRole('button',{name:'⟳ Neu einlesen'}).click();
+   await until(async()=>(await page.locator('#berichte').textContent()).includes('AR-999-2099-000003-01'),'Ordner neu eingelesen');
+   const berichte=await page.locator('#berichte').textContent();
+   assert.match(berichte,/AR-999-2099-000002-01/,'die XML ist da');assert.match(berichte,/AR-999-2099-000001-01/,'die PDF ist da – nicht mit der XML verworfen');
+   assert.match(berichte,/„AR-X\.xml“ und „AR-X\.pdf“ heißen gleich, gehören aber nicht zum selben Bericht \(XML und PDF gehören zu unterschiedlichen Berichten\) – ResultKit liest sie getrennt/);
+   assert.match(berichte,/Doppelte Probenreferenz: Probe 1\./,'doppelte Probe beim Einlesen gemeldet');assert.match(berichte,/Doppelte P-Nummer: P1\./);
+  });
+
   await check(`${w}: kein waagrechter Überlauf der Seite`,async()=>{
    const breit=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth?[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&!e.closest('.tabelle-scroll')).map(e=>`${e.tagName}.${e.className}#${e.id} ${Math.round(e.getBoundingClientRect().right)}`).slice(0,12):[]);
    assert.deepEqual(breit,[],'Elemente ragen über den Rand');

@@ -5,7 +5,7 @@
 import './style.css';
 import './suite-bar';
 import {skalenAbgleich} from './skalen-archiv.js';
-import {readLabFiles,reportWarnings,type LabReport} from './labreport';
+import {readLabFiles,readLabGroup,reportWarnings,type LabReport} from './labreport';
 import {labelkitReport} from './labelkit';
 import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
@@ -15,7 +15,7 @@ import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 
-export const APP_VERSION='1.13.0';
+export const APP_VERSION='1.14.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -97,7 +97,9 @@ function frage(titel:string,text:string,wahl:string[]):Promise<string>{return ne
 interface Scan {auftrag:LabReport|null;auftragDatei:DateiStand|null;auftragFehler:string;eingaenge:Eingang[];fehler:{name:string;text:string}[];dateien:DateiStand[];stand:string;u:Uebersicht;vorhanden:ErgebnisDatei|null;vorhandenText:string|null;vorhandenFehler:string;ohneOrdner:boolean}
 let folder:ProjectFolder|null=null,scan:Scan|null=null,einstellungen:ResultSettings|null=null,laeuft=0,beschaeftigt=false;
 /** Gelesene Berichte je Dateistand – PDFs werden nicht bei jedem Einlesen neu ausgewertet. */
-const cache=new WeakMap<ProjectFolder,Map<string,{report?:LabReport;fehler?:string}>>();   // je geöffnetem Projekt – ein spät fertiges Einlesen von A landet nie im Cache von B (F07)
+/** Eine gelesene Gruppe kann (bei XML und PDF gleichen Namens aus verschiedenen Berichten) zwei Berichte ergeben. */
+interface Gelesen {report?:LabReport;fehler?:string;namen:string[]}
+const cache=new WeakMap<ProjectFolder,Map<string,Gelesen[]>>();   // je geöffnetem Projekt – ein spät fertiges Einlesen von A landet nie im Cache von B (F07)
 
 async function einlesen(f:ProjectFolder):Promise<Scan>{
  let berichteCache=cache.get(f);if(!berichteCache){berichteCache=new Map();cache.set(f,berichteCache);}
@@ -116,9 +118,10 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
  const eingaenge:Eingang[]=[],fehler:{name:string;text:string}[]=[];
  for(const gruppe of [...gruppen.values()].sort((a,b)=>a[0].name.localeCompare(b[0].name,'de',{numeric:true}))){
   const key=gruppe.map(g=>`${g.name}|${g.file.size}|${g.file.lastModified}`).sort().join('\n');let r=berichteCache.get(key);
-  if(!r){try{const report=await readLabFiles(gruppe.map(g=>g.file));r=!report.rows.length&&!report.bericht?{fehler:report.warnings.join(' ')||'Kein Prüfbericht erkannt.'}:{report};}catch(e){r={fehler:meldung(e)};}berichteCache.set(key,r);}
-  if(r.report)eingaenge.push({report:r.report,geaendert:Math.max(...gruppe.map(g=>g.file.lastModified))});
-  else fehler.push({name:gruppe.map(g=>g.name).join(' + '),text:r.fehler||''});}
+  if(!r){try{r=(await readLabGroup(gruppe.map(g=>g.file))).map(({report,dateien})=>{const namen=dateien.map(d=>d.name);return !report.rows.length&&!report.bericht?{fehler:report.warnings.join(' ')||'Kein Prüfbericht erkannt.',namen}:{report,namen};});}catch(e){r=[{fehler:meldung(e),namen:gruppe.map(g=>g.name)}];}berichteCache.set(key,r);}
+  for(const x of r){
+   if(x.report)eingaenge.push({report:x.report,geaendert:Math.max(...gruppe.filter(g=>x.namen.includes(g.name)).map(g=>g.file.lastModified))});
+   else fehler.push({name:x.namen.join(' + '),text:x.fehler||''});}}
  const alle=[...dateien,...(auftragDatei?[auftragDatei]:[])];
  let vorhanden:ErgebnisDatei|null=null,vorhandenText:string|null=null,vorhandenFehler='';
  const ablage=(await ort(f.dir,'resultkit')).dir;   // _Ergebnisse.json: „Laborergebnisse“ oder künftig „_Spektron/ResultKit“

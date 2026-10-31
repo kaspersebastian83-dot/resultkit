@@ -10,7 +10,7 @@ registerHooks({
 });
 const E=await import('../src/ergebnisse.ts');
 const {labelkitReport}=await import('../src/labelkit.ts');
-const {nachweisgrenze}=await import('../src/labreport.ts');
+const {nachweisgrenze,pruefHinweise}=await import('../src/labreport.ts');
 const UE=await import('../src/uebersicht.ts');
 let n=0;const ok=(name,fn)=>{fn();n++;console.log('OK Ergebnisse: '+name);};
 
@@ -297,3 +297,13 @@ ok('Storno: Fingerabdruck – Storno setzen oder aufheben ändert die LabelKit-D
 });
 
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);
+
+ok('Prüfhinweise am Bericht: Probenzahl, doppelte Referenz und P-Nummer (auch beim Einlesen des Ordners)',()=>{
+ const r=report('AR-9-01',[[1,pak('1')],[2,pak('2')]]);
+ assert.deepEqual(pruefHinweise(r),[],'unauffälliger Bericht: nichts');
+ assert.deepEqual(pruefHinweise({...r,expected:3}),['2 Proben erkannt/bearbeitet; laut Bericht 3.']);
+ const gleichesLabel={...r,expected:3,rows:[...r.rows,{...r.rows[0],ref:'Probe 1b'}]};
+ assert.deepEqual(pruefHinweise(gleichesLabel),['Doppelte P-Nummer: P1.']);
+ const gleicheRef={...r,expected:3,rows:[...r.rows,{...r.rows[0],label:'P3'}]};
+ assert.deepEqual(pruefHinweise(gleicheRef),['Doppelte Probenreferenz: Probe 1.']);
+});
