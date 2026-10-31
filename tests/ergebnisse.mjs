@@ -10,7 +10,7 @@ registerHooks({
 });
 const E=await import('../src/ergebnisse.ts');
 const {labelkitReport}=await import('../src/labelkit.ts');
-const {nachweisgrenze}=await import('../src/labreport.ts');
+const {nachweisgrenze,pruefHinweise}=await import('../src/labreport.ts');
 const UE=await import('../src/uebersicht.ts');
 let n=0;const ok=(name,fn)=>{fn();n++;console.log('OK Ergebnisse: '+name);};
 
@@ -296,4 +296,30 @@ ok('Storno: Fingerabdruck – Storno setzen oder aufheben ändert die LabelKit-D
  assert.equal(E.mitStorniert(null,u),false);
 });
 
+
+ok('Prüfhinweise am Bericht: Probenzahl, doppelte Referenz und P-Nummer (auch beim Einlesen des Ordners)',()=>{
+ const r=report('AR-9-01',[[1,pak('1')],[2,pak('2')]]);
+ assert.deepEqual(pruefHinweise(r),[],'unauffälliger Bericht: nichts');
+ assert.deepEqual(pruefHinweise({...r,expected:3}),['2 Proben erkannt/bearbeitet; laut Bericht 3.']);
+ const gleichesLabel={...r,expected:3,rows:[...r.rows,{...r.rows[0],ref:'Probe 1b'}]};
+ assert.deepEqual(pruefHinweise(gleichesLabel),['Doppelte P-Nummer: P1.']);
+ const gleicheRef={...r,expected:3,rows:[...r.rows,{...r.rows[0],label:'P3'}]};
+ assert.deepEqual(pruefHinweise(gleicheRef),['Doppelte Probenreferenz: Probe 1.']);
+});
+
+ok('Ordner: getrennt gelesene XML und PDF gleicher Berichtsnummer (andere Auftragsreferenz) bleiben zwei Berichte',()=>{
+ const xml={...report('AR-5-01',[[1,pak('7')]]),sources:{xml:'AR-5.xml'},quelle:'AR-5.xml',getrennt:true};
+ const pdf={...report('AR-5-01',[[1]],{ref:'99.9002 Anderswo',xml:false}),sources:{pdf:'AR-5.pdf'},quelle:'AR-5.pdf',getrennt:true};
+ const u=E.uebersicht('99.9001',auftrag(),[{report:xml,geaendert:1},{report:pdf,geaendert:2}]);
+ assert.equal(u.berichte.length,2,'nicht wieder zu einem Paar zusammengeführt');
+ assert.deepEqual(u.berichte.map(b=>b.sources),[{xml:'AR-5.xml'},{pdf:'AR-5.pdf'}]);
+ assert.ok(!u.hinweise.some(h=>/mehrfach im Ordner/.test(h)),'kein „liegt mehrfach“');
+ assert.equal(u.berichte[1].auftragsreferenz,'99.9002 Anderswo','die PDF behält ihre eigenen Angaben');
+ assert.ok(u.berichte[1].hinweise.some(h=>/nennt Projekt 99\.9002/.test(h)));
+ assert.ok(!u.berichte[0].wertAbgleich,'kein XML↔PDF-Abgleich über fremde Dateien');
+ assert.equal(u.zeilen.find(z=>z.label==='P1').werte[0].r,'7');
+ // Ohne die Markierung bleibt es beim bisherigen Verhalten (XML und PDF desselben Berichts mit anderem Dateinamen = ein Bericht)
+ const {getrennt:_a,...x2}=xml,{getrennt:_b,...p2}=pdf;
+ assert.equal(E.uebersicht('99.9001',auftrag(),[{report:x2,geaendert:1},{report:p2,geaendert:2}]).berichte.length,1);
+});
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);

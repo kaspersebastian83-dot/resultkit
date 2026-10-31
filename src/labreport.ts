@@ -7,6 +7,9 @@ export interface TextPage {width:number;height:number;items:TextItem[]}
 export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;quelle:string;batch:string;sources:LabSources;rows:LabSample[];expected:number|null;references:string[];warnings:string[];vorlaeufig?:boolean;/** Datum des Prüfberichts (Unterschrift, sonst Bearbeitungsende), JJJJ-MM-TT */datum?:string;results:{ref:string;parameter:string;result:string;unit:string;loq:string;nwg:string;norm:string}[];
  /** PDF (ab 1.6): Hauptwerte aus der Ergebnistabelle je Probenreferenz (norm) – nur zum Abgleich mit der XML, nie als Messwert. */
  pdfWerte?:Record<string,PdfWert[]>;
+ /** Ordner (ab 1.14): XML oder PDF einer gleichnamigen Gruppe, die nicht zum selben Bericht gehörte – wird nie mit einem anderen
+  *  Eingang gleicher Berichtsnummer zusammengeführt (sonst stünde die PDF wieder als Teil der XML da). */
+ getrennt?:true;
  /** XML↔PDF-Abgleich der Hauptwerte: geprüfte Werte und Abweichungen je Probenreferenz (norm). */
  wertAbgleich?:WertAbgleich;
  /** Nur Laborauftrag aus LabelKit (ab 1.13): Probennummern, die in LabelKit storniert sind („P7“). Sie sind keine Proben mehr,
@@ -122,9 +125,15 @@ export function parseLabPDF(pages:TextPage[],quelle=''):LabReport{
  for(const ref of report.references)if(!report.rows.some(r=>norm(r.ref)===norm(ref)))report.warnings.push(`Ergebnisreferenz ohne Beschreibung: ${ref}.`);
  return report;
 }
-export function reportWarnings(report:LabReport,p?:{report?:string}){
- const warnings=[...report.warnings];if(report.vorlaeufig)warnings.push(`Vorläufiger Prüfbericht${report.bericht?` ${report.bericht}`:''}: Die Werte können sich mit dem endgültigen Bericht noch ändern. Sie werden in Ergebniskarte, Raumbuch und Anlagen als vorläufig gekennzeichnet.`);if(report.expected!==null&&report.rows.length!==report.expected)warnings.push(`${report.rows.length} Proben erkannt/bearbeitet; laut Bericht ${report.expected}.`);
+/** Prüfungen am gelesenen Bericht selbst: Probenzahl laut Bericht, doppelte Probenreferenz, doppelte P-Nummer. Beim Import und beim Einlesen
+ *  des Ordners gleich – eine doppelte P-Nummer würde in der Übersicht sonst unbemerkt zu einer Zeile zusammenfallen. */
+export function pruefHinweise(report:LabReport){
+ const warnings:string[]=[];if(report.expected!==null&&report.rows.length!==report.expected)warnings.push(`${report.rows.length} Proben erkannt/bearbeitet; laut Bericht ${report.expected}.`);
  const duplicate=(values:string[])=>values.filter((v,i)=>v&&values.indexOf(v)!==i);for(const ref of new Set(duplicate(report.rows.map(r=>norm(r.ref)))))warnings.push(`Doppelte Probenreferenz: ${report.rows.find(r=>norm(r.ref)===ref)!.ref}.`);for(const label of new Set(duplicate(report.rows.map(r=>r.label.toUpperCase()))))warnings.push(`Doppelte P-Nummer: ${label}.`);
+ return warnings;
+}
+export function reportWarnings(report:LabReport,p?:{report?:string}){
+ const warnings=[...report.warnings];if(report.vorlaeufig)warnings.push(`Vorläufiger Prüfbericht${report.bericht?` ${report.bericht}`:''}: Die Werte können sich mit dem endgültigen Bericht noch ändern. Sie werden in Ergebniskarte, Raumbuch und Anlagen als vorläufig gekennzeichnet.`);warnings.push(...pruefHinweise(report));
  const number=(s:string)=>s.match(/\b\d{2}\.\d{3,}\b/)?.[0];if(p?.report&&report.auftragsreferenz&&number(p.report)!==number(report.auftragsreferenz)&&p.report!==report.auftragsreferenz)warnings.push(`Auftragsreferenz „${report.auftragsreferenz}“ passt möglicherweise nicht zur Gutachtennummer „${p.report}“.`);
  return [...new Set(warnings)];
 }
@@ -174,6 +183,8 @@ export function mitPdfAbgleichen(xml:LabReport,pdf:LabReport){
  const a=compareValues(xml,pdf);xml.wertAbgleich=a;const n=Object.values(a.abweichend).flat().length;
  const h=abgleichHinweis(Object.keys(a.abweichend).map(k=>xml.rows.find(r=>norm(r.ref)===k)?.ref||k),n);if(h)xml.warnings.push(h);return a;
 }
+/** XML und PDF gleichen Namens gehören nicht zum selben Bericht (Nummer, Auftragsreferenz oder Batch weichen ab). */
+export class PaarFehler extends Error{readonly paar=true;constructor(text:string){super(text);this.name='PaarFehler';}}
 export async function readLabFiles(files:File[]):Promise<LabReport>{
  if(!files.length||files.length>2||files.some(f=>!(/\.(xml|pdf)$/i.test(f.name))))throw Error('Bitte eine XML, eine PDF oder beide Berichte gemeinsam auswählen (höchstens zwei Dateien).');
  const xml=files.filter(f=>/\.xml$/i.test(f.name)),pdf=files.filter(f=>/\.pdf$/i.test(f.name));if(xml.length>1||pdf.length>1)throw Error('Bitte höchstens eine XML und eine PDF desselben Berichts wählen.');
@@ -182,12 +193,26 @@ export async function readLabFiles(files:File[]):Promise<LabReport>{
  if(xml.length)try{a=parseLabXML(await xml[0].text(),xml[0].name);}catch(e){errors.push((e as Error).message);}
  if(pdf.length)try{const {openPDF}=await import('./pdf'),doc=await openPDF(pdf[0].name,new Uint8Array(await pdf[0].arrayBuffer()));try{b=parseLabPDF(await doc.text(),pdf[0].name);}finally{await doc.close();}}catch(e){errors.push((e as Error).message);}
  const report=a||b||blankReport();if(a&&b){
-  if(a.bericht&&b.bericht&&a.bericht!==b.bericht)throw Error('XML und PDF gehören zu unterschiedlichen Berichten. Bitte getrennt importieren.');
-  if(a.auftragsreferenz&&b.auftragsreferenz&&a.auftragsreferenz!==b.auftragsreferenz)throw Error('XML und PDF haben unterschiedliche Auftragsreferenzen. Bitte getrennt importieren.');
-  if(a.batch&&b.batch&&a.batch!==b.batch)throw Error('XML und PDF haben unterschiedliche Batchkennungen. Bitte getrennt importieren.');
+  if(a.bericht&&b.bericht&&a.bericht!==b.bericht)throw new PaarFehler('XML und PDF gehören zu unterschiedlichen Berichten. Bitte getrennt importieren.');
+  if(a.auftragsreferenz&&b.auftragsreferenz&&a.auftragsreferenz!==b.auftragsreferenz)throw new PaarFehler('XML und PDF haben unterschiedliche Auftragsreferenzen. Bitte getrennt importieren.');
+  if(a.batch&&b.batch&&a.batch!==b.batch)throw new PaarFehler('XML und PDF haben unterschiedliche Batchkennungen. Bitte getrennt importieren.');
   report.warnings.push(...compareReports(a,b));
   mitPdfAbgleichen(report,b);const xmlRefs=new Set(a.rows.map(r=>norm(r.ref)));for(const row of b.rows)if(!xmlRefs.has(norm(row.ref)))report.rows.push({...row});
   report.bericht||=b.bericht;report.labor||=b.labor;report.auftragsreferenz||=b.auftragsreferenz;report.batch||=b.batch;
  }
  report.sources={...(a?{xml:sourceFilename(xml[0].name)}:{}),...(b?{pdf:sourceFilename(pdf[0].name)}:{})};report.quelle=[report.sources.xml,report.sources.pdf].filter(Boolean).join(' + ');report.warnings.push(...errors);return report;
+}
+/** Einlesen des Ordners: Eine Gruppe (XML und/oder PDF gleichen Namens) liefert einen Bericht samt Prüfhinweisen. Gehören XML und PDF mit
+ *  gleichem Namen nicht zum selben Bericht, fielen vorher beide aus der Übersicht – jetzt werden sie einzeln gelesen und beide
+ *  mit einem Hinweis gemeldet (Zählung und Werte kommen aus dem, was lesbar ist; nichts wird verschwiegen). */
+export async function readLabGroup(files:File[]):Promise<{report:LabReport;dateien:File[]}[]>{
+ let teile:{report:LabReport;dateien:File[]}[];
+ try{teile=[{report:await readLabFiles(files),dateien:files}];}
+ catch(e){
+  if(!(e instanceof PaarFehler)||files.length!==2)throw e;
+  const namen=files.map(f=>`„${f.name}“`).join(' und ');
+  teile=[];for(const f of files){const report=await readLabFiles([f]);report.warnings.push(`${namen} heißen gleich, gehören aber nicht zum selben Bericht (${e.message.replace(/\.? Bitte getrennt importieren\.$/,'')}) – ResultKit liest sie getrennt. Bitte prüfen, ob beide Dateien hierher gehören.`);report.getrennt=true;teile.push({report,dateien:[f]});}
+ }
+ for(const t of teile)t.report.warnings.push(...pruefHinweise(t.report).filter(h=>!t.report.warnings.includes(h)));
+ return teile;
 }
