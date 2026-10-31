@@ -52,9 +52,9 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
  const hinweise:string[]=[];
  // 1. Gleicher Bericht mehrfach abgelegt → die Datei mit Messwerten (XML), dann endgültig vor vorläufig, sonst die neuere.
  //    Eine PDF allein (anderer Dateiname als die XML) verdrängt die Werte nicht, sie bleibt als PDF des Berichts genannt.
- //    Ohne Nummer zählt die Datei als eigener Bericht.
+ //    Ohne Nummer zählt die Datei als eigener Bericht – ebenso eine getrennt gelesene Datei (gleichnamig, aber nicht derselbe Bericht, ab 1.14).
  const nachCode=new Map<string,Eingang>(),mitWerten=(e:Eingang)=>e.report.rows.some(row=>row.werte?.length);
- for(const e of eingaenge){const key=e.report.bericht?`b:${norm(e.report.bericht)}`:`d:${e.report.quelle}`;const alt=nachCode.get(key);
+ for(const e of eingaenge){const key=e.report.bericht&&!e.report.getrennt?`b:${norm(e.report.bericht)}`:`d:${e.report.quelle}`;const alt=nachCode.get(key);
   if(!alt){nachCode.set(key,e);continue;}
   const [grund,neuGilt]=mitWerten(e)!==mitWerten(alt)?['die Datei mit Messwerten',mitWerten(e)]:!e.report.vorlaeufig!==!alt.report.vorlaeufig?['der endgültige Bericht',!e.report.vorlaeufig]:['die neuere Datei',e.geaendert>=alt.geaendert];
   hinweise.push(`Prüfbericht ${e.report.bericht} liegt mehrfach im Ordner (${[alt.report.quelle,e.report.quelle].join(', ')}). Es zählt ${grund}.`);

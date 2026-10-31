@@ -7,6 +7,9 @@ export interface TextPage {width:number;height:number;items:TextItem[]}
 export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;quelle:string;batch:string;sources:LabSources;rows:LabSample[];expected:number|null;references:string[];warnings:string[];vorlaeufig?:boolean;/** Datum des Prüfberichts (Unterschrift, sonst Bearbeitungsende), JJJJ-MM-TT */datum?:string;results:{ref:string;parameter:string;result:string;unit:string;loq:string;nwg:string;norm:string}[];
  /** PDF (ab 1.6): Hauptwerte aus der Ergebnistabelle je Probenreferenz (norm) – nur zum Abgleich mit der XML, nie als Messwert. */
  pdfWerte?:Record<string,PdfWert[]>;
+ /** Ordner (ab 1.14): XML oder PDF einer gleichnamigen Gruppe, die nicht zum selben Bericht gehörte – wird nie mit einem anderen
+  *  Eingang gleicher Berichtsnummer zusammengeführt (sonst stünde die PDF wieder als Teil der XML da). */
+ getrennt?:true;
  /** XML↔PDF-Abgleich der Hauptwerte: geprüfte Werte und Abweichungen je Probenreferenz (norm). */
  wertAbgleich?:WertAbgleich;
  /** Nur Laborauftrag aus LabelKit (ab 1.13): Probennummern, die in LabelKit storniert sind („P7“). Sie sind keine Proben mehr,
@@ -208,7 +211,7 @@ export async function readLabGroup(files:File[]):Promise<{report:LabReport;datei
  catch(e){
   if(!(e instanceof PaarFehler)||files.length!==2)throw e;
   const namen=files.map(f=>`„${f.name}“`).join(' und ');
-  teile=[];for(const f of files){const report=await readLabFiles([f]);report.warnings.push(`${namen} heißen gleich, gehören aber nicht zum selben Bericht (${e.message.replace(/\.? Bitte getrennt importieren\.$/,'')}) – ResultKit liest sie getrennt. Bitte prüfen, ob beide Dateien hierher gehören.`);teile.push({report,dateien:[f]});}
+  teile=[];for(const f of files){const report=await readLabFiles([f]);report.warnings.push(`${namen} heißen gleich, gehören aber nicht zum selben Bericht (${e.message.replace(/\.? Bitte getrennt importieren\.$/,'')}) – ResultKit liest sie getrennt. Bitte prüfen, ob beide Dateien hierher gehören.`);report.getrennt=true;teile.push({report,dateien:[f]});}
  }
  for(const t of teile)t.report.warnings.push(...pruefHinweise(t.report).filter(h=>!t.report.warnings.includes(h)));
  return teile;
