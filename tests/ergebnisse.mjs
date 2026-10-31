@@ -11,6 +11,7 @@ registerHooks({
 const E=await import('../src/ergebnisse.ts');
 const {labelkitReport}=await import('../src/labelkit.ts');
 const {nachweisgrenze}=await import('../src/labreport.ts');
+const UE=await import('../src/uebersicht.ts');
 let n=0;const ok=(name,fn)=>{fn();n++;console.log('OK Ergebnisse: '+name);};
 
 const SUM='Summe 16 EPA-PAK exkl. BG',U='µg/m²';
@@ -229,6 +230,70 @@ ok('Projektnummer mit Adresse im LabelKit-Feld: nur die Nummer zählt',()=>{
  assert.throws(()=>labelkitReport(mit('99.9002 Stegerwaldstraße Leverkusen'),'a.json','99.9001 Musterort'),/Projektzuordnung blockiert/);
  assert.throws(()=>labelkitReport(mit('99.90010'),'a.json','99.9001 Musterort'),/Projektzuordnung blockiert/);
  assert.throws(()=>labelkitReport(mit('PAK'),'a.json','99.9001 Musterort'),/Projektzuordnung blockiert/,'ohne Nummer wie bisher');
+});
+
+// Storno (LabelKit 4.49.0): stornierte Proben behalten ihre Nummer, sind aber keine Proben mehr – wie gelöscht behandeln.
+// P2 (PAK) und P4 (Chlorid) storniert, P3 nur mit `nrFest`. Echte Form `storniert: {am, kuerzel, grund}`; jeder wahre Wert zählt.
+const STORNO={am:'2026-10-30T10:00:00.000Z',kuerzel:'Te',grund:'doppelt genommen'};
+const mitStorno=(proben=[2],chlorid=true)=>{const d=JSON.parse(labelkit);d.nrSchutz=1;
+ for(const p of d.proben){p.nrFest={am:'2026-10-29T08:00:00.000Z',anlass:'Etiketten'};if(proben.includes(p._nr))p.storniert=STORNO;}
+ if(chlorid)d.chloridProben[0].storniert=true;return JSON.stringify(d);};
+const auftragStorno=(...a)=>labelkitReport(mitStorno(...a),'99.9001_Daten.json','99.9001 Musterort');
+ok('Storno: stornierte Proben fehlen im Laborauftrag, Nummern bleiben als storniert vermerkt',()=>{
+ const a=auftragStorno();
+ assert.deepEqual(a.rows.map(r=>r.label),['P1','P3']);assert.equal(a.expected,2);assert.deepEqual(a.storniert,['P2','P4']);
+ assert.deepEqual(a.warnings,['1 Bohrkern-Rückstellprobe (nur gesägt und aufbewahrt, keine Analyse) nicht übernommen – dafür gibt es keinen Laborwert.'],'Storno selbst ist kein Hinweis');
+ assert.equal(auftrag().storniert,undefined,'ohne Storno kein Feld');
+ const alle=labelkitReport(mitStorno([1,2,3]),'a.json','99.9001 Musterort');
+ assert.deepEqual(alle.rows,[]);assert.deepEqual(alle.warnings.at(-1),'Alle Proben der LabelKit-Datei sind storniert.');
+ // gleiche Nummer aktiv und storniert (darf LabelKit nicht schreiben): die aktive Probe gilt
+ const d=JSON.parse(labelkit);d.sonstigeProben.push({_nr:1,matrix:'Material',storniert:STORNO});
+ const dop=labelkitReport(JSON.stringify(d),'a.json','99.9001 Musterort');assert.deepEqual(dop.rows.map(r=>r.label),['P1','P2','P3','P4']);assert.equal(dop.storniert,undefined);
+});
+ok('Storno: nicht offen, nicht ausstehend, nicht gezählt – Projekt ohne die stornierten Proben vollständig',()=>{
+ const leer=E.uebersicht('99.9001',auftragStorno(),[]);
+ assert.deepEqual(leer.zeilen.map(z=>[z.label,z.status]),[['P1','offen'],['P3','offen']]);
+ assert.equal(leer.zaehler.offen,2);assert.equal(leer.zaehler.erwartet,2);assert.equal(E.standText(leer),'0 von 2 Proben mit Ergebnis · 2 offen');
+ assert.deepEqual(leer.storniert,['P2','P4']);assert.deepEqual(leer.hinweise,[],'ohne Laborwert kein Hinweis');
+ const leerDatei=E.ergebnisDatei(leer,auftragStorno(),[],'1.13.0');
+ assert.deepEqual(leerDatei.offen,['P1','P3']);assert.deepEqual(leerDatei.auftrag.proben.map(p=>p.label),['P1','P3']);
+ assert.deepEqual(UE.uebersichtGruppen(leer.zeilen).flatMap(g=>g.zeilen.filter(z=>z.ausstehend).map(z=>z.label)),['P1','P3'],'„ausstehend“ nur für nicht stornierte');
+ const fertig=E.uebersicht('99.9001',auftragStorno(),[{report:report('AR-5-01',[[1,pak('3')],[3,pak('1')]]),geaendert:1}]);
+ assert.equal(E.vollstaendig(fertig),true);assert.equal(E.standText(fertig),'2 von 2 Proben mit Ergebnis');
+});
+ok('Storno: Laborwert für eine stornierte Probe → eigener Hinweis, kein Ergebnis, nicht „nicht beauftragt“, nicht an PlanKit',()=>{
+ const r=report('AR-5-02',[[1,pak('3')],[2,pak('42')],[3,pak('1')],[4,[{p:'Chlorid',r:'26',u:'µg/cm²'}]],[9,pak('1')]]);
+ const u=E.uebersicht('99.9001',auftragStorno(),[{report:r,geaendert:1}]);
+ assert.deepEqual(u.zeilen.map(z=>[z.label,z.status]),[['P1','ergebnis'],['P3','ergebnis'],['P9','nichtBeauftragt']]);
+ assert.deepEqual(u.zaehler,{erwartet:2,ergebnis:2,vorlaeufig:0,offen:0,nichtBeauftragt:1},'P2/P4 weder Ergebnis noch offen noch nicht beauftragt');
+ assert.deepEqual(u.hinweise,[
+  'P2 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe (Prüfbericht AR-5-02). ResultKit übernimmt ihn nicht; gilt die Probe doch, heb das Storno in LabelKit auf.',
+  'P4 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe (Prüfbericht AR-5-02). ResultKit übernimmt ihn nicht; gilt die Probe doch, heb das Storno in LabelKit auf.']);
+ assert.equal(UE.uebersichtGruppen(u.zeilen).flatMap(g=>g.zeilen).some(z=>z.label==='P2'||z.label==='P4'),false,'nicht in der Ergebnistabelle');
+ const datei=E.ergebnisDatei(u,auftragStorno(),[],'1.13.0');
+ assert.deepEqual(datei.berichte[0].proben.map(p=>p.label),['P1','P3','P9'],'Wert der stornierten Probe geht nicht an PlanKit/FotoKit');
+ assert.ok(datei.hinweise.some(h=>h.startsWith('P2 ist in LabelKit storniert')),'Hinweis geht mit nach _Ergebnisse.json');
+ assert.deepEqual(datei.offen,[]);
+ // Bericht ohne Messwerte (nur PDF) nennt die stornierte Probe: eigener Satz; ersetzter Bericht meldet nichts
+ const nurPdf=E.uebersicht('99.9001',auftragStorno(),[{report:report('AR-5-03',[[2]],{xml:false}),geaendert:1}]);
+ assert.deepEqual(nurPdf.hinweise,['P2 ist in LabelKit storniert, steht aber im Prüfbericht AR-5-03 (ohne Messwerte) – gehört zu keiner offenen Probe.']);
+ const ersetzt=E.uebersicht('99.9001',auftragStorno(),[{report:report('AR-5-04',[[2,pak('40')]],{vorlaeufig:true}),geaendert:1},{report:report('AR-5-05',[[2,pak('42')],[1,pak('3')]]),geaendert:2}]);
+ assert.deepEqual(ersetzt.hinweise.map(h=>h.match(/Prüfberichte? [^)]*/)[0]),['Prüfbericht AR-5-05']);
+});
+ok('Storno: Fingerabdruck – Storno setzen oder aufheben ändert die LabelKit-Datei, damit den Stand („geändert“)',()=>{
+ // ResultKit vergleicht Name|Größe|Änderungszeit der LabelKit-Datei. LabelKit schreibt beim Storno (und beim Aufheben) die feste Datei neu.
+ const vorher=labelkit,nachher=mitStorno([2],false),aufgehoben=JSON.stringify({...JSON.parse(nachher),proben:JSON.parse(nachher).proben.map(({storniert,...p})=>({...p,nrFest:{am:'2026-10-31T09:00:00.000Z',anlass:'Storno aufgehoben'}}))});
+ const stand=(text,t)=>E.standKennung([{name:'Laboraufträge/99.9001_Daten.json',size:Buffer.byteLength(text),t},{name:'AR-1.xml',size:10,t:1}]);
+ assert.notEqual(stand(vorher,100),stand(nachher,200));assert.notEqual(stand(nachher,200),stand(aufgehoben,300));
+ assert.notEqual(Buffer.byteLength(vorher),Buffer.byteLength(nachher),'auch die Größe ändert sich');
+ // gleicher Dateistand, aber vor 1.13 übernommen (P2 noch offen/mit Wert in der Datei) → einmal erneut übernehmen
+ const r=report('AR-5-06',[[1,pak('3')],[2,pak('42')]]);
+ const alt=E.ergebnisDatei(E.uebersicht('99.9001',auftrag(),[{report:r,geaendert:1}]),auftrag(),[],'1.12.1');
+ const u=E.uebersicht('99.9001',auftragStorno([2],false),[{report:r,geaendert:1}]);
+ assert.equal(E.mitStorniert(alt,u),true);
+ assert.equal(E.mitStorniert(E.ergebnisDatei(u,auftragStorno([2],false),[],'1.13.0'),u),false,'neu übernommen: nichts mehr zu tun');
+ assert.equal(E.mitStorniert(alt,E.uebersicht('99.9001',auftrag(),[{report:r,geaendert:1}])),false,'ohne Storno nie');
+ assert.equal(E.mitStorniert(null,u),false);
 });
 
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);

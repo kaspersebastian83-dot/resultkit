@@ -2,13 +2,17 @@
 // LabelKit nummeriert PAK → Chlorid → Asbest → Sonstige fortlaufend (Feld _nr) und übergibt dem Labor „Probe <Nr>“.
 // Genau diese Referenz steht später im Laborbericht – beim Import des Berichts werden die Proben daher per
 // „Aktualisieren“ um Labordaten und Messwerte ergänzt.
+// In LabelKit stornierte Proben (ab 4.49.0) fehlen im Auftrag wie gelöschte; ihre Nummern stehen in `storniert` (bleiben vergeben).
 import {blankReport,validDate,type LabReport} from './labreport';
 import {MAX_RAUM,SURFACE_FROM_LABELKIT,type LabSample} from './model';
 import {parseProjName} from './ordner';
 
-type Probe={_nr?:unknown;chloridNr?:unknown;id?:unknown;matrix?:string;datum?:string;z2?:string;z3?:string;z4?:string;cm2?:string|number;tiefe?:string;bkBez?:string;bkId?:string;bkMaterial?:string;bkStatus?:string;notiz?:string;bkVon?:string|number;bkBis?:string|number;bkGesamt?:string|number;bkRueck?:string};
+type Probe={_nr?:unknown;chloridNr?:unknown;id?:unknown;matrix?:string;datum?:string;z2?:string;z3?:string;z4?:string;cm2?:string|number;tiefe?:string;bkBez?:string;bkId?:string;bkMaterial?:string;bkStatus?:string;notiz?:string;bkVon?:string|number;bkBis?:string|number;bkGesamt?:string|number;bkRueck?:string;storniert?:unknown};
 /** Bohrkern-Segment „R“: nur gesägt und aufbewahrt, kein Laborwert – kommt nicht als offene Probe in den Plan. */
 export const RUECKSTELLPROBE='Rückstellprobe – nicht analysieren';
+/** LabelKit ab 4.49.0: `storniert: {am, kuerzel, grund}` – die Probe ist keine Probe mehr, behält aber ihre Nummer (`_nr`).
+ *  Wie gelöscht behandeln (nicht anbieten, nicht zählen); jeder wahre Wert zählt als storniert. */
+export const isStorniert=(p:Probe)=>!!p.storniert;
 const isRueckstellprobe=(p:Probe)=>p.matrix==='Bohrkern'&&(str(p.bkStatus).toUpperCase()==='R'||str(p.notiz)===RUECKSTELLPROBE);
 const LISTS:[string,string][]=[['proben','PAK'],['chloridProben','Chlorid'],['asbestProben','Asbest'],['sonstigeProben','Sonstige']];
 const str=(v:unknown)=>v===undefined||v===null?'':String(v).replace(/\s+/g,' ').trim();
@@ -34,9 +38,10 @@ export function labelkitReport(text:string,quelle:string,project:string|null,con
   if(target&&nr&&(projektNummer(nr)||nr)!==target)throw Error(`Projektzuordnung blockiert: „${quelle}“ gehört zu Projekt ${nr}, das aktive Projekt zu ${target}. Bitte die Datei und den Projektordner prüfen und das passende Projekt öffnen.`);
   if(!nr&&!confirmMissingProject?.(`„${quelle}“ enthält keine Projektnummer (ältere Datei). ${target?`Die Zugehörigkeit zu Projekt ${target}`:'Die Zugehörigkeit zum geöffneten freien Plan'} kann nicht automatisch geprüft werden.\n\nHaben Sie die Datei geprüft und gehört sie zu diesem Projekt? Nur dann mit OK übernehmen.`))throw Error('LabelKit-Import abgebrochen: Die Datei ohne Projektnummer wurde nicht ausdrücklich dem aktiven Projekt zugeordnet.');
   const report=blankReport();report.quelle=quelle;report.labor='LabelKit (Probenerfassung)';report.bericht='';report.auftragsreferenz=nr||target||'';report.sources={};
-  const seen=new Set<number>();let rueckstell=0;
+  const seen=new Set<number>(),storniert=new Set<number>();let rueckstell=0;
   for(const [key,type] of LISTS)for(const raw of (Array.isArray(data[key])?data[key] as Probe[]:[])){
     if(!raw||typeof raw!=='object')continue;const n=number(raw);
+    if(isStorniert(raw)){if(n)storniert.add(n);continue;}   // Nummer bleibt vergeben: ein Laborwert dafür wird gemeldet, nie einer anderen Probe zugeordnet
     if(!n){report.warnings.push(`${type}: eine Probe ohne Nummer wurde übersprungen.`);continue;}
     if(isRueckstellprobe(raw)){rueckstell++;continue;}
     if(seen.has(n)){report.warnings.push(`Probe ${n} ist in LabelKit doppelt vergeben (${type}) und wurde übersprungen.`);continue;}seen.add(n);
@@ -48,6 +53,8 @@ export function labelkitReport(text:string,quelle:string,project:string|null,con
   }
   if(rueckstell)report.warnings.push(`${rueckstell} Bohrkern-Rückstellprobe${rueckstell===1?'':'n'} (nur gesägt und aufbewahrt, keine Analyse) nicht übernommen – dafür gibt es keinen Laborwert.`);
   report.rows.sort((a,b)=>Number(a.label.slice(1))-Number(b.label.slice(1)));report.expected=report.rows.length;
-  if(!report.rows.length)report.warnings.push('Die LabelKit-Datei enthält noch keine PAK-, Chlorid-, Asbest- oder sonstigen Proben.');
+  for(const n of seen)storniert.delete(n);   // gleiche Nummer aktiv und storniert (sollte LabelKit nie schreiben): die aktive Probe gilt
+  if(storniert.size)report.storniert=[...storniert].sort((a,b)=>a-b).map(n=>`P${n}`);
+  if(!report.rows.length)report.warnings.push(storniert.size?'Alle Proben der LabelKit-Datei sind storniert.':'Die LabelKit-Datei enthält noch keine PAK-, Chlorid-, Asbest- oder sonstigen Proben.');
   return report;
 }
