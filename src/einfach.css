@@ -44,9 +44,11 @@ body.rk2 .jetzt-knoepfe{display:none}
 
 /* Filterzeile: drei Filter links, rechts „Für Excel kopieren“ bzw. „Sortiert nach“ (Ansicht unter „Mehr …“) */
 body.rk2 .u-ansicht,body.rk2 .u-tipp{display:none!important}
+#u-sort option[hidden]{display:none}
 .u-filter{gap:8px 12px;margin:2px 0 4px}
 .u-chips button{min-height:34px}
 .u-chips button[aria-pressed=true]{background:var(--sp-app-dunkel);border-color:var(--sp-app-dunkel);color:#fff}
+.u-kopieren:not([hidden])~.u-sort{margin-left:0}
 .u-kopieren{margin-left:auto;min-height:34px;padding:0 4px;border:0;background:none;box-shadow:none;color:var(--sp-app-dunkel);text-decoration:underline;font-weight:600}
 .u-kopieren:hover:not(:disabled){background:none;color:var(--sp-app)}
 .u-sort{margin-left:auto}
@@ -63,6 +65,7 @@ body.rk2 .u-ansicht,body.rk2 .u-tipp{display:none!important}
 .rk-leg{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;cursor:help}
 .rk-punkt{display:inline-block;box-sizing:border-box;width:10px;height:10px;border-radius:50%;background:var(--c,var(--sp-line2));flex:none}
 .rk-punkt.leer{background:none;border:1.5px solid var(--sp-line2)}
+.rk-punkt{-webkit-print-color-adjust:exact;print-color-adjust:exact}   /* Bewertung auch auf Papier */
 .u-tabelle{font-size:14px}
 .u-tabelle thead th{background:none;color:var(--sp-muted);font-size:12px;border-bottom:1.5px solid var(--sp-line2)}
 .u-tabelle th,.u-tabelle td{padding:8px 10px}
@@ -121,6 +124,7 @@ tr.u-detail>td{background:var(--sp-panel2);padding:10px 16px 14px 30px;text-alig
 #rk-fuss{position:sticky;bottom:0;z-index:20;box-sizing:border-box;min-height:64px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;padding:7px 20px;background:var(--sp-panel);border-top:1px solid var(--sp-line);box-shadow:0 -2px 10px rgba(0,0,0,.05)}
 #rk-mehr{height:46px;padding:0 16px;font-size:15px;display:inline-flex;align-items:center;gap:8px}
 .rk-stand{flex:1 1 200px;min-width:0;text-align:right;font-size:14px;color:var(--sp-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk-stand:empty{display:none}
 .rk-stand.ok{color:var(--sp-ok);font-weight:600}
 .rk-stand.gelb{color:#8a6d00;font-weight:600}
 #rk-neben{height:46px;font-size:15px}

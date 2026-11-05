@@ -193,6 +193,10 @@ try{
    await t.getByRole('button',{name:/Σ16 EPA-PAK/}).click();
    assert.equal(await t.locator('thead th').nth(1).getAttribute('aria-sort'),'descending');
    assert.deepEqual(await pNr(),['P1 · P4','P2','P3'],'höchster Wert zuerst, < BG zuletzt');
+   assert.equal(await page.locator('#u-sort').inputValue(),'wert','„Sortiert nach“ zeigt: nach Wert (Spaltenkopf)');
+   await page.locator('#u-sort').selectOption('nr');assert.equal(await t.locator('thead th[aria-sort="ascending"],thead th[aria-sort="descending"]').count(),0,'nach Probennummer – kein Spaltenkopf aktiv');
+   assert.deepEqual(await pNr(),['P1 · P4','P2','P3']);assert.match(await page.evaluate(()=>localStorage.getItem('resultkit-msort')),/"s":"probe"/);
+   await page.locator('#u-sort').selectOption('ort');assert.equal(await t.locator('thead th').first().getAttribute('aria-sort'),'ascending');
    await zeilen.nth(1).locator('td').first().click();assert.equal(await zeilen.nth(1).getAttribute('aria-selected'),'true');
    await page.keyboard.press('Shift+ArrowDown');assert.deepEqual(await zeilen.evaluateAll(r=>r.map(x=>x.getAttribute('aria-selected'))),['false','true','true']);
    await page.keyboard.press('Control+c');
@@ -215,6 +219,11 @@ try{
    assert.ok(!(await haupt.isVisible())||/^Weiter/.test(await haupt.textContent()),'nichts mehr zu tun – höchstens „Weiter“ des Kopfbands');
    assert.match(await fussStand.textContent(),/^✓ Übernommen am /);assert.equal(await neben.textContent(),'Berichte importieren');
    assert.deepEqual(await page.locator('#rk-ablauf li').evaluateAll(l=>l.map(x=>x.className)),['fertig','fertig','fertig']);
+   // Zeichnet sich das Kopfband später neu (eigener Takt), zieht die Fußleiste ihr „Weiter“ nach
+   await page.evaluate(()=>{const a=document.createElement('a');a.className='ml-weiter';a.href='#weiter-test';a.innerHTML='<strong>Weiter: Plan</strong><small>noch kein Probenplan</small>';document.getElementById('mosaikLeiste').append(a);});
+   await until(async()=>(await haupt.textContent())==='Weiter: Plan →','Fußleiste folgt dem Kopfband');
+   await page.evaluate(()=>document.querySelector('#mosaikLeiste a[href="#weiter-test"]').remove());
+   await until(async()=>!(await haupt.isVisible()),'ohne „Weiter“ keine Hauptaktion');
    const datei=JSON.parse(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'));
    assert.equal(datei.format,'spektron-ergebnisse');assert.equal(datei.projekt,'99.9001');assert.equal(datei.vollstaendig,true);
    assert.deepEqual(datei.berichte.map(b=>b.bericht),['AR-1-02']);assert.equal(datei.berichte[0].datum,'2026-10-12');assert.deepEqual(datei.ersetzt,[{bericht:'AR-1-01',durch:['AR-1-02']}]);

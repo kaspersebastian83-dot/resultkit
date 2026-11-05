@@ -54,6 +54,11 @@ export class Oberflaeche {
   document.body.append(d);
   // Ablauf-Zeile in der Karte „Jetzt dran“ (E2 Variante A)
   this.ablaufZeile();
+  // Das Kopfband zeichnet sich nach eigenem Takt neu (Ordnerstand, Fokus, Timer): „Weiter“ in der Fußleiste dann nachziehen
+  let geplant=0;const nachziehen=()=>{if(geplant)return;geplant=requestAnimationFrame(()=>{geplant=0;this.nachRender();});};
+  const band=()=>document.getElementById('mosaikLeiste');
+  const beobachte=(el:HTMLElement)=>new MutationObserver(nachziehen).observe(el,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['href','hidden']});
+  const b=band();if(b)beobachte(b);else{const warte=new MutationObserver(()=>{const x=band();if(x){warte.disconnect();beobachte(x);nachziehen();}});warte.observe(document.body,{childList:true});}
   this.nachRender();
  }
  private ablaufZeile(){
@@ -79,6 +84,7 @@ export class Oberflaeche {
   const umschalten=(a:'stelle'|'art')=>document.querySelector<HTMLButtonElement>(`.u-ansicht [data-ansicht="${a}"]`)?.click();
   ML.mehr(knopf,[
    {text:'Prüfberichte zeigen',id:'rk-m-berichte',title:'Die Prüfberichte im Ordner „Laborergebnisse“ (XML/PDF, alle Parameter) und die Ablage für neue Berichte',hidden:!projekt,onclick:()=>{const b=$<HTMLDetailsElement>('berichte-block');b.open=true;b.scrollIntoView({behavior:'smooth',block:'start'});}},
+   {text:'Berichte importieren …',id:'rk-m-import',title:'Prüfberichte (Eurofins-XML und PDF) in „Laborergebnisse“ ablegen – oder einfach auf die Seite ziehen',hidden:!projekt,disabled:dis('btn-import'),onclick:()=>$('btn-import').click()},
    {trenner:true},
    {text:(ansicht==='stelle'?'✓ ':'')+'Ansicht: Nach Stelle',id:'rk-m-stelle',title:'Eine Zeile je Probenahmestelle – PAK, Chlorid und Asbest derselben Stelle nebeneinander (gilt in diesem Browser)',hidden:!projekt,onclick:()=>umschalten('stelle')},
    {text:(ansicht==='art'?'✓ ':'')+'Ansicht: Je Probenart',id:'rk-m-art',title:'Eine Tabelle je Probenart (gilt in diesem Browser)',hidden:!projekt,onclick:()=>umschalten('art')},

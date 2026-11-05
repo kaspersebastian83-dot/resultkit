@@ -72,7 +72,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
   <div id="u-filter" class="u-filter"><span class="u-ansicht" role="group" aria-label="Ansicht"><button type="button" data-ansicht="stelle" title="Eine Zeile je Probenahmestelle – PAK, Chlorid und Asbest derselben Stelle nebeneinander">Nach Stelle</button><button type="button" data-ansicht="art" title="Eine Tabelle je Probenart (wie bisher)">Je Probenart</button></span><span class="u-chips" role="group" aria-label="Filter"><button type="button" data-filter="alle">Alle</button><button type="button" data-filter="auff">Nur auffällige</button><button type="button" data-filter="offen">Nur offene</button></span>
    <span class="u-tipp muted klein" id="u-tipp">Zeile anklicken: alle Parameter, Hinweise und Prüfbericht</span>
    <button type="button" id="u-kopieren" class="u-kopieren" title="Markierte Zeilen (sonst alle) als Tabelle kopieren – in Excel oder Word einfügen">Für Excel kopieren</button>
-   <label class="u-sort">Sortiert nach <select id="u-sort"><option value="ort">Ort (Geschoss, Raum)</option><option value="nr">Probennummer</option></select></label></div>
+   <label class="u-sort">Sortiert nach <select id="u-sort"><option value="ort">Ort (Geschoss, Raum)</option><option value="nr">Probennummer</option><option value="wert" hidden disabled>Wert (Spaltenkopf)</option></select></label></div>
   <div id="u-tabellen"></div>
   <details id="berichte-block" class="berichte-block"><summary><h2 id="h-berichte">Prüfberichte</h2><span id="berichte-zahl" class="zahl"></span><span id="berichte-kurz" class="berichte-kurz"></span></summary>
    <div class="berichte-inhalt"><div id="berichte"></div>
@@ -89,7 +89,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
 <div id="toast" role="status" hidden></div>`;
 
 let toastTimer=0;
-function toast(text:string,fehler=false){const t=$('toast');const d=[...document.querySelectorAll('dialog[open]')].find(x=>x.matches(':modal'));if(d){if(t.parentElement!==d)d.append(t);}else if(t.parentElement!==document.body)document.body.append(t);   // 2.0: Meldung nicht hinter einem offenen Dialog
+function toast(text:string,fehler=false){const t=$('toast');const d=[...document.querySelectorAll('dialog[open]')].filter(x=>x.matches(':modal')).pop();if(d){if(t.parentElement!==d){d.append(t);d.addEventListener('close',()=>{if(t.parentElement===d)document.body.append(t);},{once:true});}}else if(t.parentElement!==document.body)document.body.append(t);   // 2.0: Meldung nicht hinter einem offenen Dialog
  t.textContent=text;t.className=fehler?'fehler':'';t.hidden=false;clearTimeout(toastTimer);toastTimer=window.setTimeout(()=>{t.hidden=true;},fehler?9000:5000);}
 function fail(e:unknown){toast(meldung(e),true);}
 function frage(titel:string,text:string,wahl:string[]):Promise<string>{return new Promise(resolve=>{const d=$<HTMLDialogElement>('frage-dialog');$('frage-titel').textContent=titel;$('frage-text').textContent=text;
@@ -223,7 +223,6 @@ function hinweiseZeigen(){
 type Filter='alle'|'auff'|'offen';
 const merke=(k:string,v?:string)=>{try{if(v===undefined)return localStorage.getItem('resultkit-'+k)||'';localStorage.setItem('resultkit-'+k,v);}catch{/* ohne Speicher */}return v||'';};
 let filter:Filter=(['auff','offen'].includes(merke('filter'))?merke('filter'):'alle') as Filter;
-($('u-sort') as HTMLSelectElement).value=merke('sortierung')==='nr'?'nr':'ort';
 /** Bewertung eines Messwerts für die Übersicht: Kategorie der Skala, BG/n. n. neutral. */
 function bewertung(w:Wert):{text:string;farbe:string;index:number;titel:string}|null{
  const q=labQualifier(w.r);
@@ -243,7 +242,7 @@ const GTITEL:Record<Gruppe,string>={PAK:'PAK',Chlorid:'Chlorid',Asbest:'Asbest',
 /** Zeile der Prüfung zu einer Zeile der Übersicht (gleiche Bezeichnung). */
 function quelleVon(s:Scan,z:UZeile):Zeile|undefined{return s.u.zeilen.find(x=>(x.label||x.ref)===z.label);}
 function renderUebersicht(s:Scan){
- const gruppen=uebersichtGruppen(s.u.zeilen),nach=($('u-sort') as HTMLSelectElement).value as 'ort'|'nr';
+ const gruppen=uebersichtGruppen(s.u.zeilen),nach:'ort'|'nr'=merke('sortierung')==='nr'?'nr':'ort';
  $('u-filter').hidden=!gruppen.length;
  if(!gruppen.length){$('u-kacheln').innerHTML='';$('u-tabellen').innerHTML='';return;}
  $('u-kacheln').innerHTML=gruppen.map(g=>{const n=g.zeilen.length,offen=n-g.mitErgebnis,auff=g.zeilen.filter(auffaellig).length;
@@ -251,7 +250,9 @@ function renderUebersicht(s:Scan){
   const teile=[g.gruppe==='Asbest'?`${auff} Asbest nachgewiesen`:auff?`${auff} auffällig`:'',vorl?`${vorl} vorläufig`:'',offen?`${offen} offen`:'',!offen&&!auff&&!vorl?'alle mit Ergebnis':''].filter(Boolean);
   return `<div class="u-kachel"><span class="u-k-name">${esc(GTITEL[g.gruppe])}</span><span class="u-k-zahl">${g.mitErgebnis} / ${n}</span><span class="u-k-text">${esc(teile.join(' · '))}</span></div>`;}).join('');
  const fokusDrin=!!document.activeElement?.closest('#m-tabelle');
- const stelle=ansicht==='stelle';$('u-sort').closest('label')!.hidden=stelle;$('u-kopieren').hidden=!stelle;
+ const stelle=ansicht==='stelle';$('u-kopieren').hidden=!stelle;
+ // „Sortiert nach“ in beiden Ansichten (2.0): in „Nach Stelle“ steht die Probennummer am Wert – sortieren nach ihr geht hier; nach einem Wert sortiert der Spaltenkopf
+ ($('u-sort') as HTMLSelectElement).value=stelle?(msort.s==='probe'?'nr':msort.s==='stelle'?'ort':'wert'):nach;
  $('u-tipp').textContent=stelle?'Klick markiert (Umschalt/Strg für mehrere) · Doppelklick oder Enter: Details · Strg+C kopiert für Excel':'Zeile anklicken: alle Parameter, Hinweise und Prüfbericht';
  document.querySelectorAll<HTMLButtonElement>('[data-ansicht]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.ansicht===ansicht)));
  $('u-tabellen').innerHTML=stelle?mTabelle(s,gruppen):gruppen.map(g=>uTabelle(s,g,nach)).join('');
@@ -270,7 +271,6 @@ function berichtZeile(codes:string[],berichte:Bericht[]){
 // sie kommen aus dem Prüfbericht des Labors und aus LabelKit.
 let ansicht:'stelle'|'art'=merke('ansicht')==='art'?'art':'stelle';
 let msort:{s:MSpalte;auf:boolean}=(()=>{try{const v=JSON.parse(merke('msort')||'null');if(v&&['probe','stelle','PAK','Chlorid','Asbest','Weitere'].includes(v.s)&&typeof v.auf==='boolean')return v;}catch{/* alt */}return {s:'stelle',auf:true};})();
-if(msort.s==='probe')msort={s:'stelle',auf:true};   // 2.0: Probennummer steht am Wert, keine eigene Spalte
 let mZeilen:MZeile[]=[],mGruppen:UGruppe[]=[],cursor:string|null=null,anker:string|null=null;
 const markiert=new Set<string>();
 const mFilter=(r:MZeile)=>filter==='offen'?Object.values(r.zellen).some(z=>z!.ausstehend):filter==='auff'?Object.values(r.zellen).some(z=>auffaellig(z!)):true;
@@ -287,7 +287,7 @@ function mTabelle(s:Scan,gruppen:UGruppe[]){
  const zeile=(r:MZeile)=>{const key=`M|${r.key}`,auf=aufgeklappt.has(key),proben=gruppen.map(g=>({g,z:r.zellen[g.gruppe]})).filter(x=>x.z);
   const zellen=gruppen.map(g=>{const z=r.zellen[g.gruppe];return `<td class="rk-wz">${z?`${ergebnis(g.gruppe,g.einheit,z)}${hinweis(z,quelleVon(s,z))}<small class="rk-p">${esc(z.label)}</small>`:'<span class="m-leer" aria-label="keine Probe">–</span>'}</td>`;}).join('');
   const det=auf?`<tr class="u-detail"><td colspan="${n}">${proben.map(({g,z})=>{const q=quelleVon(s,z!);return q?`<h3 class="m-det-titel">${esc(z!.label)} · ${esc(GTITEL[g.gruppe])}</h3>${probeDetails(s,q)}`:'';}).join('')}</td></tr>`:'';
-  return `<tr class="u-zeile m-zeile${auf?' auf':''}" data-m="${esc(r.key)}" aria-selected="false"><th scope="row"><button type="button" class="u-auf" tabindex="-1" aria-expanded="${auf}" title="${auf?'Details zuklappen':`${r.labels.join(' · ')}: alle Parameter, Hinweise und Prüfbericht zeigen`}">${esc(r.stelle)}</button></th>${zellen}</tr>${det}`;};
+  return `<tr class="u-zeile m-zeile${auf?' auf':''}" data-m="${esc(r.key)}" aria-selected="false"><th scope="row"><button type="button" class="u-auf" tabindex="-1" aria-expanded="${auf}" title="${esc(auf?'Details zuklappen':`${r.labels.join(' · ')}: alle Parameter, Hinweise und Prüfbericht zeigen`)}">${esc(r.stelle)}</button></th>${zellen}</tr>${det}`;};
  return `<section class="u-gruppe m-gruppe" aria-label="Ergebnisse nach Probenahmestelle"><h2>Nach Probenahmestelle${codes.length?` <small>${esc(berichtZeile(codes,s.u.berichte))}</small>`:''}</h2><div class="rk-legenden">${gruppen.map(g=>legendeFuer(g,gruppen.length>1)).join('')}</div>
   <div class="m-scroll" id="m-tabelle" tabindex="0" aria-label="Ergebnistabelle: Pfeiltasten wählen, Enter zeigt Details, Strg+C kopiert" title="Klick markiert (Umschalt/Strg für mehrere) · Doppelklick oder Enter: Details · Strg+C kopiert für Excel"><table class="u-tabelle m-tabelle" role="grid" aria-multiselectable="true" aria-readonly="true"><thead><tr>${kopf('stelle','Probenahmestelle')}${gruppen.map(g=>kopf(g.gruppe,titel(g),'rk-wz')).join('')}</tr></thead>
   <tbody>${mitGeschoss(mZeilen,r=>r.stelle,msort.s==='stelle',n,zeile)||leer}</tbody></table></div></section>`;
@@ -330,7 +330,7 @@ function mitGeschoss<T>(zeilen:T[],stelle:(z:T)=>string,an:boolean,spalten:numbe
  if(!an)return zeilen.map(zeile).join('');
  const kopf=zeilen.map(z=>geschossKopf(stelle(z)));if(new Set(kopf).size<2)return zeilen.map(zeile).join('');
  let vorher:string|null=null;
- return zeilen.map((z,i)=>{const k=kopf[i],teiler=k!==vorher?`<tr class="rk-geschoss"><th colspan="${spalten}" scope="rowgroup">${esc(k||'ohne Geschoss')}</th></tr>`:'';vorher=k;return teiler+zeile(z);}).join('');
+ return zeilen.map((z,i)=>{const k=kopf[i],teiler=k!==vorher?`<tr class="rk-geschoss" aria-hidden="true"><th colspan="${spalten}">${esc(k||'ohne Geschoss')}</th></tr>`:'';vorher=k;return teiler+zeile(z);}).join('');
 }
 /** Ergebnis einer Probe als Zelle (Farbpunkt nach Skala, Asbest-Befund rot) – in beiden Ansichten gleich. */
 function ergebnis(gruppe:Gruppe,einheit:string,z:UZeile){
@@ -352,7 +352,7 @@ function uTabelle(s:Scan,g:UGruppe,nach:'ort'|'nr'){
  const zeile=(z:UZeile)=>{const erg=ergebnis(g.gruppe,g.einheit,z),q=quelleVon(s,z),key=`${g.gruppe}|${z.label}`,auf=aufgeklappt.has(key);
   return `<tr class="u-zeile${z.ausstehend?' u-offen':''}${auf?' auf':''}" data-zeile="${esc(key)}"><th scope="row"><button type="button" class="u-auf" aria-expanded="${auf}" title="${auf?'Details zuklappen':'Alle Parameter, Hinweise und Prüfbericht zeigen'}">${esc(z.label)}</button></th><td>${esc(stelleText(z.stelle))}</td><td class="rk-wz">${erg}${hinweis(z,q)}</td></tr>${auf&&q?`<tr class="u-detail"><td colspan="3">${probeDetails(s,q)}</td></tr>`:''}`;};
  return `<section class="u-gruppe" aria-label="${esc(GTITEL[g.gruppe])}"><h2>${esc(GTITEL[g.gruppe])}${codes.length?` <small>${esc(berichtZeile(codes,berichte))}</small>`:''}</h2>${legende}
-  <div class="tabelle-scroll"><table class="u-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">${g.gruppe==='Asbest'?'Material und Stelle':'Probenahmestelle'}</th><th scope="col" class="rk-wz">${esc(kopf)}</th></tr></thead>
+  <div class="tabelle-scroll" title="Zeile anklicken: alle Parameter, Hinweise und Prüfbericht"><table class="u-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">${g.gruppe==='Asbest'?'Material und Stelle':'Probenahmestelle'}</th><th scope="col" class="rk-wz">${esc(kopf)}</th></tr></thead>
   <tbody>${mitGeschoss(zeilen,z=>z.stelle,nach==='ort',3,zeile)||leer}</tbody></table></div></section>`;
 }
 /** Aufgeklappte Probe (2.0, E13.6): Hinweise als Satz oben, links alle Parameter als kleine Tabelle, rechts Stand, Prüfbericht, Labor-Nr., Probenahme. */
@@ -573,7 +573,9 @@ document.addEventListener('copy',e=>{if(ansicht!=='stelle'||!document.activeElem
 $('u-kopieren').onclick=async()=>{const d=kopierDaten();
  try{if('ClipboardItem' in window)await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([d.text],{type:'text/plain'}),'text/html':new Blob([d.html],{type:'text/html'})})]);else await navigator.clipboard.writeText(d.text);toast(kopiertText(d.n));}
  catch{toast('Kopieren wurde vom Browser blockiert. In der Tabelle Strg+C drücken.',true);}};
-$('u-sort').onchange=()=>{merke('sortierung',($('u-sort') as HTMLSelectElement).value);if(scan)renderUebersicht(scan);};
+$('u-sort').onchange=()=>{const v=($('u-sort') as HTMLSelectElement).value;if(v!=='ort'&&v!=='nr')return;
+ if(ansicht==='stelle'){msort={s:v==='nr'?'probe':'stelle',auf:true};merke('msort',JSON.stringify(msort));}else merke('sortierung',v);
+ if(scan)renderUebersicht(scan);};
 const wahl=$<HTMLInputElement>('datei-wahl');
 $('btn-import').onclick=$('ablage-wahl').onclick=()=>{wahl.value='';wahl.click();};
 wahl.onchange=()=>{const files=[...wahl.files||[]];if(files.length)void importieren(files);};
