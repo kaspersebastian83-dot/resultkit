@@ -80,6 +80,10 @@ ok('Sortierung nach Ort: Gebäude, Geschoss von unten nach oben, dann Raum; sons
  assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P3','P5','P2','P4','P7','P1','P6','P8'],'ohne Geschoss (P8) ans Ende, auch nach „Haus B“');
  assert.deepEqual(U.sortiere(zeilen,'nr').map(z=>z.label),['P1','P2','P3','P4','P5','P6','P7','P8']);
 });
+ok('Geschoss als Zwischenzeile (2.0): wie geschrieben, „1OG“/„2.OG“/„1. OG“ als „n. OG“, Gebäude davor, ohne Geschoss leer',()=>{
+ assert.deepEqual(['EG Küche Wand','KG Heizung','1OG Flur','2.OG Bad','1. OG Schlafzimmer, Boden','OG 3 Flur','Haus B EG Lager','DG Bad','Garage Decke'].map(U.geschossKopf),
+  ['EG','KG','1. OG','2. OG','1. OG','3. OG','Haus B · EG','DG','']);
+});
 ok('Sortierung nach Ort: ohne Geschoss nach allen Proben mit Geschoss, auch mit Gebäude davor',()=>{
  const zeilen=['P1 Haus A EG Küche','P2 Treppenhaus Wand','P3 Haus A 1.OG Bad','P4 Außenwand Nord'].map(s=>{const [l,...r]=s.split(' ');return {label:l,nr:Number(l.slice(1)),stelle:r.join(' ')};});
  assert.deepEqual(U.sortiere(zeilen,'ort').map(z=>z.label),['P1','P3','P4','P2']);

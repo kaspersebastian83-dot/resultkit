@@ -107,7 +107,7 @@ try{
  const stand=()=>rk.locator('#jetzt .jetzt-stand').textContent(),art=()=>rk.locator('#jetzt').getAttribute('data-art');
  const importieren=async(name,xml)=>{await rk.locator('#datei-wahl').setInputFiles([{name,mimeType:'application/xml',buffer:Buffer.from(xml)}]);
   const d=rk.locator('#import-dialog');await d.waitFor();await d.getByRole('button',{name:'Ablegen'}).click();await d.waitFor({state:'hidden'});};
- const uebernehmen=async()=>{await rk.locator('#jetzt').getByRole('button',{name:/Ergebnisse übernehmen|Erneut übernehmen/}).click();
+ const uebernehmen=async()=>{await rk.locator('#rk-haupt',{hasText:/^(Ergebnisse übernehmen|Erneut übernehmen) →$/}).click();   // ResultKit 2.0: Hauptaktion in der Fußleiste
   const f=rk.locator('#frage-dialog');if(await f.waitFor({timeout:4000}).then(()=>true,()=>false))await f.getByRole('button',{name:'Trotzdem übernehmen'}).click();
   await until(async()=>await art()==='fertig','übernommen');};
  await schritt('ResultKit','Projekt öffnen: LabelKit-Proben sind beauftragt, noch nichts zurück',async()=>{
@@ -116,11 +116,11 @@ try{
   // Standardansicht „Nach Stelle“ (ab ResultKit 1.4.0): eine Zeile je Probenahmestelle, Spalte je Probenart
   const t=rk.locator('#m-tabelle');await t.waitFor();
   const spalten=(await t.locator('thead th').allTextContents()).map(x=>x.replace(/[▲▼]/g,''));
-  assert.deepEqual(spalten.slice(0,3),['Probe','Probenahmestelle','Σ16 EPA-PAK']);
-  const proben=(await t.locator('tbody tr.m-zeile th').allTextContents()).flatMap(x=>x.split(' · '));
+  assert.deepEqual(spalten.slice(0,2),['Probenahmestelle','Σ16 EPA-PAK'],'ResultKit 2.0: Stelle vorn, Probennummer am Wert');
+  const proben=await t.locator('tbody tr.m-zeile .rk-p').allTextContents();
   assert.deepEqual([...proben].sort(),['P1','P2','P3','P4'],'alle LabelKit-Proben genau einmal');
-  const p1=t.locator('tr.m-zeile',{has:rk.locator('th',{hasText:/^P1( · |$)/})});
-  assert.match(await p1.textContent(),/P1.*EG Küche, Wand, Ansicht/s,'Probenahmestelle wie in LabelKit (ohne Fläche)');
+  const p1=t.locator('tr.m-zeile',{has:rk.locator('.rk-p',{hasText:/^P1$/})});
+  assert.match(await p1.textContent(),/EG Küche, Wand, Ansicht.*P1/s,'Probenahmestelle wie in LabelKit (ohne Fläche)');
   assert.match(await p1.textContent(),/ausstehend/);
  });
  await schritt('ResultKit','vorläufigen Bericht importieren und als Zwischenstand übernehmen',async()=>{
@@ -149,12 +149,13 @@ try{
  const pk=await neueSeite('PlanKit');
  await pk.addLocatorHandler(pk.locator('#ask-title',{hasText:'Gespeicherte Fassungen prüfen'}),()=>pk.locator('#ask-actions button',{hasText:'Datei verwenden'}).click());
  const planDatei=async()=>JSON.parse(await until(()=>lies(pk,`_Spektron/PlanKit/Probenplan ${PROJEKT}.probenplan`),'Plan gespeichert'));
- const uebernahme=async(auswahl)=>{await pk.locator('#lab-import').click();await pk.locator(`#lab-folder-dialog ${auswahl}`).first().click();await pk.locator('#lab-review').waitFor();
+ // PlanKit 2.0: „Proben übernehmen“ steht in Schritt ② (Proben setzen)
+ const uebernahme=async(auswahl)=>{if(await pk.evaluate(()=>document.body.dataset.pkSchritt)!=='2')await pk.locator('[data-pk-step="2"]').click();await pk.locator('#lab-import:visible, #pk-import-gross:visible').first().click();/* ohne Proben: großer Knopf in der leeren Liste */await pk.locator(`#lab-folder-dialog ${auswahl}`).first().click();await pk.locator('#lab-review').waitFor();
   const alle=pk.locator('#lab-update-all:visible');if(await alle.count())await alle.click();
   await pk.locator('#lab-confirm:enabled').click();await pk.locator('#lab-review').waitFor({state:'hidden'});await pk.waitForTimeout(1200);};
  const offene=async()=>Object.fromEntries((await planDatei()).pending.map(r=>[r.label,r]));
  await schritt('PlanKit','Projekt öffnen, Grundriss aus „Pläne“, Proben aus LabelKit',async()=>{
-  await pk.goto(`${base}/probenplan/#projekt=${encodeURIComponent(PROJEKT)}`);await pk.locator('#project-badge:not([hidden])').waitFor();
+  await pk.goto(`${base}/probenplan/#projekt=${encodeURIComponent(PROJEKT)}`);   // PlanKit 2.0: Projekt im Kopfband, Pläne aus „Pläne“ auf der Startkarte
   await pk.locator('#folder-plans button',{hasText:'Grundriss EG.svg'}).click();await pk.locator('#welcome').waitFor({state:'hidden'});
   await uebernahme('[data-labelkit]');
   const o=await offene();assert.deepEqual(Object.keys(o).sort(),['P1','P2','P3','P4']);
@@ -197,7 +198,8 @@ try{
  const fk=await neueSeite('FotoKit');
  await schritt('FotoKit','Ergebnistabelle: P1–P4 mit den Werten aus ResultKit, Zwischenstand und vorläufige Werte gekennzeichnet',async()=>{
   await fk.goto(`${base}/bildumbenenner/#projekt=${encodeURIComponent(PROJEKT)}`);
-  await fk.locator('#btnLab:enabled').click();
+  await until(async()=>!(await fk.locator('#btnLab').isDisabled()),'FotoKit: Projekt geladen');   // FotoKit 2.0: Ergebnistabelle unter „Mehr …“
+  await fk.locator('#btnMehr').click();await fk.locator('#mehrLab:enabled').click();
   const vorschau=fk.locator('#lPrev');await until(async()=>/P4/.test(await vorschau.textContent()),'Tabelle mit P4');
   const tabelle=await vorschau.textContent();
   const proben=await vorschau.locator('tr').evaluateAll(z=>z.map(r=>r.cells[0]?.textContent.trim()).filter(t=>/^P\d+$/.test(t||'')));

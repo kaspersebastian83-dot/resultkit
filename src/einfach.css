@@ -1,0 +1,149 @@
+/* ResultKit 2.0 – einfache Oberfläche (Spektron Schritt 3, Plan resultkit-schritt3-plan.md).
+   Kommt nach style.css und spektron-look.css: alte Variablen zeigen auf --sp-*, Kopfband statt eigener Kopfzeile, Fußleiste
+   mit „Mehr …“ und einer Hauptaktion, ruhige Ergebnistabelle (E13: Farbpunkt statt Pille, Legende in einer Zeile). */
+:root{
+  --bg:var(--sp-bg);--panel:var(--sp-panel);--panel2:var(--sp-panel2);--line:var(--sp-line);--line2:var(--sp-line2);--text:var(--sp-text);--muted:var(--sp-muted);
+  --accent:var(--sp-app-dunkel);--accent-2:var(--sp-app-dunkel);--accent-l:var(--sp-app);--head:var(--sp-app);--focus:#f1ecf8;
+  --sans:var(--sp-font);
+}
+#rk-alt{display:none!important}
+main{max-width:1180px;padding:18px 20px 28px}
+
+/* Knöpfe aus dem Look gegen die allgemeine button-Regel von style.css schützen */
+button.sp-knopf{min-height:0;height:var(--sp-h);border-radius:var(--sp-radius-k);border:1.5px solid var(--sp-line2);background:var(--sp-panel);color:var(--sp-text);font-weight:600;box-shadow:none}
+button.sp-knopf:hover:not(:disabled){background:var(--sp-panel);border-color:var(--sp-app);color:var(--sp-text)}
+button.sp-haupt{min-height:0;height:var(--sp-h-haupt);padding:0 24px;border:0;border-radius:12px;background:var(--sp-app-dunkel);color:#fff;box-shadow:none}
+button.sp-haupt:hover:not(:disabled){background:var(--sp-app);border:0;color:#fff}
+button.primary{background:var(--sp-app-dunkel);border-color:var(--sp-app-dunkel);box-shadow:none}
+button.primary:hover:not(:disabled){background:var(--sp-app)}
+
+/* Start ohne Projekt: die Hauptaktion steht unten rechts (eine Stelle für den einen Knopf) */
+.start{border:0;border-radius:var(--sp-radius);box-shadow:var(--sp-schatten)}
+.start h1{font-size:24px}
+.start .eyebrow{color:var(--sp-app-dunkel)}
+body.rk2 #start-projekt,body.rk2 #ordner-erlauben{display:none}
+
+/* Jetzt dran: Titel, Stand, Text, Hinweis-Chip – Knöpfe in der Fußleiste */
+.jetzt{border:0;border-left:5px solid var(--sp-app);border-radius:var(--sp-radius);box-shadow:var(--sp-schatten);margin-bottom:14px}
+.jetzt .eyebrow{color:var(--sp-app-dunkel)}
+body.rk2 .jetzt-knoepfe{display:none}
+.jetzt.ok{border-left-color:var(--sp-ok);background:var(--sp-panel)}
+.jetzt.ok h1{color:var(--sp-ok)}
+.rk-ablauf{list-style:none;margin:0 0 8px 2px;padding:0;display:flex;flex-wrap:wrap;gap:4px 20px;font-size:13px;color:var(--sp-muted)}
+.rk-ablauf li{display:flex;align-items:center;gap:7px}
+.rk-ablauf li::before{content:'';box-sizing:border-box;width:11px;height:11px;border-radius:50%;border:1.5px dashed var(--sp-line2)}
+.rk-ablauf li.aktiv{color:var(--sp-text);font-weight:600}
+.rk-ablauf li.aktiv::before{border:0;background:var(--sp-app)}
+.rk-ablauf li.fertig{color:var(--sp-ok)}
+.rk-ablauf li.fertig::before{content:'✓';border:0;width:auto;height:auto;font-weight:700}
+.hinweis-liste{background:#fdf6e3;border-color:#ecd39a}
+
+/* Kacheln je Probenart */
+.u-kachel{border:0;border-radius:var(--sp-radius-k);box-shadow:var(--sp-schatten)}
+.u-k-zahl{font-variant-numeric:tabular-nums}
+
+/* Filterzeile: drei Filter links, rechts „Für Excel kopieren“ bzw. „Sortiert nach“ (Ansicht unter „Mehr …“) */
+body.rk2 .u-ansicht,body.rk2 .u-tipp{display:none!important}
+.u-filter{gap:8px 12px;margin:2px 0 4px}
+.u-chips button{min-height:34px}
+.u-chips button[aria-pressed=true]{background:var(--sp-app-dunkel);border-color:var(--sp-app-dunkel);color:#fff}
+.u-kopieren{margin-left:auto;min-height:34px;padding:0 4px;border:0;background:none;box-shadow:none;color:var(--sp-app-dunkel);text-decoration:underline;font-weight:600}
+.u-kopieren:hover:not(:disabled){background:none;color:var(--sp-app)}
+.u-sort{margin-left:auto}
+
+/* ---- Ergebnistabelle (E13): lesen wie die Tabelle im Gutachten ---- */
+.u-gruppe{border:0;border-radius:var(--sp-radius);box-shadow:var(--sp-schatten);padding:16px 20px 10px;margin-top:14px}
+.u-gruppe h2{font-size:17px;margin:0 0 6px}
+.u-gruppe h2 small{font-size:12.5px;margin-left:8px}
+.u-legende{font-size:12.5px;gap:4px 14px;margin:0 0 10px;color:var(--sp-muted)}
+.rk-legenden{display:flex;flex-wrap:wrap;gap:2px 28px;margin:0 0 10px}
+.rk-legenden .u-legende{margin:0}
+.u-legende b{color:var(--sp-text);font-weight:600}
+.rk-skala{color:var(--sp-text);cursor:help}
+.rk-leg{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;cursor:help}
+.rk-punkt{display:inline-block;box-sizing:border-box;width:10px;height:10px;border-radius:50%;background:var(--c,var(--sp-line2));flex:none}
+.rk-punkt.leer{background:none;border:1.5px solid var(--sp-line2)}
+.u-tabelle{font-size:14px}
+.u-tabelle thead th{background:none;color:var(--sp-muted);font-size:12px;border-bottom:1.5px solid var(--sp-line2)}
+.u-tabelle th,.u-tabelle td{padding:8px 10px}
+.u-tabelle thead th:nth-child(1){width:76px}.u-tabelle thead th:nth-child(3){width:220px}
+.u-tabelle .rk-wz{text-align:right}
+.u-tabelle tbody tr.u-zeile:hover,.u-tabelle tbody tr.auf{background:var(--sp-panel2)}
+tr.u-zeile>th{position:relative;padding-left:26px}
+tr.u-zeile>th::before{position:absolute;left:9px;top:11px;color:var(--sp-line2)}
+.u-auf{text-align:left;white-space:normal}
+.rk-w{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.u-wert{font-family:var(--sp-font);font-size:14.5px;font-variant-numeric:tabular-nums}
+.rk-w.auff .u-wert,.rk-w.auff{font-weight:700}
+.u-aus{font-style:normal;color:var(--sp-muted);font-size:13px}
+.u-offen th,.u-offen td{color:var(--sp-muted)}
+.u-vorl{color:var(--sp-muted);font-style:italic;font-size:12px;margin-left:8px;cursor:help}
+.u-nb{color:var(--sp-muted);font-size:12px;margin-left:8px;cursor:help}
+.u-hw{color:var(--sp-text);font-size:12px;margin-left:8px;cursor:help}
+.rk-p{display:inline-block;min-width:34px;margin-left:10px;color:var(--sp-muted);font-size:12px;font-weight:400;text-align:left}
+tr.rk-geschoss>th{background:var(--sp-panel2);color:var(--sp-muted);font-size:12px;font-weight:700;letter-spacing:.04em;padding:5px 10px;text-align:left;border-bottom:1px solid var(--sp-line)}
+/* Nach Stelle */
+.m-scroll{border:0;border-radius:0;max-height:72vh}
+.m-tabelle thead th{background:var(--sp-panel)}
+.m-tabelle thead th.rk-wz .m-sort{justify-content:flex-end}
+.m-tabelle tbody tr.m-zeile>th{white-space:normal;font-weight:400}
+.m-tabelle tbody tr.m-zeile>th .u-auf{font-weight:400}
+.m-tabelle tbody tr.sel{background:color-mix(in srgb,var(--sp-app) 10%,var(--sp-panel))}
+.m-tabelle tbody tr.cur>th{box-shadow:inset 3px 0 0 var(--sp-app)}
+.m-tabelle td.rk-wz{width:190px}
+/* Aufgeklappte Probe: kompakt, Tabelle bleibt sichtbar */
+tr.u-detail>td{background:var(--sp-panel2);padding:10px 16px 14px 30px;text-align:left}
+.rk-det{display:grid;gap:8px}
+.rk-det-spalten{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:8px 30px;align-items:start}
+.rk-param{width:auto;min-width:260px;font-size:13px;table-layout:auto}
+.rk-param caption{text-align:left;font-weight:600;font-size:12.5px;color:var(--sp-muted);padding:0 0 4px}
+.rk-param th,.rk-param td{padding:3px 12px 3px 0;border-bottom:1px solid var(--sp-line);font-weight:400;white-space:normal;vertical-align:baseline}
+.rk-param td:nth-child(2){text-align:right}
+.rk-param td:last-child{color:var(--sp-muted)}
+.rk-param-leer{font-size:13px}
+.u-det{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:0;font-size:13px}
+.u-det>div{display:contents}
+.u-det dt{margin:0;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;color:var(--sp-muted)}
+.u-det dd{margin:0}
+.u-hinweise{margin:0;padding-left:18px;color:#7a4d00;font-weight:600;font-size:13px}
+.m-det-titel{margin:10px 0 6px;font-size:13px;text-transform:none;letter-spacing:0;color:var(--sp-text)}
+.m-det-titel:first-child{margin-top:2px}
+/* Werte in Details und Prüfberichten: Farbpunkt statt Fläche */
+.wert{border:0;background:none;padding:0;gap:6px;font-size:13px;align-items:center}
+.wert.bewertet{background:none;color:inherit}
+.wert b{font-family:var(--sp-font);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* Prüfberichte */
+.berichte-block{border:0;border-radius:var(--sp-radius);box-shadow:var(--sp-schatten)}
+.bericht{border-color:var(--sp-line)}
+
+/* Fußleiste: „Mehr …“ · Stand · Neben · eine Hauptaktion */
+#rk-fuss{position:sticky;bottom:0;z-index:20;box-sizing:border-box;min-height:64px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;padding:7px 20px;background:var(--sp-panel);border-top:1px solid var(--sp-line);box-shadow:0 -2px 10px rgba(0,0,0,.05)}
+#rk-mehr{height:46px;padding:0 16px;font-size:15px;display:inline-flex;align-items:center;gap:8px}
+.rk-stand{flex:1 1 200px;min-width:0;text-align:right;font-size:14px;color:var(--sp-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk-stand.ok{color:var(--sp-ok);font-weight:600}
+.rk-stand.gelb{color:#8a6d00;font-weight:600}
+#rk-neben{height:46px;font-size:15px}
+#rk-neben[hidden],#rk-haupt[hidden]{display:none}
+#rk-haupt{font-size:17px;white-space:nowrap}
+#rk-haupt:disabled,#rk-neben:disabled{opacity:.45;cursor:not-allowed}
+#toast{bottom:84px}
+#rk-hilfe ol{margin:12px 0;padding-left:20px;display:grid;gap:8px;font-size:14px;line-height:1.5}
+#rk-hilfe h3{font-size:15px;margin:16px 0 6px}
+#rk-hilfe p{font-size:13.5px}
+
+@media(max-width:820px){
+  .rk-det-spalten{grid-template-columns:1fr}
+  tr.u-detail>td{padding-left:12px}
+  .rk-param{min-width:0;width:100%}
+  .u-tabelle thead th:nth-child(1){width:auto}.u-tabelle thead th:nth-child(3){width:auto}
+  .m-tabelle td.rk-wz{width:auto}
+}
+@media(max-width:700px){
+  main{padding:12px 12px 22px}
+  #rk-fuss{padding:8px 10px}
+  .rk-stand{flex:1 1 100%;order:-1;text-align:left}
+  #rk-haupt{flex:1 1 100%;font-size:16px;white-space:normal;height:auto;min-height:var(--sp-h-haupt);padding:8px 16px}
+  .rk-w{white-space:normal}
+}
+@media print{#rk-fuss,.rk-ablauf{display:none!important}}
