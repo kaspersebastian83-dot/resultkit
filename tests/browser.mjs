@@ -41,7 +41,8 @@ const lies=(page,pfad)=>page.evaluate(async ([projekt,pfad])=>{let d=await (awai
 const liste=(page,pfad)=>page.evaluate(async ([projekt,pfad])=>{let d=await (await navigator.storage.getDirectory()).getDirectoryHandle(projekt);for(const t of pfad.split('/'))d=await d.getDirectoryHandle(t);const out=[];for await(const [name] of d.entries())out.push(name);return out.sort();},[PROJEKT,pfad]);
 
 try{
- for(const viewport of [{width:1366,height:900},{width:360,height:740}]){
+ // Telefon 390 px wie LabelKit/FotoKit/PlanKit 2.0 – darunter passt das gemeinsame Kopfband (Leiste v3) nicht ganz (bekannte Grenze)
+ for(const viewport of [{width:1366,height:900},{width:390,height:780}]){
   const context=await browser.newContext({viewport,timezoneId:'Europe/Berlin'});
   await context.addInitScript(projekt=>{window.showDirectoryPicker=async()=>(await navigator.storage.getDirectory()).getDirectoryHandle(projekt);},PROJEKT);
   // Die Prüfungen der Tabellen je Probenart laufen in „Je Probenart“; „Nach Stelle“ (Standard) hat eine eigene Prüfung.
@@ -53,22 +54,33 @@ try{
   await ordner(page,{'_Projekt.json':JSON.stringify({nutzung:'Wohnen'}),'Laboraufträge/99.9001_08.10.2026_Daten.json':labelkit,'Laborergebnisse/AR-1-01.xml':vorlaeufig,[`Pläne/Probenplan ${PROJEKT}.probenplan`]:plan});
   const stand=page.locator('#jetzt .jetzt-stand'),jetzt=page.locator('#jetzt'),w=viewport.width;
   const art=()=>jetzt.getAttribute('data-art');
+  // 2.0: Haupt- und Nebenaktion stehen in der Fußleiste, Seltenes unter „Mehr …“ (Kopfzeile und Kartenknöpfe sind unsichtbar)
+  const haupt=page.locator('#rk-haupt'),neben=page.locator('#rk-neben'),fussStand=page.locator('#rk-stand');
+  const mehr=async id=>{await page.locator('#rk-mehr').click();await page.locator('#mosaikMehrPop').waitFor();await page.locator('#'+id).click();};
+  const haken=t=>t.replace(/\s*→$/,'');
   const aufklappen=async(gruppe,probe)=>{const z=page.locator('.u-gruppe').nth(gruppe).locator('tr.u-zeile',{has:page.getByRole('button',{name:probe,exact:true})});await z.getByRole('button',{name:probe,exact:true}).click();
    const d=z.locator('xpath=following-sibling::tr[1]');await d.locator('.u-det').waitFor();return d;};
 
   await check(`${w}: Projekt öffnen – eine Seite: Jetzt dran, Übersicht, Prüfberichte zugeklappt`,async()=>{
-   await page.getByRole('button',{name:'📁 Projektordner öffnen'}).click();
+   assert.equal(await haupt.textContent(),'Projektordner öffnen →','ohne Projekt: eine Hauptaktion unten rechts');
+   assert.equal(await page.locator('#start-projekt').isVisible(),false,'kein zweiter Knopf in der Startkarte');
+   await haupt.click();
    await until(async()=>(await stand.textContent().catch(()=>''))?.includes('von 4'),'Stand');
    assert.equal(await page.getByRole('tab').count(),0,'keine Reiter mehr');
    assert.equal(await stand.textContent(),'0 von 4 Proben mit Ergebnis · 2 nur vorläufig · 2 offen');
    assert.equal(await art(),'uebernehmen');
    assert.match(await jetzt.locator('h1').textContent(),/Ergebnisse prüfen und übernehmen/);
    assert.match(await jetzt.textContent(),/Noch nicht übernommen/);assert.equal(await jetzt.locator('.chip').count(),0,'keine Hinweise');
-   assert.deepEqual(await jetzt.locator('.jetzt-knoepfe button').allTextContents(),['Ergebnisse übernehmen','📥 Berichte importieren']);
+   assert.equal(await jetzt.locator('.jetzt-knoepfe').isVisible(),false,'Knöpfe der Karte stehen in der Fußleiste');
+   assert.deepEqual([await haupt.textContent(),await neben.textContent()],['Ergebnisse übernehmen →','Berichte importieren']);
+   assert.equal(await fussStand.textContent(),'Noch nicht übernommen');
+   assert.deepEqual(await page.locator('#rk-ablauf li').evaluateAll(l=>l.map(x=>x.className)),['fertig','aktiv',''],'Ablauf: importiert ✓ · geprüft (jetzt) · übernommen');
    assert.deepEqual(await page.locator('.u-kachel .u-k-name').allTextContents(),['PAK','Chlorid']);
    assert.match(await page.locator('.u-kachel').first().textContent(),/2 \/ 3.*1 auffällig · 2 vorläufig · 1 offen/s);
    const pakZeilen=page.locator('.u-gruppe').first().locator('tbody tr.u-zeile');assert.equal(await pakZeilen.count(),3);
-   assert.match(await pakZeilen.first().textContent(),/P1.*EG Testraum 1, Wand, Ansicht, 400 cm².*12.*vorläufig/s);
+   assert.match(await pakZeilen.first().textContent(),/P1.*EG Testraum 1, Wand, Ansicht.*12.*vorläufig/s);
+   assert.doesNotMatch(await pakZeilen.first().textContent(),/cm²/,'Fläche gehört in die Details, nicht zur Stelle');
+   assert.equal(await pakZeilen.first().locator('.u-vorl').evaluate(e=>getComputedStyle(e).fontStyle),'italic','„vorläufig“ leise (grau, kursiv) – Amber gehört der Bewertung');
    assert.match(await pakZeilen.nth(2).textContent(),/P3.*ausstehend/s);
    assert.equal(await page.locator('#berichte-block').evaluate(e=>e.open),false,'Prüfberichte zugeklappt');
    assert.match(await page.locator('#berichte-block > summary').textContent(),/Prüfberichte\s*1.*AR-1-01 \(vorläufig\).*Neue hier ablegen/s);
@@ -76,16 +88,28 @@ try{
    assert.match(page.url(),/#projekt=99\.9001%20Musterort$/);
   });
 
+  await check(`${w}: Fußleiste – „Mehr …“ vollständig, Kurzanleitung mit Version, keine alte Kopfzeile`,async()=>{
+   assert.equal(await page.locator('header.kopf').isVisible(),false,'Kopfband statt eigener Kopfzeile');
+   await page.locator('#rk-mehr').click();const pop=page.locator('#mosaikMehrPop');await pop.waitFor();
+   const eintraege=(await pop.locator('[role=menuitem]').allTextContents()).map(x=>x.trim());
+   for(const e of ['Prüfberichte zeigen','Ansicht: Nach Stelle','Ansicht: Je Probenart','Ordner neu einlesen','Anderes Projekt öffnen …','Kurzanleitung','Version und Änderungen'])assert.ok(eintraege.some(x=>x.endsWith(e)),`„Mehr …“ fehlt ${e}: ${eintraege.join(' | ')}`);
+   assert.ok(eintraege.some(x=>/Handbuch/.test(x))&&eintraege.some(x=>/Rückmeldung/.test(x)),'Handbuch und Rückmeldung von der Leiste');
+   await page.locator('#rk-m-version').click();const d=page.locator('#rk-hilfe');await d.waitFor();
+   assert.match(await d.textContent(),/Prüfberichte importieren.*Ergebnisse prüfen.*Ergebnisse übernehmen.*Neu in ResultKit 2\.0\.0.*ResultKit v2\.0\.0/s);
+   await page.keyboard.press('Escape');assert.equal(await d.isVisible(),false);
+  });
+
   await check(`${w}: Probe aufklappen – alle Parameter, Hinweis, Bericht, Labor-Nr.; wieder zuklappen`,async()=>{
    const d=await aufklappen(0,'P1');
-   assert.match(await d.textContent(),/Alle Parameter \(3\).*Σ16 EPA-PAK\s*12.*Naphthalin\s*n\. n\..*Nur vorläufige Werte.*AR-1-01 \(vorläufig\) vom 12\.10\.2026.*XML ✓.*999-2099-00000001/s);
+   assert.match(await d.textContent(),/Nur vorläufige Werte.*Alle Parameter \(3\).*Σ16 EPA-PAK\s*12.*Naphthalin\s*n\. n\..*AR-1-01 \(vorläufig\) vom 12\.10\.2026.*XML ✓.*999-2099-00000001.*EG Testraum 1, Wand, Ansicht, 400 cm²/s);
+   assert.equal(await d.locator('.rk-param tr').count(),3,'alle Parameter als kleine Tabelle');
    assert.equal(await page.getByRole('button',{name:'P1',exact:true}).getAttribute('aria-expanded'),'true');
    await page.getByRole('button',{name:'P1',exact:true}).click();
    assert.equal(await page.locator('.u-detail').count(),0);
   });
 
   await check(`${w}: Zwischenstand übernehmen fragt nach; Abbrechen schreibt nichts`,async()=>{
-   await jetzt.getByRole('button',{name:'Ergebnisse übernehmen'}).click();
+   await haupt.click();
    const d=page.locator('#frage-dialog');await d.waitFor();assert.match(await d.textContent(),/Noch nicht vollständig: 0 von 4/);
    await d.getByRole('button',{name:'Abbrechen'}).click();
    assert.equal(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'),null);
@@ -104,20 +128,22 @@ try{
    assert.equal(await art(),'importiert');
    assert.equal(await jetzt.locator('h1').textContent(),'AR-1-02 eingelesen');
    assert.match(await jetzt.textContent(),/Keine Hinweise\. Jetzt übernehmen\?/);
-   assert.deepEqual(await jetzt.locator('.jetzt-knoepfe button').allTextContents(),['Ergebnisse übernehmen','Erst ansehen']);
+   assert.deepEqual([await haupt.textContent(),await neben.textContent()],['Ergebnisse übernehmen →','Erst ansehen']);
    const ersetzt=page.locator('.bericht.ersetzt');assert.equal(await ersetzt.count(),1);assert.match(await ersetzt.textContent(),/AR-1-01.*ersetzt/s);
    assert.match(await page.locator('#berichte-block > summary').textContent(),/AR-1-02 vom 12\.10\.2026.*1 ersetzt/s);
   });
 
   await check(`${w}: Bewertung in der aufgeklappten Probe – Σ16 EPA-PAK nach VdS (Wohnen), Chlorid nach VdS 2357`,async()=>{
-   const p1=(await aufklappen(0,'P1')).locator('.wert').first();
-   assert.match(await p1.textContent(),/Σ16 EPA-PAK\s*14/);
-   assert.equal(await p1.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(224, 69, 58)');
+   const farbe=l=>l.locator('.rk-punkt').evaluate(e=>getComputedStyle(e).backgroundColor);
+   const z1=(await aufklappen(0,'P1')).locator('.rk-param tr').first(),p1=z1.locator('.wert');
+   assert.match(await z1.textContent(),/Σ16 EPA-PAK\s*14/);
+   assert.equal(await farbe(p1),'rgb(224, 69, 58)','Farbpunkt in der Farbe der Kategorie');
+   assert.equal(await p1.evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)','keine farbige Fläche mehr');
    assert.match(await p1.getAttribute('title'),/VdS 2357.*Wohn/);
    const p2=(await aufklappen(0,'P2')).locator('.wert').first();
-   assert.equal(await p2.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(76, 175, 80)');
+   assert.equal(await farbe(p2),'rgb(76, 175, 80)');
    const chlorid=(await aufklappen(1,'P4')).locator('.wert').first();
-   assert.equal(await chlorid.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(224, 69, 58)','Chlorid 26 µg/cm²: oberhalb von 5–10 µg/cm² (VdS 2357)');
+   assert.equal(await farbe(chlorid),'rgb(224, 69, 58)','Chlorid 26 µg/cm²: oberhalb von 5–10 µg/cm² (VdS 2357)');
    for(const p of ['P1','P2','P4'])await page.getByRole('button',{name:p,exact:true}).click();
    assert.equal(await page.locator('.u-detail').count(),0);
    assert.equal(await page.locator('#xss').count(),0,'Farbe aus dem Probenplan schleust kein HTML ein');assert.equal(await page.evaluate(()=>window.__xss),undefined);
@@ -135,17 +161,21 @@ try{
    const pak=page.locator('.u-gruppe').first();
    assert.deepEqual(await pak.locator('thead th').allTextContents(),['Probe','Probenahmestelle','Σ16 EPA-PAK (µg/m²)'],'drei Spalten, Bewertung als Farbe des Werts');
    assert.match(await pak.locator('h2').textContent(),/Prüfbericht AR-1-02 vom 12\.10\.2026/);
-   assert.match(await pak.locator('.u-legende').textContent(),/VdS 2357.*unter Referenzwert.*Referenzwert erreicht\/überschritten/s);
+   assert.match(await pak.locator('.u-legende').textContent(),/VdS 2357.*< 10 µg\/m².*≥ 10 µg\/m²/s,'Legende in einer Zeile: Skala kurz, Punkte mit Bereich');
+   assert.deepEqual(await pak.locator('.u-legende .rk-leg').evaluateAll(l=>l.slice(0,2).map(x=>x.title)),['unter Referenzwert','Referenzwert erreicht/überschritten'],'Kategorienamen im Tooltip');
+   assert.match(await pak.locator('.rk-skala').getAttribute('title'),/VdS 2357.*Wohn/);
    assert.doesNotMatch(await pak.locator('tbody').textContent(),/BaP|Benzo/);
-   const chip=pak.locator('tbody tr').first().locator('.u-chip').first();
+   const chip=pak.locator('tbody tr').first().locator('.rk-w').first();
    assert.equal(await chip.textContent(),'14');assert.match(await chip.getAttribute('title'),/Referenzwert erreicht/);
-   const [bg]=await chip.evaluate(e=>[getComputedStyle(e).backgroundColor]);
-   assert.notEqual(bg,'rgb(224, 69, 58)','keine Vollfarbe');
+   assert.equal(await chip.evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)','Wert ohne Pille');
+   assert.equal(await chip.locator('.rk-punkt').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(224, 69, 58)','Farbpunkt');
+   assert.equal(await chip.evaluate(e=>e.classList.contains('auff')),true,'auffälliger Wert fett');
    // Chlorid: VdS 2357, 5–10 µg/cm² korrosionschemisch relevant – 26 µg/cm² liegt darüber
    const cl=page.locator('.u-gruppe').nth(1);
    assert.deepEqual(await cl.locator('thead th').allTextContents(),['Probe','Probenahmestelle','Chlorid (µg/cm²)']);
-   assert.match(await cl.locator('.u-legende').textContent(),/unterhalb.*< 5 µg\/cm².*im Bereich.*5 – < 10 µg\/cm².*oberhalb.*≥ 10 µg\/cm²/s);
-   const clChip=cl.locator('tbody .u-chip').first();assert.equal(await clChip.textContent(),'26');assert.match(await clChip.getAttribute('title'),/oberhalb/);
+   assert.match(await cl.locator('.u-legende').textContent(),/< 5 µg\/cm².*5 – < 10 µg\/cm².*≥ 10 µg\/cm²/s);
+   assert.deepEqual((await cl.locator('.u-legende .rk-leg').evaluateAll(l=>l.map(x=>x.title))).map(t=>t.split(' ')[0]),['unterhalb','im','oberhalb']);
+   const clChip=cl.locator('tbody .rk-w').first();assert.equal(await clChip.textContent(),'26');assert.match(await clChip.getAttribute('title'),/oberhalb/);
    await page.getByRole('button',{name:'Nur auffällige'}).click();
    assert.deepEqual(await pak.locator('tbody th').allTextContents(),['P1']);assert.deepEqual(await cl.locator('tbody th').allTextContents(),['P4'],'Chlorid oberhalb ist auffällig');
    await page.getByRole('button',{name:'Alle'}).click();
@@ -153,15 +183,20 @@ try{
   });
 
   await check(`${w}: Nach Stelle – PAK und Chlorid nebeneinander, sortieren, markieren, Strg+C für Excel, nichts bearbeitbar`,async()=>{
-   await page.getByRole('button',{name:'Nach Stelle'}).click();
+   await mehr('rk-m-stelle');
    const t=page.locator('#m-tabelle');await t.waitFor();
-   assert.deepEqual((await t.locator('thead th').allTextContents()).map(x=>x.replace(/[▲▼]/g,'')),['Probe','Probenahmestelle','Σ16 EPA-PAK (µg/m²)','Chlorid (µg/cm²)']);
+   assert.deepEqual((await t.locator('thead th').allTextContents()).map(x=>x.replace(/[▲▼]/g,'')),['Probenahmestelle','Σ16 EPA-PAK (µg/m²)','Chlorid (µg/cm²)'],'Stelle vorn, Probennummer am Wert');
    const zeilen=t.locator('tbody tr.m-zeile');assert.equal(await zeilen.count(),3);
-   assert.match(await zeilen.first().textContent(),/P1 · P4.*EG Testraum 1, Wand, Ansicht.*14.*26/s);
+   assert.match(await zeilen.first().textContent(),/EG Testraum 1, Wand, Ansicht.*14.*P1.*26.*P4/s);
+   const pNr=()=>zeilen.evaluateAll(r=>r.map(x=>[...x.querySelectorAll('.rk-p')].map(p=>p.textContent).join(' · ')));
    assert.equal(await t.locator('input,textarea,select,[contenteditable]').count(),0,'nur lesen');
    await t.getByRole('button',{name:/Σ16 EPA-PAK/}).click();
-   assert.equal(await t.locator('thead th').nth(2).getAttribute('aria-sort'),'descending');
-   assert.deepEqual(await zeilen.locator('th').allTextContents(),['P1 · P4','P2','P3'],'höchster Wert zuerst, < BG zuletzt');
+   assert.equal(await t.locator('thead th').nth(1).getAttribute('aria-sort'),'descending');
+   assert.deepEqual(await pNr(),['P1 · P4','P2','P3'],'höchster Wert zuerst, < BG zuletzt');
+   assert.equal(await page.locator('#u-sort').inputValue(),'wert','„Sortiert nach“ zeigt: nach Wert (Spaltenkopf)');
+   await page.locator('#u-sort').selectOption('nr');assert.equal(await t.locator('thead th[aria-sort="ascending"],thead th[aria-sort="descending"]').count(),0,'nach Probennummer – kein Spaltenkopf aktiv');
+   assert.deepEqual(await pNr(),['P1 · P4','P2','P3']);assert.match(await page.evaluate(()=>localStorage.getItem('resultkit-msort')),/"s":"probe"/);
+   await page.locator('#u-sort').selectOption('ort');assert.equal(await t.locator('thead th').first().getAttribute('aria-sort'),'ascending');
    await zeilen.nth(1).locator('td').first().click();assert.equal(await zeilen.nth(1).getAttribute('aria-selected'),'true');
    await page.keyboard.press('Shift+ArrowDown');assert.deepEqual(await zeilen.evaluateAll(r=>r.map(x=>x.getAttribute('aria-selected'))),['false','true','true']);
    await page.keyboard.press('Control+c');
@@ -172,16 +207,23 @@ try{
    await page.keyboard.press('Escape');assert.equal(await t.locator('.u-detail').count(),0);
    await zeilen.first().locator('td').first().dblclick();assert.match(await t.locator('.u-detail').textContent(),/P1 · PAK.*P4 · Chlorid/s,'beide Proben der Stelle');
    await page.keyboard.press('Escape');await page.keyboard.press('Control+a');assert.equal(await t.locator('tr.m-zeile[aria-selected=true]').count(),3);
-   await page.getByRole('button',{name:'Je Probenart'}).click();assert.equal(await page.locator('#m-tabelle').count(),0);assert.equal(await page.locator('.u-gruppe').count(),2);
+   await mehr('rk-m-art');assert.equal(await page.locator('#m-tabelle').count(),0);assert.equal(await page.locator('.u-gruppe').count(),2);
   });
 
   await check(`${w}: Ergebnisse übernehmen – Datei für PlanKit/FotoKit, danach grün ohne Hauptknopf`,async()=>{
-   if(w<500){await jetzt.getByRole('button',{name:'Erst ansehen'}).click();assert.equal(await art(),'uebernehmen');}
-   await jetzt.getByRole('button',{name:'Ergebnisse übernehmen'}).click();
+   if(w<500){assert.equal(await neben.textContent(),'Erst ansehen');await neben.click();assert.equal(await art(),'uebernehmen');}
+   assert.equal(await haupt.textContent(),'Ergebnisse übernehmen →');await haupt.click();
    await until(async()=>await art()==='fertig','übernommen');
    assert.match(await jetzt.locator('h1').textContent(),/^Übernommen am .* ✓$/);
    assert.match(await jetzt.textContent(),/PlanKit und FotoKit verwenden diesen Stand/);
-   assert.equal(await jetzt.locator('button.primary').count(),0,'nichts mehr zu tun');
+   assert.ok(!(await haupt.isVisible())||/^Weiter/.test(await haupt.textContent()),'nichts mehr zu tun – höchstens „Weiter“ des Kopfbands');
+   assert.match(await fussStand.textContent(),/^✓ Übernommen am /);assert.equal(await neben.textContent(),'Berichte importieren');
+   assert.deepEqual(await page.locator('#rk-ablauf li').evaluateAll(l=>l.map(x=>x.className)),['fertig','fertig','fertig']);
+   // Zeichnet sich das Kopfband später neu (eigener Takt), zieht die Fußleiste ihr „Weiter“ nach
+   await page.evaluate(()=>{const a=document.createElement('a');a.className='ml-weiter';a.href='#weiter-test';a.innerHTML='<strong>Weiter: Plan</strong><small>noch kein Probenplan</small>';document.getElementById('mosaikLeiste').append(a);});
+   await until(async()=>(await haupt.textContent())==='Weiter: Plan →','Fußleiste folgt dem Kopfband');
+   await page.evaluate(()=>document.querySelector('#mosaikLeiste a[href="#weiter-test"]').remove());
+   await until(async()=>!(await haupt.isVisible()),'ohne „Weiter“ keine Hauptaktion');
    const datei=JSON.parse(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'));
    assert.equal(datei.format,'spektron-ergebnisse');assert.equal(datei.projekt,'99.9001');assert.equal(datei.vollstaendig,true);
    assert.deepEqual(datei.berichte.map(b=>b.bericht),['AR-1-02']);assert.equal(datei.berichte[0].datum,'2026-10-12');assert.deepEqual(datei.ersetzt,[{bericht:'AR-1-01',durch:['AR-1-02']}]);
@@ -218,13 +260,13 @@ try{
 
   await check(`${w}: Ordner ändert sich nach der Übernahme → „Erneut übernehmen“, Hinweis-Chip öffnet die Berichte`,async()=>{
    await page.evaluate(async projekt=>{const d=await (await (await navigator.storage.getDirectory()).getDirectoryHandle(projekt)).getDirectoryHandle('Laborergebnisse');const w=await (await d.getFileHandle('AR-1-02.pdf',{create:true})).createWritable();await w.write('%PDF-1.4 kaputt');await w.close();},PROJEKT);
-   await page.getByRole('button',{name:'⟳ Neu einlesen'}).click();
+   await mehr('rk-m-neu');
    await until(async()=>await art()==='geaendert','geändert');
    assert.match(await jetzt.textContent(),/Geändert seit der Übernahme/);
    assert.match(await page.locator('#berichte').textContent(),/PDF ist beschädigt/,'unlesbare PDF wird gemeldet');
    await jetzt.getByRole('button',{name:/⚠ \d+ Hinweis/}).click();
    assert.equal(await page.locator('#berichte-block').evaluate(e=>e.open),true,'Hinweis-Chip klappt die Prüfberichte auf');
-   await jetzt.getByRole('button',{name:'Erneut übernehmen'}).click();
+   assert.equal(await haupt.textContent(),'Erneut übernehmen →');await haupt.click();
    await until(async()=>await art()==='fertig','erneut übernommen');
    assert.ok(await lies(page,'_Spektron/ResultKit/_Ergebnisse.vorher.json'),'vorige Übernahme bleibt erhalten');
   });
@@ -234,23 +276,23 @@ try{
    const d=JSON.parse(labelkit);d.nrSchutz=1;for(const p of d.proben)p.nrFest={am:'2026-10-29T08:00:00.000Z',anlass:'Etiketten'};
    d.proben[2].storniert={am:'2026-10-30T10:00:00.000Z',kuerzel:'Te',grund:'doppelt'};   // P3 hat im Bericht AR-1-02 einen Wert
    await schreibe(JSON.stringify(d));
-   await page.getByRole('button',{name:'⟳ Neu einlesen'}).click();
+   await mehr('rk-m-neu');
    await until(async()=>await art()==='geaendert','Storno gesetzt → geändert');
    assert.equal(await stand.textContent(),'3 von 3 Proben mit Ergebnis');
    assert.match(await page.locator('#hinweise').textContent(),/P3 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe \(Prüfbericht AR-1-02\)\. ResultKit übernimmt ihn nicht; gilt die Probe doch, heb das Storno in LabelKit auf\./);
    assert.deepEqual(await page.locator('.u-gruppe').first().locator('tbody tr.u-zeile th').allTextContents(),['P1','P2'],'P3 nicht in der Ergebnistabelle');
    assert.match(await page.locator('#berichte article.bericht:not(.ersetzt)').first().textContent(),/P3 storniert/,'Prüfbericht kennzeichnet die Probe');
-   await jetzt.getByRole('button',{name:'Erneut übernehmen'}).click();
+   assert.equal(await haupt.textContent(),'Erneut übernehmen →');await haupt.click();
    await until(async()=>await art()==='fertig','übernommen ohne P3');
    let datei=JSON.parse(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'));
    assert.equal(datei.vollstaendig,true);assert.deepEqual(datei.auftrag.proben.map(p=>p.label),['P1','P2','P4']);
    assert.deepEqual(datei.berichte.find(b=>b.bericht==='AR-1-02').proben.map(p=>p.label),['P1','P2','P4']);
    assert.ok(datei.hinweise.some(h=>h.startsWith('P3 ist in LabelKit storniert')));
    await schreibe(labelkit);   // Storno aufgehoben
-   await page.getByRole('button',{name:'⟳ Neu einlesen'}).click();
+   await mehr('rk-m-neu');
    await until(async()=>await art()==='geaendert','Storno aufgehoben → geändert');
    assert.equal(await stand.textContent(),'4 von 4 Proben mit Ergebnis');
-   await jetzt.getByRole('button',{name:'Erneut übernehmen'}).click();
+   assert.equal(await haupt.textContent(),'Erneut übernehmen →');await haupt.click();
    await until(async()=>await art()==='fertig','übernommen mit P3');
    datei=JSON.parse(await lies(page,'_Spektron/ResultKit/_Ergebnisse.json'));
    assert.equal(datei.auftrag.proben.length,4);assert.ok(!datei.hinweise.some(h=>/storniert/.test(h)));
@@ -263,7 +305,7 @@ try{
     'AR-D.xml':b64(labXML([probe(1,pak('5')),{...probe(1,pak('6')),labNr:'999-2099-00000099'}],{code:'AR-999-2099-000003-01'}))};
    await page.evaluate(async ([projekt,neu])=>{const d=await (await (await navigator.storage.getDirectory()).getDirectoryHandle(projekt)).getDirectoryHandle('Laborergebnisse');
     for(const [n,t] of Object.entries(neu)){const w=await (await d.getFileHandle(n,{create:true})).createWritable();await w.write(Uint8Array.from(atob(t),c=>c.charCodeAt(0)));await w.close();}},[PROJEKT,neu]);
-   await page.getByRole('button',{name:'⟳ Neu einlesen'}).click();
+   await mehr('rk-m-neu');
    await until(async()=>(await page.locator('#berichte').textContent()).includes('AR-999-2099-000003-01'),'Ordner neu eingelesen');
    const berichte=await page.locator('#berichte').textContent();
    assert.match(berichte,/AR-999-2099-000002-01/,'die XML ist da');assert.match(berichte,/AR-999-2099-000001-01/,'die PDF ist da – nicht mit der XML verworfen');

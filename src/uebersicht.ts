@@ -91,8 +91,15 @@ function geschoss(text:string){
  for(let i=0;i<w.length;i++){
   const m=GESCHOSS.exec(w[i]);if(!m)continue;
   const n=m[1]?.toUpperCase();const rang=m[2]||m[3]?1+Number(m[2]||m[3]):m[4]?2:n?(/^(UG|KG|KELLER)/.test(n)?0:n==='EG'||n==='ERDGESCHOSS'?1:/^(DG|DACH|SPITZBODEN)/.test(n)?50:60):40;
-  return {vor:w.slice(0,i).join(' '),rang,rest:w.slice(i+1).join(' ')};}
- return {vor:'',rang:70,rest:text};   // ohne Geschoss: ans Ende
+  return {vor:w.slice(0,i).join(' '),rang,rest:w.slice(i+1).join(' '),wort:w[i]};}
+ return {vor:'',rang:70,rest:text,wort:''};   // ohne Geschoss: ans Ende
+}
+/** Geschoss als Überschrift für Zwischenzeilen (ResultKit 2.0, nur Anzeige): Gebäude und Geschoss wie geschrieben,
+ *  „1.OG“/„OG 1“ als „1. OG“; '' ohne erkennbares Geschoss. Gleiche Erkennung wie die Sortierung nach Ort. */
+export function geschossKopf(text:string){
+ const g=geschoss(text);if(g.rang===70)return '';
+ const wort=g.wort.replace(/^(\d{1,2})\.?\s?OG$/i,'$1. OG').replace(/^OG\s?(\d{1,2})$/i,'$1. OG');
+ return [g.vor,wort].filter(Boolean).join(' · ');
 }
 /** Vergleich nach Ort: Gebäude, Geschoss (unten nach oben), dann Raum/Bauteil wie geschrieben. Ohne Geschoss ans Ende. */
 export function ortVergleich(a:string,b:string){

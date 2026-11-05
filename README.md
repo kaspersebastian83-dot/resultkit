@@ -6,8 +6,8 @@ Teil der Spektron-Apps (LabelKit → FotoKit → **ResultKit** → PlanKit → B
 - **was zurück ist** – die Prüfberichte im Ordner `Laborergebnisse` (Eurofins-XML, dazu die PDF zum Abgleich),
 - **was noch fehlt** – Proben ohne Ergebnis, nur vorläufige Werte, Proben im Bericht, die nicht beauftragt waren.
 
-**Eine Seite (ab 1.3):** Oben **„Jetzt dran“** mit dem einen nächsten Schritt (Berichte importieren · Ergebnisse übernehmen · übernommen ✓ · erneut übernehmen) und dem Stand in einem Satz.
-Darunter die Ergebnisse auf einen Blick – je Probenart eine Kachel und eine einfache Tabelle (Probe · Probenahmestelle aus LabelKit · Ergebnis; PAK als Σ16 EPA-PAK mit Bewertung, Chlorid mit Wert, Asbest mit Befund). Filter „Nur auffällige“ / „Nur offene“, Sortierung nach Ort oder Probennummer.
+**Eine Seite (ab 1.3), einfache Oberfläche (ab 2.0):** Kopfband wie in allen Spektron-Apps; oben **„Jetzt dran“** mit dem Stand in einem Satz, der eine nächste Schritt steht als Hauptaktion unten rechts in der Fußleiste (Berichte importieren · Ergebnisse übernehmen · erneut übernehmen · danach „Weiter“). Seltenes unter „Mehr …“ unten links.
+Darunter die Ergebnisse auf einen Blick – je Probenart eine Kachel und eine einfache Tabelle (Probe · Probenahmestelle aus LabelKit · Ergebnis; PAK als Σ16 EPA-PAK mit Bewertung, Chlorid mit Wert, Asbest mit Befund). Werte mit Farbpunkt nach Skala, Legende in einer Zeile, Zwischenzeile je Geschoss. Filter „Nur auffällige“ / „Nur offene“, Sortierung nach Ort oder Probennummer; Ansicht „Nach Stelle“ / „Je Probenart“ unter „Mehr …“.
 Ein Klick auf eine Probe klappt alle Parameter, Hinweise, Prüfbericht und Labor-Nr. auf. Ganz unten, zugeklappt: die Prüfberichte und die Ablage für neue Berichte.
 Die Regeln für „Jetzt dran“ stehen in `src/jetzt.ts` (in Node getestet, `tests/jetzt.mjs`).
 

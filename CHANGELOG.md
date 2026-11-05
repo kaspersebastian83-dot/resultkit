@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0 · 05.11.2026 – einfache Oberfläche (Spektron Schritt 3)
+- **Kopfband** wie in LabelKit, FotoKit und PlanKit (Spektron-Leiste v3, byte-gleich): Projekt groß, sechs Kacheln, „Weiter“ mit Grund. Die eigene lila Kopfzeile entfällt; Version, Projektwechsel, Neu einlesen und Hilfe stehen unter „Mehr …“.
+- **Fußleiste:** „Mehr …“ links, rechts **eine Hauptaktion** als Satz aus „Jetzt dran“ („Ergebnisse übernehmen →“, „Erneut übernehmen →“, „Prüfberichte importieren →“), daneben höchstens eine Nebenaktion („Berichte importieren“, „Erst ansehen“). Nach der Übernahme führt die Hauptaktion zum „Weiter“ des Kopfbands. In der Mitte der Stand der Übernahme („Noch nicht übernommen“ / „✓ Übernommen am …“).
+- „Jetzt dran“ bleibt die Karte oben (Titel, Stand, Hinweis-Chip); darüber eine kleine Ablauf-Zeile „Berichte importiert · Geprüft · Übernommen“.
+- **Ruhigere Ergebnistabelle:** Werte mit kleinem Farbpunkt statt farbiger Pille, auffällige Werte fett; Legende in einer Zeile (Kategorienamen im Tooltip); „vorläufig“, „ausstehend“, „nicht beauftragt“ grau; Zwischenzeile je Geschoss bei Sortierung nach Ort; „Je Probenart“ zeigt die Stelle ohne Fläche (die steht in den Details).
+- **Nach Stelle:** die Probenahmestelle steht vorn, die Probennummer klein am Wert („12 · P1“, „3,2 · P7“) statt „P1 · P7“ als Zeilenkopf. Kopieren für Excel liefert dieselben Spalten wie bisher (mit „Probe“).
+- **Aufgeklappte Probe kompakt:** Hinweise oben als Satz, links alle Parameter als kleine Tabelle, rechts Stand, Prüfbericht, Labor-Nr., Probenahme, Beschreibung.
+- Ansicht „Nach Stelle / Je Probenart“ unter „Mehr …“ (gilt weiter je Browser); Kurzanleitung mit „Neu in 2.0.0“. Spektron-Look v1 (Segoe UI), Leistenfarbe Labor.
+- Unverändert: Import, Prüfungen, XML↔PDF-Abgleich, Bewertung, Storno-Regel, Übernahme und `_Ergebnisse.json`.
+- Spektron-Kette auf die neuen Wege von FotoKit 2.0 und PlanKit 2.0 umgestellt (lief seit FotoKit 2.0 nachts rot).
+
 ## 1.15.0 · 01.11.2026
 - Spektron-Leiste v2: Schritt „BerichtKit · Brandbericht“ bzw. „· Asbestbericht“, wenn BerichtKit sich die Berichtsart des Projekts gemerkt hat (der Link öffnet genau diese); Haken bei BerichtKit nur für einen gespeicherten Bericht dieser Art, dessen Datei noch in „Mitteilungen“ liegt (Projekte ohne BerichtKit-Angaben wie bisher nach dem Dateinamen). Nach dem gespeicherten Bericht heißt der Knopf „Weiter: Ans Büro übergeben →“ (Projektzentrale, eigenes Fenster). „Weiter“ nennt im Tooltip Ziel und Grund. Keine Nummern mehr an den Schritten (✓ reicht), die eigene App ist deutlicher markiert, „Aktuelles Projekt“ im Projektmenü lädt nicht mehr neu.
 
