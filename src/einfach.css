@@ -128,7 +128,8 @@ tr.u-detail>td{background:var(--sp-panel2);padding:10px 16px 14px 30px;text-alig
 .rk-stand.ok{color:var(--sp-ok);font-weight:600}
 .rk-stand.gelb{color:#8a6d00;font-weight:600}
 #rk-neben{height:46px;font-size:15px}
-#rk-neben[hidden],#rk-haupt[hidden]{display:none}
+#rk-drucken{height:46px;font-size:15px}
+#rk-neben[hidden],#rk-haupt[hidden],#rk-drucken[hidden]{display:none}
 #rk-haupt{font-size:17px;white-space:nowrap}
 #rk-haupt:disabled,#rk-neben:disabled{opacity:.45;cursor:not-allowed}
 #toast{bottom:84px}
@@ -149,5 +150,6 @@ tr.u-detail>td{background:var(--sp-panel2);padding:10px 16px 14px 30px;text-alig
   .rk-stand{flex:1 1 100%;order:-1;text-align:left}
   #rk-haupt{flex:1 1 100%;font-size:16px;white-space:normal;height:auto;min-height:var(--sp-h-haupt);padding:8px 16px}
   .rk-w{white-space:normal}
+  #rk-drucken{display:none}   /* Telefon: drucken über „Mehr …“ */
 }
 @media print{#rk-fuss,.rk-ablauf{display:none!important}}

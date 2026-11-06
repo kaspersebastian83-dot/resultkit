@@ -9,6 +9,8 @@ Teil der Spektron-Apps (LabelKit → FotoKit → **ResultKit** → PlanKit → B
 **Eine Seite (ab 1.3), einfache Oberfläche (ab 2.0):** Kopfband wie in allen Spektron-Apps; oben **„Jetzt dran“** mit dem Stand in einem Satz, der eine nächste Schritt steht als Hauptaktion unten rechts in der Fußleiste (Berichte importieren · Ergebnisse übernehmen · erneut übernehmen · danach „Weiter“). Seltenes unter „Mehr …“ unten links.
 Darunter die Ergebnisse auf einen Blick – je Probenart eine Kachel und eine einfache Tabelle (Probe · Probenahmestelle aus LabelKit · Ergebnis; PAK als Σ16 EPA-PAK mit Bewertung, Chlorid mit Wert, Asbest mit Befund). Werte mit Farbpunkt nach Skala, Legende in einer Zeile, Zwischenzeile je Geschoss. Filter „Nur auffällige“ / „Nur offene“, Sortierung nach Ort oder Probennummer; Ansicht „Nach Stelle“ / „Je Probenart“ unter „Mehr …“.
 Ein Klick auf eine Probe klappt alle Parameter, Hinweise, Prüfbericht und Labor-Nr. auf. Ganz unten, zugeklappt: die Prüfberichte und die Ablage für neue Berichte.
+
+**Übersicht drucken (ab 2.1):** Nach der Übernahme druckt „Übersicht drucken“ (Fußleiste bzw. „Mehr …“) alle Werte auf einer A4-Seite quer – eine Zeile je Probenahmestelle (P-Nr., Etage, Raum, Oberfläche, PAK Σ16 EPA, Chlorid, Asbest, Bemerkung), Kopf mit Projekt, Objekt, Auftraggeber, Druckdatum und Stand der Übernahme, „vorläufig“ bei vorläufigen Prüfberichten. Leere Spalten fallen weg, REF und Freimessung sind markiert, stornierte Proben fehlen; ab etwa 40 Zeilen weitere Seiten mit wiederholtem Tabellenkopf. Quelle ist nur die übernommene `_Ergebnisse.json`, gedruckt wird über den Browser (`window.print()`, `src/druck.ts`, `src/druck.css`) – ResultKit ändert dabei nichts und legt keine Datei ab.
 Die Regeln für „Jetzt dran“ stehen in `src/jetzt.ts` (in Node getestet, `tests/jetzt.mjs`).
 
 Neue Prüfberichte werden **nur hier** importiert: ResultKit legt eine unveränderte Kopie in `Laborergebnisse` ab (nichts wird überschrieben).
@@ -43,6 +45,7 @@ pnpm build && pnpm test
 ```
 
 Tests nutzen nur erfundene Daten (`tests/lab-fixtures.mjs`). Keine Kundendaten im Repository.
+Die Druckseite prüft `tests/druck-browser.mjs` (Zeilen, ausgeblendete Spalten, REF, vorläufig, nichts geschrieben; als PDF: 40 Zeilen = eine Seite quer, 70 Zeilen = zwei Seiten mit Kopf). Mit `DRUCK_PDF=<Ordner>` legt der Test die PDFs und Bildschirmfotos zum Ansehen ab.
 
 ### Spektron-Kette (Integrationstest über die Apps)
 

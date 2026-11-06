@@ -101,6 +101,15 @@ export function geschossKopf(text:string){
  const wort=g.wort.replace(/^(\d{1,2})\.?\s?OG$/i,'$1. OG').replace(/^OG\s?(\d{1,2})$/i,'$1. OG');
  return [g.vor,wort].filter(Boolean).join(' · ');
 }
+/** Ort (LabelKit „Raum/Ort“, z. B. „Haus A 1OG Küche Brandraum“) in Etage und Raum teilen – für die Druckseite (2.1, nur Anzeige).
+ *  Etage wie geschossKopf („Haus A · 1. OG“), Raum = was danach steht, wie geschrieben. Ohne erkennbares Geschoss: alles ist Raum. */
+export function ortTeile(text:string):{etage:string;raum:string}{
+ const t=String(text||'').trim(),g=geschoss(t);if(g.rang===70)return {etage:'',raum:t};
+ // Raum aus dem Text selbst (Kommas bleiben stehen): alles hinter dem Geschosswort – gleiche Wörter wie in geschoss()
+ const n=t.replace(/(\d{1,2})\.\s+OG\b/gi,'$1.OG').replace(/\bOG\s+(\d{1,2})\b/gi,'OG$1'),woerter=[...n.matchAll(/[^\s,·]+/g)];
+ const w=woerter[g.vor?g.vor.split(' ').length:0];
+ return {etage:geschossKopf(t),raum:w?n.slice(w.index!+w[0].length).replace(/^[\s,·]+/,'').trim():g.rest};
+}
 /** Vergleich nach Ort: Gebäude, Geschoss (unten nach oben), dann Raum/Bauteil wie geschrieben. Ohne Geschoss ans Ende. */
 export function ortVergleich(a:string,b:string){
  const x=geschoss(a),y=geschoss(b),ohne=(g:{rang:number})=>g.rang===70?1:0;

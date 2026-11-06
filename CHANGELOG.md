@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 · 06.11.2026 – Übersicht drucken
+- **Neu: „Übersicht drucken“** (Fußleiste links neben „Mehr …“, sobald die Ergebnisübersicht übernommen ist, und unter „Mehr …“): alle Werte auf **einer A4-Seite quer** – statt des Stapels ausgedruckter Eurofins-Prüfberichte beim Schreiben der Sanierungsmaßnahmen.
+- Kopf: Projektnummer und Ort, Objekt und Auftraggeber aus `_Projekt.json`, Druckdatum, „Stand der Laborergebnisse: übernommen am …“, die Prüfberichte; „vorläufig“, wenn ein Prüfbericht vorläufig ist; ein Hinweis, wenn sich der Ordner seit der Übernahme geändert hat.
+- Eine Zeile je Probenahmestelle, sortiert Gebäude → Etage → Raum (wie die Übersicht): P-Nr. · Etage · Raum (mit Zusatz wie „Brandraum“) · Oberfläche/-art · PAK Σ16 EPA · Chlorid · Asbest (Befund) · Bemerkung (vorläufig, nicht beauftragt, Chlorid laut Bericht in mg/m²). Leere Spalten fallen weg, Proben weiterer Art bekommen eine Spalte „Weitere“. Die Werte stehen direkt neben dem Raum, die Zeilen sind abwechselnd hinterlegt; Oberfläche und Bemerkung stehen grau am rechten Rand (fürs Nachschlagen, nicht fürs Lesen).
+- Bewertung in ruhigen Pastellfarben nach derselben Skala wie in der App, Asbest nachgewiesen nur leicht rot. **REF** und **Freimessung** klein markiert (Regel wie Projektzentrale/BerichtKit: „REF“, „Referenz“, „unbelastet“ … bzw. „F-“ vorn, „Freimessung“, „nach Sanierung“). In LabelKit stornierte Proben stehen nicht drauf.
+- Werte und Bezeichnungen kommen unverändert aus der übernommenen `_Ergebnisse.json` – nichts wird bearbeitet, keine Datei wird geschrieben (Druck über den Browser, Spektron-Look). Ab etwa 40 Zeilen bricht die Tabelle auf weitere Seiten um, der Tabellenkopf und die Fußzeile „Spektron ResultKit … · Werte aus den Eurofins-Prüfberichten, keine Bewertung“ stehen auf jeder Seite.
+- Strg+P auf der normalen Seite druckt wie bisher die App.
+
 ## 2.0.0 · 05.11.2026 – einfache Oberfläche (Spektron Schritt 3)
 - **Kopfband** wie in LabelKit, FotoKit und PlanKit (Spektron-Leiste v3, byte-gleich): Projekt groß, sechs Kacheln, „Weiter“ mit Grund. Die eigene lila Kopfzeile entfällt; Version, Projektwechsel, Neu einlesen und Hilfe stehen unter „Mehr …“.
 - **Fußleiste:** „Mehr …“ links, rechts **eine Hauptaktion** als Satz aus „Jetzt dran“ („Ergebnisse übernehmen →“, „Erneut übernehmen →“, „Prüfberichte importieren →“), daneben höchstens eine Nebenaktion („Berichte importieren“, „Erst ansehen“). Nach der Übernahme führt die Hauptaktion zum „Weiter“ des Kopfbands. In der Mitte der Stand der Übernahme („Noch nicht übernommen“ / „✓ Übernommen am …“).

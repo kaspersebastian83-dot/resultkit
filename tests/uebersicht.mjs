@@ -140,4 +140,28 @@ ok('Kopieren für Excel: Werte wie im Bericht, Einheit im Kopf, Tabulatoren, kei
  assert.deepEqual(d.zeilen,[['P3','EG Flur\tWand','ausstehend',''],['P1, P2','EG Küche Decke','412','14,2']]);
  const t=U.alsTSV(d).split('\r\n');assert.equal(t.length,3);assert.equal(t[1],'P3\tEG Flur Wand\tausstehend\t','Tabulator in Text wird Leerzeichen');
 });
+{const D=await import('../src/druck.ts');
+ ok('Druckseite (2.1): Ort in Etage und Raum, REF/Freimessung wie Projektzentrale',()=>{
+  assert.deepEqual(U.ortTeile('EG Küche Brandraum'),{etage:'EG',raum:'Küche Brandraum'});
+  assert.deepEqual(U.ortTeile('Haus A 1OG Bad'),{etage:'Haus A · 1. OG',raum:'Bad'});
+  assert.deepEqual(U.ortTeile('Treppenhaus'),{etage:'',raum:'Treppenhaus'});
+  assert.equal(D.rolleAuto('','EG REF Flur, Wand'),'referenz');assert.equal(D.rolleAuto('','F-EG Küche, Wand'),'frei');assert.equal(D.rolleAuto('','EG Küche F-1 Wand'),'');
+ });
+ ok('Druckseite (2.1): Modell aus _Ergebnisse.json – leere Spalten weg, Raum aus LabelKit, nicht beauftragt',()=>{
+  const datei={format:'spektron-ergebnisse',version:1,projekt:'99.9001',uebernommen:'2026-11-06T10:00:00.000Z',stand:'',dateien:[],vollstaendig:false,ersetzt:[],offen:['P2'],hinweise:[],
+   auftrag:{quelle:'x',proben:[{label:'P1',typ:'PAK',ref:'Probe 1',desc:'EG Küche, links, Decke, Untersicht, 400 cm²',raum:'EG Küche, links'},{label:'P2',typ:'PAK',ref:'Probe 2',desc:'EG Flur, Wand, Ansicht, 400 cm²',raum:'EG Flur'}]},
+   berichte:[{id:'b1',bericht:'AR-1',labor:'E',auftragsreferenz:'',sources:{xml:'AR-1.xml'},proben:[{label:'P1',ref:'Probe 1',desc:'EG Küche, links, Decke, Untersicht, 400 cm²',werte:[{p:SUM,r:'48',u:'µg/m²'}]},{label:'P9',ref:'Probe 9',desc:'KG Lager',werte:[{p:SUM,r:'3',u:'µg/m²'}]}]}]};
+  const m=D.druckModell(datei);
+  assert.deepEqual(m.gruppen.map(g=>g.gruppe),['PAK']);
+  assert.deepEqual(m.zeilen.map(r=>[r.labels.join(' '),r.etage,r.raum,r.oberflaeche,r.bemerkung.join('; ')]),[['P9','KG','Lager','','nicht beauftragt'],['P2','EG','Flur','Wand, Ansicht',''],['P1','EG','Küche, links','Decke, Untersicht','']]);
+  assert.deepEqual(m.spalten,{etage:true,oberflaeche:true,bemerkung:true});
+  assert.equal(m.zeilen[1].zellen.PAK.ausstehend,true,'P2 offen → ausstehend');
+ });
+ ok('Druckseite (2.1): REF/Freimessung auch, wenn nur die Probenreferenz sie nennt (Codex #30)',()=>{
+  const pr=(label,ref,desc)=>({label,ref,desc,werte:[{p:SUM,r:'5',u:'µg/m²'}]});
+  const datei={format:'spektron-ergebnisse',version:1,projekt:'99.9001',uebernommen:'2026-11-06T10:00:00.000Z',stand:'',dateien:[],vollstaendig:true,ersetzt:[],offen:[],hinweise:[],auftrag:null,
+   berichte:[{id:'b1',bericht:'AR-1',labor:'E',auftragsreferenz:'',sources:{xml:'AR-1.xml'},proben:[pr('P1','REF 1','EG Flur, Wand'),pr('P2','F-EG-WZ-B-7','EG Wohnzimmer, Wand'),pr('P3','Probe 3','EG Küche, Wand')]}]};
+  const rolle=Object.fromEntries(D.druckModell(datei).zeilen.map(r=>[r.labels.join(' '),r.rolle]));
+  assert.deepEqual(rolle,{P1:'referenz',P2:'frei',P3:''});
+ });}
 console.log(`${n} Prüfungen Übersicht bestanden`);
