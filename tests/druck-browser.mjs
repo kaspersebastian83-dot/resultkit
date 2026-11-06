@@ -80,12 +80,12 @@ try{
   assert.equal(await page.locator('#rk-druck').isVisible(),true);
   assert.equal(await page.locator('#jetzt').isVisible(),false,'beim Drucken nur die Druckseite');
   const kopf=await page.locator('.dr-tabelle thead th').allTextContents();
-  assert.deepEqual(kopf,['P-Nr.','Etage','Raum','Oberfläche / -art','PAK Σ16 EPA (µg/m²)','Chlorid (µg/cm²)','Bemerkung'],'ohne Asbest und Weitere');
+  assert.deepEqual(kopf,['P-Nr.','Etage','Raum','PAK Σ16 EPA (µg/m²)','Chlorid (µg/cm²)','Oberfläche / -art','Bemerkung'],'Werte direkt neben dem Raum; ohne Asbest und Weitere');
   const zeilen=page.locator('.dr-tabelle tbody tr');
   assert.deepEqual(await zeilen.evaluateAll(l=>l.map(tr=>tr.dataset.p)),['P5','P1 P4','P2','P3'],'Gebäude → Etage → Raum; P1 und P4 eine Stelle; P6 storniert fehlt');
   const zeile=p=>page.locator(`.dr-tabelle tbody tr[data-p="${p}"]`),zelle=async(p,i)=>(await zeile(p).locator('td').nth(i).textContent()).trim();
-  assert.deepEqual([await zelle('P1 P4',0),await zelle('P1 P4',1),await zelle('P1 P4',2),await zelle('P1 P4',3),await zelle('P1 P4',4),await zelle('P1 P4',5)],['P1, P4','EG','Testraum 1','Wand, Ansicht','14 P1','26 P4'],'Werte wie im Bericht, Probennummer am Wert');
-  assert.deepEqual([await zelle('P3',1),await zelle('P3',2),await zelle('P3',4)],['1. OG','Testraum 3 Brandraum','412']);
+  assert.deepEqual([await zelle('P1 P4',0),await zelle('P1 P4',1),await zelle('P1 P4',2),await zelle('P1 P4',3),await zelle('P1 P4',4),await zelle('P1 P4',5)],['P1, P4','EG','Testraum 1','14 P1','26 P4','Wand, Ansicht'],'Werte wie im Bericht, Probennummer am Wert');
+  assert.deepEqual([await zelle('P3',1),await zelle('P3',2),await zelle('P3',3)],['1. OG','Testraum 3 Brandraum','412']);
   assert.equal(await zeile('P5').locator('.dr-tag').textContent(),'REF');assert.equal(await page.locator('.dr-tag').count(),1,'nur P5 ist REF');assert.equal(await zelle('P5',6),'vorläufig');
   assert.equal(await zeile('P3').locator('td.dr-w').first().evaluate(td=>td.classList.contains('dr-bew')&&td.classList.contains('dr-auff')),true,'412 µg/m² bewertet und auffällig');
   const k=await page.locator('.dr-kopf').textContent();
@@ -104,7 +104,7 @@ try{
   for(const [anzahl,seitenSoll] of [[40,1],[70,2]]){
    const {page,context,fehler}=await projekt(gross(anzahl));await uebernehmen(page);await drucken(page);
    assert.equal(await page.locator('.dr-tabelle tbody tr').count(),anzahl);
-   assert.deepEqual(await page.locator('.dr-tabelle thead th').allTextContents(),['P-Nr.','Etage','Raum','Oberfläche / -art','PAK Σ16 EPA (µg/m²)'],'ohne Chlorid, Asbest, Bemerkung');
+   assert.deepEqual(await page.locator('.dr-tabelle thead th').allTextContents(),['P-Nr.','Etage','Raum','PAK Σ16 EPA (µg/m²)','Oberfläche / -art'],'ohne Chlorid, Asbest, Bemerkung');
    const seiten=await pdfSeiten(page);
    assert.equal(seiten.length,seitenSoll,`${anzahl} Zeilen: ${seitenSoll} Seite(n)`);
    for(const s of seiten){assert.ok(s.quer);assert.match(s.text,/Nr\.\s+Etage\s+Raum/,'Tabellenkopf auf jeder Seite');assert.match(s.text,/keine Bewertung/,'Fuß auf jeder Seite');}

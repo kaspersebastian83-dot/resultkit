@@ -105,11 +105,12 @@ const spaltenTitel=(g:UGruppe)=>g.gruppe==='PAK'?`PAK Σ16 EPA${g.einheit?` (${g
 /** HTML der Druckseite (ein Abschnitt, Stil in einfach.css „Druckseite“). */
 export function druckHtml(m:DModell,k:DruckKopf,bewerte:Bewerte):string{
  const sp=m.spalten,gruppen=m.gruppen;
- const kopfZellen=[['dr-c-nr','P-Nr.'],...(sp.etage?[['dr-c-etage','Etage']]:[]),['dr-c-raum','Raum'],...(sp.oberflaeche?[['dr-c-ober','Oberfläche / -art']]:[]),
-  ...gruppen.map(g=>[`dr-c-w dr-c-${g.gruppe.toLowerCase()}`,spaltenTitel(g)]),...(sp.bemerkung?[['dr-c-bem','Bemerkung']]:[])];
+ // Werte direkt neben dem Raum (kurzer Blickweg), Oberfläche und Bemerkung grau am Rand
+ const kopfZellen=[['dr-c-nr','P-Nr.'],...(sp.etage?[['dr-c-etage','Etage']]:[]),['dr-c-raum','Raum'],
+  ...gruppen.map(g=>[`dr-c-w dr-c-${g.gruppe.toLowerCase()}`,spaltenTitel(g)]),...(sp.oberflaeche?[['dr-c-ober','Oberfläche / -art']]:[]),...(sp.bemerkung?[['dr-c-bem','Bemerkung']]:[])];
  const n=kopfZellen.length;
  const tag=(r:DZeile)=>r.rolle==='frei'?'<span class="dr-tag" title="Freimessung nach Sanierung">Freimessung</span> ':r.rolle==='referenz'?'<span class="dr-tag" title="Referenz (unbelastet)">REF</span> ':'';
- const zeile=(r:DZeile)=>`<tr data-p="${esc(r.labels.join(' '))}"><td class="dr-nr">${esc(r.labels.join(', '))}</td>${sp.etage?`<td>${esc(r.etage)}</td>`:''}<td>${tag(r)}${esc(r.raum)}</td>${sp.oberflaeche?`<td>${esc(r.oberflaeche)}</td>`:''}${gruppen.map(g=>zelle(g,r.zellen[g.gruppe],r.labels.length>1,bewerte)).join('')}${sp.bemerkung?`<td class="dr-bem">${esc(r.bemerkung.join('; '))}</td>`:''}</tr>`;
+ const zeile=(r:DZeile)=>`<tr data-p="${esc(r.labels.join(' '))}"><td class="dr-nr">${esc(r.labels.join(', '))}</td>${sp.etage?`<td class="dr-etage">${esc(r.etage)}</td>`:''}<td class="dr-raum">${tag(r)}${esc(r.raum)}</td>${gruppen.map(g=>zelle(g,r.zellen[g.gruppe],r.labels.length>1,bewerte)).join('')}${sp.oberflaeche?`<td class="dr-ober">${esc(r.oberflaeche)}</td>`:''}${sp.bemerkung?`<td class="dr-bem">${esc(r.bemerkung.join('; '))}</td>`:''}</tr>`;
  const berichte=m.berichte.map(b=>`${esc(b.code)}${b.vorlaeufig||b.datum?` (${[b.vorlaeufig?'vorläufig':'',b.datum?esc(datumDE(b.datum)):''].filter(Boolean).join(', ')})`:''}`).join(' · ');
  const feld=(t:string,v:string)=>v?`<div><dt>${t}</dt><dd>${esc(v)}</dd></div>`:'';
  return `<section class="dr-seite" aria-label="Ergebnisübersicht zum Drucken">

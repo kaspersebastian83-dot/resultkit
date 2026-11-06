@@ -27,16 +27,28 @@
 .dr-leg.dr-leg-asb i{background:color-mix(in srgb,var(--c) 13%,#fff)}
 .dr-leg b{color:#1d2328;margin-right:.6mm}
 .dr-tabelle{width:100%;border-collapse:collapse;table-layout:auto;margin:0;font-size:7.6pt;background:#fff;border:0;box-shadow:none}
-.dr-tabelle th,.dr-tabelle td{position:static;padding:.3mm 1.4mm;border:0;border-bottom:.2mm solid #cfd6db;text-align:left;vertical-align:top;font-weight:400;white-space:normal;background:none;color:inherit;font-size:inherit;line-height:1.15;letter-spacing:0;text-transform:none;height:auto}
+.dr-tabelle th,.dr-tabelle td{position:static;padding:.3mm 1.6mm;border:0;border-bottom:.2mm solid #cfd6db;text-align:left;vertical-align:top;font-weight:400;white-space:normal;background:none;color:inherit;font-size:inherit;line-height:1.15;letter-spacing:0;text-transform:none;height:auto}
 .dr-tabelle thead{display:table-header-group}
 .dr-tabelle tfoot{display:table-footer-group}
 .dr-tabelle thead th{padding-top:.6mm;padding-bottom:.6mm;font-weight:700;background:#eef2f5;border-bottom:.35mm solid #1d2328;white-space:nowrap}
 .dr-tabelle tbody tr{break-inside:avoid}
-.dr-c-nr{width:12mm}.dr-c-etage{width:17mm}.dr-c-w{width:27mm}.dr-c-asbest{width:44mm}.dr-c-weitere{width:44mm}.dr-c-bem{width:42mm}
+.dr-tabelle tbody tr:nth-child(even) td{background:#f1f4f7}
+.dr-tabelle tbody tr:nth-child(even) td.dr-bew{background:color-mix(in srgb,var(--c) 28%,#f1f4f7)}
+.dr-tabelle tbody tr:nth-child(even) td.dr-asb-ja{background:color-mix(in srgb,var(--c) 16%,#f1f4f7)}
+.dr-c-nr{width:12mm}.dr-c-etage{width:17mm}.dr-c-w{width:26mm}.dr-c-asbest{width:42mm}.dr-c-weitere{width:42mm}
+/* Raum nur so breit wie nötig, der Rest der Seite geht an Oberfläche/Bemerkung rechts – Wert und Raum bleiben zusammen */
+.dr-c-raum{width:1%}
+.dr-tabelle td.dr-raum,.dr-tabelle td.dr-etage{white-space:nowrap;font-weight:600}
+.dr-tabelle td.dr-etage{font-weight:400;color:#4a545b}
+.dr-c-ober{width:auto}.dr-c-bem{width:24%}
+.dr-tabelle th.dr-c-ober,.dr-tabelle th.dr-c-bem{font-weight:600;color:#6b757d}
+.dr-tabelle td.dr-ober{color:#6b757d;font-size:6.9pt}
+.dr-tabelle th.dr-c-w:first-of-type,.dr-tabelle td.dr-w:first-of-type{border-left:.2mm solid #cfd6db}
+.dr-tabelle th.dr-c-ober,.dr-tabelle td.dr-ober{border-left:.2mm solid #cfd6db}
 .dr-tabelle th.dr-c-w{text-align:right}
 .dr-tabelle th.dr-c-asbest,.dr-tabelle th.dr-c-weitere{text-align:left}
 .dr-nr{white-space:nowrap;font-weight:600}
-.dr-tabelle td.dr-w{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dr-tabelle td.dr-w{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:8pt;line-height:1.1}
 .dr-tabelle td.dr-bew{background:color-mix(in srgb,var(--c) 24%,#fff)}
 .dr-tabelle td.dr-auff{font-weight:700}
 .dr-tabelle td.dr-asb,.dr-tabelle td.dr-text{text-align:left;white-space:normal}
@@ -44,6 +56,6 @@
 .dr-tabelle td.dr-aus{color:#6b757d;font-style:italic}
 .dr-p{color:#6b757d;font-size:6.5pt;font-weight:400;font-style:normal;margin-left:1mm}
 .dr-tag{display:inline-block;padding:0 .8mm;border:.2mm solid #6a4d98;border-radius:.8mm;color:#6a4d98;font-size:6.3pt;font-weight:700;line-height:1.35;vertical-align:.15mm}
-.dr-bem{color:#4a545b}
+.dr-bem{color:#6b757d;font-size:6.9pt}
 .dr-tabelle tfoot td{border:0;padding:1.6mm 0 0;color:#6b757d;font-size:6.8pt}
 .dr-fuss-r{float:right;margin-left:4mm}
