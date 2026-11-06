@@ -1,0 +1,49 @@
+/* Druckseite „Ergebnisübersicht“ (ResultKit 2.1.0) – eine A4-Seite quer. Nur sichtbar beim Drucken über „Übersicht drucken“
+   (body.rk-drucken); Strg+P auf der normalen Seite druckt wie bisher die App. Ab ~40 Zeilen bricht die Tabelle um,
+   der Tabellenkopf wiederholt sich auf jeder Seite. */
+#rk-druck{display:none}
+@page rk-quer{size:A4 landscape;margin:8mm 9mm}
+@media print{
+  body.rk-drucken>*:not(#rk-druck){display:none!important}
+  html:has(body.rk-drucken){background:#fff!important}
+  body.rk-drucken{background:#fff!important;margin:0!important;padding:0!important;min-height:0!important}
+  body.rk-drucken #rk-druck{display:block!important;page:rk-quer}
+}
+.dr-seite{font-family:"Segoe UI",Arial,Helvetica,sans-serif;font-size:7.6pt;line-height:1.15;color:#1d2328;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.dr-seite *{box-sizing:border-box}
+.dr-kopf{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.6mm 10mm;align-items:start;margin:0 0 1.8mm}
+.dr-titel h1{margin:0;font-size:13pt;line-height:1.15;font-weight:700;letter-spacing:0;text-transform:none;color:#1d2328}
+.dr-projekt{margin:.4mm 0 0;font-size:10pt}
+.dr-vorl-marke{display:inline-block;margin-left:2mm;padding:0 1.6mm;border:.3mm solid #8a6d00;border-radius:1mm;color:#8a6d00;font-size:8pt;font-weight:700;vertical-align:.6mm;text-transform:uppercase;letter-spacing:.04em}
+.dr-meta{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content minmax(0,1fr);gap:.4mm 3mm;margin:0;font-size:7.8pt}
+.dr-meta>div{display:contents}
+.dr-meta dt{margin:0;color:#5c666e;font-weight:600;font-size:7.8pt;text-transform:none;letter-spacing:0}
+.dr-meta dd{margin:0}
+.dr-zeile{grid-column:1/-1;margin:0;font-size:7.5pt}
+.dr-hinweis{color:#7a4d00;font-weight:600}
+.dr-legende{color:#5c666e}
+.dr-leg{display:inline-flex;align-items:center;gap:1mm;margin-right:3mm;white-space:nowrap}
+.dr-leg i{display:inline-block;width:3.2mm;height:2.4mm;border-radius:.6mm;background:color-mix(in srgb,var(--c) 24%,#fff);border:.15mm solid color-mix(in srgb,var(--c) 45%,#fff)}
+.dr-leg.dr-leg-asb i{background:color-mix(in srgb,var(--c) 13%,#fff)}
+.dr-leg b{color:#1d2328;margin-right:.6mm}
+.dr-tabelle{width:100%;border-collapse:collapse;table-layout:auto;margin:0;font-size:7.6pt;background:#fff;border:0;box-shadow:none}
+.dr-tabelle th,.dr-tabelle td{position:static;padding:.3mm 1.4mm;border:0;border-bottom:.2mm solid #cfd6db;text-align:left;vertical-align:top;font-weight:400;white-space:normal;background:none;color:inherit;font-size:inherit;line-height:1.15;letter-spacing:0;text-transform:none;height:auto}
+.dr-tabelle thead{display:table-header-group}
+.dr-tabelle tfoot{display:table-footer-group}
+.dr-tabelle thead th{padding-top:.6mm;padding-bottom:.6mm;font-weight:700;background:#eef2f5;border-bottom:.35mm solid #1d2328;white-space:nowrap}
+.dr-tabelle tbody tr{break-inside:avoid}
+.dr-c-nr{width:12mm}.dr-c-etage{width:17mm}.dr-c-w{width:27mm}.dr-c-asbest{width:44mm}.dr-c-weitere{width:44mm}.dr-c-bem{width:42mm}
+.dr-tabelle th.dr-c-w{text-align:right}
+.dr-tabelle th.dr-c-asbest,.dr-tabelle th.dr-c-weitere{text-align:left}
+.dr-nr{white-space:nowrap;font-weight:600}
+.dr-tabelle td.dr-w{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dr-tabelle td.dr-bew{background:color-mix(in srgb,var(--c) 24%,#fff)}
+.dr-tabelle td.dr-auff{font-weight:700}
+.dr-tabelle td.dr-asb,.dr-tabelle td.dr-text{text-align:left;white-space:normal}
+.dr-tabelle td.dr-asb-ja{background:color-mix(in srgb,var(--c) 13%,#fff);color:#8c2a22}
+.dr-tabelle td.dr-aus{color:#6b757d;font-style:italic}
+.dr-p{color:#6b757d;font-size:6.5pt;font-weight:400;font-style:normal;margin-left:1mm}
+.dr-tag{display:inline-block;padding:0 .8mm;border:.2mm solid #6a4d98;border-radius:.8mm;color:#6a4d98;font-size:6.3pt;font-weight:700;line-height:1.35;vertical-align:.15mm}
+.dr-bem{color:#4a545b}
+.dr-tabelle tfoot td{border:0;padding:1.6mm 0 0;color:#6b757d;font-size:6.8pt}
+.dr-fuss-r{float:right;margin-left:4mm}

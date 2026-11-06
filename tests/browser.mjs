@@ -92,10 +92,10 @@ try{
    assert.equal(await page.locator('header.kopf').isVisible(),false,'Kopfband statt eigener Kopfzeile');
    await page.locator('#rk-mehr').click();const pop=page.locator('#mosaikMehrPop');await pop.waitFor();
    const eintraege=(await pop.locator('[role=menuitem]').allTextContents()).map(x=>x.trim());
-   for(const e of ['Prüfberichte zeigen','Ansicht: Nach Stelle','Ansicht: Je Probenart','Ordner neu einlesen','Anderes Projekt öffnen …','Kurzanleitung','Version und Änderungen'])assert.ok(eintraege.some(x=>x.endsWith(e)),`„Mehr …“ fehlt ${e}: ${eintraege.join(' | ')}`);
+   for(const e of ['Prüfberichte zeigen','Übersicht drucken …','Ansicht: Nach Stelle','Ansicht: Je Probenart','Ordner neu einlesen','Anderes Projekt öffnen …','Kurzanleitung','Version und Änderungen'])assert.ok(eintraege.some(x=>x.endsWith(e)),`„Mehr …“ fehlt ${e}: ${eintraege.join(' | ')}`);
    assert.ok(eintraege.some(x=>/Handbuch/.test(x))&&eintraege.some(x=>/Rückmeldung/.test(x)),'Handbuch und Rückmeldung von der Leiste');
    await page.locator('#rk-m-version').click();const d=page.locator('#rk-hilfe');await d.waitFor();
-   assert.match(await d.textContent(),/Prüfberichte importieren.*Ergebnisse prüfen.*Ergebnisse übernehmen.*Neu in ResultKit 2\.0\.0.*ResultKit v2\.0\.0/s);
+   assert.match(await d.textContent(),/Prüfberichte importieren.*Ergebnisse prüfen.*Ergebnisse übernehmen.*Übersicht drucken.*Neu in ResultKit 2\.0\.0.*ResultKit v2\.1\.0/s);
    await page.keyboard.press('Escape');assert.equal(await d.isVisible(),false);
   });
 

@@ -10,6 +10,8 @@ export interface RkHooks {
  /** Zuletzt gezeigtes „Jetzt dran“ (null: noch keins) */jetzt():Jetzt|null;
  /** Übernahme oder Import läuft */beschaeftigt():boolean;
  /** Ansicht der Übersicht */ansicht():'stelle'|'art';
+ /** Druckseite (2.1.0): zeigen = Übersicht hat Proben, moeglich = „_Ergebnisse.json“ liegt vor */druck():{zeigen:boolean;moeglich:boolean};
+ /** Druckseite aufbauen und den Druckdialog öffnen */drucken():void;
  version:string;
 }
 type MehrEintrag={text?:string;id?:string;title?:string;onclick?:()=>void;hidden?:boolean;disabled?:boolean;trenner?:boolean};
@@ -33,11 +35,13 @@ export class Oberflaeche {
   // sind aber unsichtbar (einfach.css): die Ansicht wählt man unter „Mehr …“ (E4), der Tipp steht als Tooltip an der Tabelle.
   // Fußleiste
   const fuss=h('footer',{id:'rk-fuss'});
-  const mehr=h('button',{type:'button',id:'rk-mehr',class:'sp-knopf','aria-haspopup':'menu',title:'Prüfberichte, Ansicht, Ordner neu einlesen, anderes Projekt, Kurzanleitung, Version, Handbuch …'});mehr.innerHTML=MEHR_ICON+'Mehr …';mehr.onclick=()=>this.mehr(mehr);
+  const mehr=h('button',{type:'button',id:'rk-mehr',class:'sp-knopf','aria-haspopup':'menu',title:'Prüfberichte, Übersicht drucken, Ansicht, Ordner neu einlesen, anderes Projekt, Kurzanleitung, Version, Handbuch …'});mehr.innerHTML=MEHR_ICON+'Mehr …';mehr.onclick=()=>this.mehr(mehr);
+  // 2.1.0: „Übersicht drucken“ links neben „Mehr …“ – nur, wenn die Ergebnisübersicht da und übernommen ist
+  const drucken=h('button',{type:'button',id:'rk-drucken',class:'sp-knopf',hidden:'',title:'Ergebnisübersicht als eine A4-Seite quer drucken – alle Werte aus der übernommenen „_Ergebnisse.json“'},'Übersicht drucken');drucken.onclick=()=>{if(!drucken.disabled)this.hooks.drucken();};
   const stand=h('span',{id:'rk-stand',class:'rk-stand'});
   const neben=h('button',{type:'button',id:'rk-neben',class:'sp-knopf',hidden:''});neben.onclick=()=>this.klick(neben);
   const haupt=h('button',{type:'button',id:'rk-haupt',class:'sp-haupt'});haupt.onclick=()=>this.klick(haupt);
-  fuss.append(mehr,stand,neben,haupt);document.body.append(fuss);
+  fuss.append(mehr,drucken,stand,neben,haupt);document.body.append(fuss);
   // Kurzanleitung + Version (statt Fußzeile und Hilfe-Link)
   const d=h('dialog',{id:'rk-hilfe','aria-labelledby':'rk-hilfe-titel'});
   d.innerHTML=`<form method="dialog"><button class="schliessen" aria-label="Schließen">×</button></form>
@@ -48,7 +52,9 @@ export class Oberflaeche {
     <li><b>Ergebnisse übernehmen.</b> Der große Knopf unten rechts schreibt die geltenden Werte nach „_Ergebnisse.json“ – erst dann sehen PlanKit, FotoKit und die Projektzentrale die Werte. Kommen weitere Berichte: importieren und erneut übernehmen. Danach führt „Weiter“ zum Probenplan.</li>
    </ol>
    <p>Unter <b>„Mehr …“</b> unten links: Prüfberichte zeigen, Ansicht „Nach Stelle“ (eine Zeile je Probenahmestelle, PAK und Chlorid nebeneinander) oder „Je Probenart“, Ordner neu einlesen, anderes Projekt öffnen, Handbuch, Rückmeldung.</p>
-   <h3 id="rk-aenderungen">Neu in ResultKit 2.0.0 · 05.11.2026</h3>
+   <h3 id="rk-aenderungen">Neu in ResultKit 2.1.0 · 06.11.2026</h3>
+   <p><b>Übersicht drucken</b> (unten links neben „Mehr …“): alle Werte auf einer A4-Seite quer – eine Zeile je Probenahmestelle mit Etage, Raum, Oberfläche, PAK, Chlorid, Asbest und Bemerkung, Bewertung in ruhigen Farben, REF und Freimessung markiert. Gedruckt wird der übernommene Stand („_Ergebnisse.json“), ohne etwas zu ändern oder abzulegen – statt des Stapels ausgedruckter Prüfberichte.</p>
+   <h3>Neu in ResultKit 2.0.0 · 05.11.2026</h3>
    <p>Kopfband wie in den anderen Spektron-Apps, eine Hauptaktion unten rechts, „Mehr …“ unten links. Ruhigere Tabelle: Farbpunkte statt farbiger Pillen, Legende in einer Zeile, Probennummer klein am Wert, Zwischenzeile je Geschoss, kompakte Details. Werte, Regeln, Import, Übernahme und die Datei „_Ergebnisse.json“ sind unverändert.</p>
    <p id="rk-version-zeile" class="muted klein">ResultKit v${this.hooks.version} · liest und schreibt nur im Projektordner · keine Daten verlassen diesen Rechner</p>`;
   document.body.append(d);
@@ -80,11 +86,12 @@ export class Oberflaeche {
 
  private mehr(knopf:HTMLElement){
   const ML=(window as unknown as {MosaikLeiste?:ML}).MosaikLeiste;if(!ML?.mehr)return;
-  const projekt=this.hooks.projekt(),ansicht=this.hooks.ansicht(),dis=(id:string)=>!!(document.getElementById(id) as HTMLButtonElement|null)?.disabled;
+  const projekt=this.hooks.projekt(),ansicht=this.hooks.ansicht(),druck=this.hooks.druck(),dis=(id:string)=>!!(document.getElementById(id) as HTMLButtonElement|null)?.disabled;
   const umschalten=(a:'stelle'|'art')=>document.querySelector<HTMLButtonElement>(`.u-ansicht [data-ansicht="${a}"]`)?.click();
   ML.mehr(knopf,[
    {text:'Prüfberichte zeigen',id:'rk-m-berichte',title:'Die Prüfberichte im Ordner „Laborergebnisse“ (XML/PDF, alle Parameter) und die Ablage für neue Berichte',hidden:!projekt,onclick:()=>{const b=$<HTMLDetailsElement>('berichte-block');b.open=true;b.scrollIntoView({behavior:'smooth',block:'start'});}},
    {text:'Berichte importieren …',id:'rk-m-import',title:'Prüfberichte (Eurofins-XML und PDF) in „Laborergebnisse“ ablegen – oder einfach auf die Seite ziehen',hidden:!projekt,disabled:dis('btn-import'),onclick:()=>$('btn-import').click()},
+   {text:'Übersicht drucken …',id:'rk-m-drucken',title:druck.moeglich?'Ergebnisübersicht als eine A4-Seite quer drucken – alle Werte aus der übernommenen „_Ergebnisse.json“':'Erst „Ergebnisse übernehmen“ – gedruckt wird der übernommene Stand',hidden:!projekt,disabled:!druck.moeglich,onclick:()=>this.hooks.drucken()},
    {trenner:true},
    {text:(ansicht==='stelle'?'✓ ':'')+'Ansicht: Nach Stelle',id:'rk-m-stelle',title:'Eine Zeile je Probenahmestelle – PAK, Chlorid und Asbest derselben Stelle nebeneinander (gilt in diesem Browser)',hidden:!projekt,onclick:()=>umschalten('stelle')},
    {text:(ansicht==='art'?'✓ ':'')+'Ansicht: Je Probenart',id:'rk-m-art',title:'Eine Tabelle je Probenart (gilt in diesem Browser)',hidden:!projekt,onclick:()=>umschalten('art')},
@@ -104,6 +111,7 @@ export class Oberflaeche {
   const haupt=$<HTMLButtonElement>('rk-haupt'),neben=$<HTMLButtonElement>('rk-neben'),stand=$('rk-stand');
   const setze=(b:HTMLButtonElement,text:string,aktion:string,disabled=false,title='')=>{b.hidden=false;if(b.textContent!==text)b.textContent=text;b.dataset.aktion=aktion;b.disabled=disabled;b.title=title;};
   neben.hidden=true;delete neben.dataset.aktion;
+  const dr=$<HTMLButtonElement>('rk-drucken'),druck=projekt?this.hooks.druck():{zeigen:false,moeglich:false};dr.hidden=!(druck.zeigen&&druck.moeglich);dr.disabled=busy;
   document.body.classList.toggle('rk-ohne-projekt',!projekt);
   if(!projekt){
    const frage=!$('ordner-frage').hidden;

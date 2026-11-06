@@ -5,6 +5,7 @@
 import './style.css';
 import './spektron-look.css';
 import './einfach.css';
+import './druck.css';
 import './suite-bar';
 import {Oberflaeche} from './oberflaeche';
 import {skalenAbgleich} from './skalen-archiv.js';
@@ -17,8 +18,9 @@ import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,
 import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,stelleText,geschossKopf,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
+import {druckModell,druckHtml,type DruckKopf,type Bewerte} from './druck';
 
-export const APP_VERSION='2.0.0';
+export const APP_VERSION='2.1.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -87,6 +89,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
 <dialog id="frage-dialog" aria-labelledby="frage-titel"><h2 id="frage-titel"></h2><p id="frage-text"></p><div class="dialog-aktionen" id="frage-aktionen"></div></dialog>
 <div id="ziehen" class="ziehen" hidden><p>Prüfberichte loslassen zum Importieren</p></div>
 <div id="toast" role="status" hidden></div>`;
+// Druckseite „Ergebnisübersicht“ (2.1.0): direkt im body, damit beim Drucken alles andere wegfallen kann (druck.css)
+{const d=document.createElement('div');d.id='rk-druck';d.hidden=true;document.body.append(d);}
 
 let toastTimer=0;
 function toast(text:string,fehler=false){const t=$('toast');const d=[...document.querySelectorAll('dialog[open]')].filter(x=>x.matches(':modal')).pop();if(d){if(t.parentElement!==d){d.append(t);d.addEventListener('close',()=>{if(t.parentElement===d)document.body.append(t);},{once:true});}}else if(t.parentElement!==document.body)document.body.append(t);   // 2.0: Meldung nicht hinter einem offenen Dialog
@@ -526,6 +530,38 @@ function zeigeVorschau(f:ProjectFolder,vorschau:Vorschau[],uebrig:number){
  d.showModal();
 }
 
+// ---- Übersicht drucken (2.1.0): eine A4-Seite quer aus der übernommenen „_Ergebnisse.json“ – nur lesen, nichts wird geschrieben ----
+/** Legende der Druckseite: je Probenart die Skala kurz mit Farbfeld und Bereich (wie die Legende der Übersicht). */
+function druckLegende(gruppen:UGruppe[]){
+ const leg=(farbe:string,text:string,cls='')=>`<span class="dr-leg${cls}"><i style="--c:${farbeSicher(farbe)}"></i>${text}</span>`;
+ return gruppen.map(g=>{
+  if(g.gruppe==='Asbest')return g.zeilen.some(z=>z.befund?.gefunden)?`<span class="dr-leg"><b>Asbest</b></span>${leg(ASBEST_ROT,'nachgewiesen',' dr-leg-asb')}`:'';
+  if(g.gruppe!=='PAK'&&g.gruppe!=='Chlorid')return '';
+  const skalen=new Map<string,{scale:Scale;u:string}>();
+  for(const z of g.zeilen)if(z.bewertet&&labQualifier(z.bewertet.r)==='measured'){const k=skala(z.bewertet.p,z.bewertet.u);if(k.scale)skalen.set(`${k.scale.name}|${z.bewertet.u}`,{scale:k.scale,u:z.bewertet.u});}
+  return [...skalen.values()].map(({scale,u})=>`<span class="dr-leg"><b>${esc(SPALTE_TITEL[g.gruppe])}</b>${esc(scale.name.split(' · ')[0])}</span>${scale.cats.map((c,i)=>leg(c.color||UNRATED,esc(rangeText(scale,i,u)))).join('')}`).join('');
+ }).filter(Boolean).join('<span class="dr-leg"></span>');
+}
+const bewerteDruck:Bewerte=w=>{const b=bewertung(w);return b?{farbe:farbeSicher(b.farbe),index:b.index,titel:b.text}:null;};
+/** Was der Knopf „Übersicht drucken“ kann: zeigen, sobald die Übersicht Proben hat; drucken nur mit übernommener Datei. */
+function druckStand(){return {zeigen:!!folder&&!!scan&&!$('u-filter').hidden,moeglich:!!folder&&!!scan?.vorhanden};}
+async function uebersichtDrucken(){
+ const f=folder,s=scan;if(!f||!s)return;
+ const d=s.vorhanden;
+ if(!d){toast('Erst „Ergebnisse übernehmen“ – gedruckt wird der übernommene Stand aus „_Ergebnisse.json“.',true);return;}
+ let pj:Record<string,unknown>={};try{pj=await readProjectData(f);}catch{/* ohne Projektdaten: nur Nummer und Ort */}
+ if(folder!==f||scan!==s)return;
+ const feld=(k:string)=>{const v=pj[k]??(pj.daten&&typeof pj.daten==='object'?(pj.daten as Record<string,unknown>)[k]:undefined);return typeof v==='string'?v.trim():'';};
+ const t=Date.parse(d.uebernommen);
+ const kopf:DruckKopf={nr:f.nr,ort:f.ort,objekt:feld('objekt'),auftraggeber:feld('auftraggeber'),gedruckt:uhr(Date.now()),stand:Number.isFinite(t)?`übernommen am ${uhr(t)}`:'',
+  veraltet:d.stand!==s.stand,version:APP_VERSION,legende:''};
+ const m=druckModell(d);kopf.legende=druckLegende(m.gruppen);
+ const el=$('rk-druck');el.innerHTML=druckHtml(m,kopf,bewerteDruck);el.hidden=false;
+ document.body.classList.add('rk-drucken');
+ window.print();
+}
+window.addEventListener('afterprint',()=>{if(!document.body.classList.contains('rk-drucken'))return;document.body.classList.remove('rk-drucken');const el=$('rk-druck');el.hidden=true;el.innerHTML='';});
+
 // ---- Bedienung ----
 $('btn-projekt').onclick=$('start-projekt').onclick=()=>void projektWaehlen();
 $('btn-neu').onclick=()=>void neuEinlesen();
@@ -590,7 +626,7 @@ window.addEventListener('focus',fokus);document.addEventListener('visibilitychan
 window.addEventListener('hashchange',()=>{const p=PROJEKT_URL.lesen();if(p&&p!==folder?.name)void ausZentrale(p);});
 declare global {interface Window {MosaikLeiste?:{start:(app:string,opt?:Record<string,unknown>)=>void;aktualisieren:()=>void}}}
 // Leiste v3 startet in suite-bar.ts (Kopfband). 2.0: einfache Oberfläche – Fußleiste, „Mehr …“, Kurzanleitung.
-rk=new Oberflaeche({projekt:()=>!!folder,stand:()=>scan?standText(scan.u):'',jetzt:()=>letzteJetzt,beschaeftigt:()=>beschaeftigt,ansicht:()=>ansicht,version:APP_VERSION});
+rk=new Oberflaeche({projekt:()=>!!folder,stand:()=>scan?standText(scan.u):'',jetzt:()=>letzteJetzt,beschaeftigt:()=>beschaeftigt,ansicht:()=>ansicht,druck:druckStand,drucken:()=>void uebersichtDrucken(),version:APP_VERSION});
 if(!supported()){startHinweis('Dieser Browser kann keine Ordner öffnen. ResultKit arbeitet direkt im Projektordner – bitte Chrome oder Edge verwenden.');($('start-projekt') as HTMLButtonElement).disabled=true;}
 render();
 if(PROJEKT_URL.projekt)void ausZentrale(PROJEKT_URL.projekt);
