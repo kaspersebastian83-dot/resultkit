@@ -242,21 +242,24 @@ try{
   await pz.locator('#btnRescan').click();await pzStand('laeuft','Beim Büro');
  });
 
- // ---- 9. BüroKit: gegenlesen, PDF, Versand → „Versandt – Rechnung schreiben“ (BüroKit 1.1) ----
+ // ---- 9. BüroKit: gegenlesen, PDF, Versand → „Rechnung schreiben“ (einfache Oberfläche ab BüroKit 1.6: Karten, Schritt-Leiste, Hauptknopf) ----
  const bk=await neueSeite('BüroKit');
  await schritt('BüroKit','Aufgabe aus der Projektzentrale abarbeiten: Gegenlesen, PDF, Versand → Rechnung schreiben',async()=>{
   await bk.goto(`${base}/buerokit/`);
-  const karte=bk.locator('.aufgabe',{hasText:NR});await karte.waitFor();
+  const karte=bk.locator('.karte',{hasText:NR});await karte.waitFor();
   assert.match(await karte.textContent(),/Kettenort/);
-  await bk.locator('#ich').selectOption('Nad');
-  const fertig=()=>bk.waitForFunction(()=>!document.querySelector('#liste input:disabled'));
-  await karte.locator('input[data-s="gegenlesen"]').check();await fertig();
-  await karte.locator('input[data-s="pdf"]').check();await fertig();
-  await karte.locator('button.schritt[data-mehr]').click();
-  const empf=karte.locator('.empf input');const anzahl=await empf.count();assert.ok(anzahl>=1,'Empfänger aus der Übergabe');
-  for(let i=0;i<anzahl;i++){await karte.locator('.empf input').nth(i).check();await fertig();}
+  // Ohne Kürzel fragt BüroKit beim ersten Start einmal („Wer bist du?“)
+  await bk.locator('#dlgIch[open]').waitFor();await bk.locator('#ich').selectOption('Nad');await bk.locator('#formIch button.primary').click();
+  const fertig=()=>bk.waitForFunction(()=>!document.querySelector('#liste button[data-s]:disabled'));
+  await karte.locator('button.primary[data-s="gegenlesen"]').click();await fertig();
+  await karte.locator('.st.fertig',{hasText:'Gegenlesen'}).waitFor();
+  await karte.locator('button.primary[data-s="pdf"]').click();await fertig();
+  await karte.locator('.st.fertig',{hasText:'PDF'}).waitFor();
+  await karte.locator('button.primary[data-mehr]',{hasText:'Jetzt versenden'}).click();await karte.locator('.empf').first().waitFor();
+  const anzahl=await karte.locator('.empf').count();assert.ok(anzahl>=1,'Empfänger aus der Übergabe');
+  for(let i=0;i<anzahl;i++){await karte.locator('.empf button.gut').first().click();await fertig();}
   // Seit BüroKit 1.1 ist ein Gutachten erst nach der Rechnung erledigt: nach dem Versand steht es unter „Rechnung schreiben“.
-  await bk.locator('section.rechnung .aufgabe',{hasText:NR}).waitFor();assert.equal(await bk.locator('#erledigtBox').count(),0,'noch nicht erledigt');
+  await bk.locator('section.rechnung .karte',{hasText:NR}).waitFor();assert.equal(await bk.locator('#g-erledigt').count(),0,'noch nicht erledigt');
  });
  await schritt('Projektzentrale','nach dem Versand: „Versandt · Abrechnung offen“',async()=>{
   await pz.bringToFront();await pz.locator('#btnRescan').click();await pzStand('dich','Versandt · Abrechnung offen');
@@ -283,10 +286,12 @@ try{
 
  // ---- 11. BüroKit: Rechnung nach dem BelegKit-Stand abhaken → erledigt ----
  await schritt('BüroKit','Rechnung nach dem BelegKit-Stand abhaken → erledigt',async()=>{
-  await bk.bringToFront();await bk.reload();await bk.locator('#ich').selectOption('Nad');
-  const karte=bk.locator('section.rechnung .aufgabe',{hasText:NR});await karte.waitFor();
-  await karte.locator('input[data-s="rechnung"]').check();
-  await bk.locator('#erledigtBox').waitFor();assert.equal(await bk.locator('section.rechnung').count(),0);
+  await bk.bringToFront();await bk.reload();   // Kürzel ist gemerkt, keine Rückfrage mehr
+  const karte=bk.locator('section.rechnung .karte',{hasText:NR});await karte.waitFor();
+  const haken=karte.locator('button.gut[data-s="rechnung"]');   // Details evtl. noch offen, sonst „Rechnung schreiben →“
+  if(!await haken.isVisible())await karte.locator('button.primary[data-mehr]',{hasText:'Rechnung schreiben'}).click();
+  await haken.click();
+  await bk.locator('#g-erledigt').waitFor();assert.equal(await bk.locator('section.rechnung').count(),0);
  });
  await schritt('Projektzentrale','Projekt „Versandt und abgerechnet“, abgeschlossen; Fortschritt seit dem Spektron-Start',async()=>{
   await pz.bringToFront();await pz.reload();
