@@ -63,10 +63,16 @@ export function druckModell(d:ErgebnisDatei):DModell{
  for(const p of d.auftrag?.proben||[])if(p?.label&&p.raum)raumVon.set(tidy(p.label).toUpperCase(),tidy(p.raum));
  for(const b of d.berichte||[])for(const s of b?.proben||[])if(s?.label&&s.raum&&!raumVon.has(tidy(s.label).toUpperCase()))raumVon.set(tidy(s.label).toUpperCase(),tidy(s.raum));
  const descVon=new Map(zeilen.map(z=>[z.label||z.ref,z.desc]));
+ // Alle Probenreferenzen je Probe (LabelKit „Probe 3“ und die aus den Prüfberichten): REF / „F-“ kann nur in der Referenz stehen (alte IDs)
+ const refsVon=new Map<string,Set<string>>(),merkeRef=(label:unknown,ref:unknown)=>{const l=tidy(label),r=tidy(ref);if(!l||!r)return;const k=l.toUpperCase();refsVon.set(k,(refsVon.get(k)||new Set()).add(r));};
+ for(const p of d.auftrag?.proben||[])merkeRef(p?.label,p?.ref);
+ for(const b of d.berichte||[])for(const s of b?.proben||[])merkeRef(s?.label,s?.ref);
+ for(const z of zeilen)if(!z.label)merkeRef(z.ref,z.ref);
  const rows=sortiereMatrix(matrix(gruppen),'stelle',true).map(r=>{
   const proben=gruppen.map(g=>({g:g.gruppe,z:r.zellen[g.gruppe]})).filter((x):x is {g:Gruppe;z:UZeile}=>!!x.z);
   const ersterRaum=r.labels.map(l=>raumVon.get(l.toUpperCase())).find(Boolean)||'';
-  const rollen=r.labels.map(l=>{const r2=rolleAuto('',descVon.get(l)||'');return r2==='frei'||r2==='referenz'?r2:'';});
+  const rollen=r.labels.flatMap(l=>{const desc=descVon.get(l)||'',refs=[...(refsVon.get(l.toUpperCase())||[])];
+   return (refs.length?refs:['']).map(ref=>{const r2=rolleAuto(ref,desc);return r2==='frei'||r2==='referenz'?r2:'';});});
   const rolle=rollen.includes('frei')?'frei':rollen.includes('referenz')?'referenz':'';
   const mehrere=r.labels.length>1,wer=(z:UZeile)=>mehrere?`${z.label} `:'';
   const bemerkung=[
