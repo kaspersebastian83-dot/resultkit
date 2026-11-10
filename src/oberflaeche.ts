@@ -52,7 +52,9 @@ export class Oberflaeche {
     <li><b>Ergebnisse übernehmen.</b> Der große Knopf unten rechts schreibt die geltenden Werte nach „_Ergebnisse.json“ – erst dann sehen PlanKit, FotoKit und die Projektzentrale die Werte. Kommen weitere Berichte: importieren und erneut übernehmen. Danach führt „Weiter“ zum Probenplan.</li>
    </ol>
    <p>Unter <b>„Mehr …“</b> unten links: Prüfberichte zeigen, Ansicht „Nach Stelle“ (eine Zeile je Probenahmestelle, PAK und Chlorid nebeneinander) oder „Je Probenart“, Ordner neu einlesen, anderes Projekt öffnen, Handbuch, Rückmeldung.</p>
-   <h3 id="rk-aenderungen">Neu in ResultKit 2.1.1 · 10.11.2026</h3>
+   <h3 id="rk-aenderungen">Neu in ResultKit 2.2.0 · 10.11.2026</h3>
+   <p><b>Welcher Prüfbericht gilt:</b> Bei mehreren Fassungen desselben Berichts (Nummer endet auf -01, -02 …) gilt die höhere Fassung – nicht mehr die zuletzt gespeicherte Datei. Verschiedene Berichte ersetzen einander nie: Haben zwei Berichte einen Wert für dieselbe Probe, siehst du beide, und „Ergebnisse übernehmen“ ist gesperrt, bis du die falsche Datei aus „Laborergebnisse“ nimmst. Ein Bericht, dessen Auftragsreferenz ein anderes Projekt nennt (auch durch einen Tippfehler), steht in der Liste, seine Werte zählen aber nicht. Weicht die Beschreibung bei allen Proben eines Berichts von LabelKit ab, fragt ResultKit vor dem Übernehmen.</p>
+   <h3>Neu in ResultKit 2.1.1 · 10.11.2026</h3>
    <p><b>Dateien an zwei Orten:</b> Liegt „_Ergebnisse.json“, die LabelKit-Datei, der Plan oder „_Projekt.json“ in „_Spektron“ und zusätzlich am früheren Ort (z. B. eine kopierte Datei), gilt immer die in „_Spektron“. Eine Zeile oben nennt beide Dateien mit Datum; gelöscht wird nichts.</p>
    <h3>Neu in ResultKit 2.1.0 · 06.11.2026</h3>
    <p><b>Übersicht drucken</b> (unten links neben „Mehr …“): alle Werte auf einer A4-Seite quer – eine Zeile je Probenahmestelle mit Etage, Raum, Oberfläche, PAK, Chlorid, Asbest und Bemerkung, Bewertung in ruhigen Farben, REF und Freimessung markiert. Gedruckt wird der übernommene Stand („_Ergebnisse.json“), ohne etwas zu ändern oder abzulegen – statt des Stapels ausgedruckter Prüfberichte.</p>
@@ -123,8 +125,8 @@ export class Oberflaeche {
    this.ablauf(-1);return;
   }
   // Stand der Übernahme (der Stand der Proben steht schon in der Karte): übernommen / nicht aktuell / noch nicht
-  const art=j?.art||'',text=art==='fertig'?'✓ '+(j!.titel.replace(/\s*✓\s*$/,'')):art==='geaendert'||art==='unlesbar'?'Übernahme nicht mehr aktuell':art==='uebernehmen'||art==='importiert'?'Noch nicht übernommen':'';
-  stand.textContent=text;stand.className=`rk-stand${art==='fertig'?' ok':art==='geaendert'||art==='unlesbar'?' gelb':''}`;stand.title=this.hooks.stand();
+  const art=j?.art||'',text=art==='fertig'?'✓ '+(j!.titel.replace(/\s*✓\s*$/,'')):art==='geaendert'||art==='unlesbar'?'Übernahme nicht mehr aktuell':art==='uebernehmen'||art==='importiert'?'Noch nicht übernommen':art==='konflikt'?'Übernahme gesperrt':'';
+  stand.textContent=text;stand.className=`rk-stand${art==='fertig'?' ok':art==='geaendert'||art==='unlesbar'||art==='konflikt'?' gelb':''}`;stand.title=this.hooks.stand();
   if(!j){haupt.hidden=true;this.ablauf(-1);return;}
   this.ablauf(ABLAUF[j.art]??1);
   const satz=(t:string)=>t.replace(/^📥\s*/,'').replace(/\s*→$/,'')+' →';

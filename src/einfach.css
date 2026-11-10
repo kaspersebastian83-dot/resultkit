@@ -153,3 +153,12 @@ tr.u-detail>td{background:var(--sp-panel2);padding:10px 16px 14px 30px;text-alig
   #rk-drucken{display:none}   /* Telefon: drucken über „Mehr …“ */
 }
 @media print{#rk-fuss,.rk-ablauf{display:none!important}}
+
+/* 2.2 (Audit K2): zwei verschiedene Prüfberichte mit Werten für dieselbe Probe – sichtbar, aber nicht bewertet */
+.badge.konflikt{background:#fdecc8;color:#7a4b00}
+.bericht.konflikt{border-left:4px solid #d08a00}
+.bericht.fremd{opacity:.85}
+.rk-konflikt{display:inline-flex;flex-direction:column;align-items:flex-end;gap:1px;background:#fdecc8;border-radius:3px;padding:1px 5px;white-space:normal}
+.rk-konflikt>span{white-space:nowrap}
+.rk-konflikt small{color:#7a4b00}
+.rk-konflikt-tag{color:#7a4b00;font-weight:600}

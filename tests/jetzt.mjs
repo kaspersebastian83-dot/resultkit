@@ -69,4 +69,15 @@ ok('vor 1.13 übernommen, Datei führt eine stornierte Probe → einmal erneut �
  assert.equal(j({stand:'S2',vorhanden:{stand:'S1',uebernommen:'2026-10-30T14:05:00Z',vollstaendig:true,mitStorniert:true}}).titel,'Geändert seit der Übernahme – bitte erneut übernehmen','neuer Dateistand geht vor');
 });
 
+ok('2.2: Konflikt zweier Berichte → gesperrt, „Prüfberichte zeigen“, auch vor „Übernommen ✓“',()=>{
+ const k=[{berichte:['AR-A-01','AR-B-01'],proben:['P1','P2']}];
+ for(const vorhanden of [null,{stand:'S1',uebernommen:'2026-11-10T10:00:00Z',vollstaendig:true}]){
+  const r=j({konflikte:k,vorhanden});
+  assert.equal(r.art,'konflikt');assert.deepEqual(knoepfe(r),['berichte','import']);assert.equal(r.titel,'Zwei Prüfberichte für dieselben Proben – erst klären');
+  assert.match(r.text,/^Für P1, P2 stehen Werte in AR-A-01 und AR-B-01 – verschiedene Berichte, keine neue Fassung\. .*bis dahin übernimmt ResultKit nichts\./);}
+});
+ok('2.2: alte Übernahme nach der früheren Regel → einmal erneut übernehmen, Werte ändern sich',()=>{
+ const r=j({vorhanden:{stand:'S1',uebernommen:'2026-11-10T10:00:00Z',vollstaendig:true,regel:true}});
+ assert.equal(r.art,'geaendert');assert.match(r.text,/höhere Fassung.*anderen Projekts.*dabei ändern sich übernommene Werte/);
+});
 console.log(`${n} Prüfungen „Jetzt dran“ bestanden`);
