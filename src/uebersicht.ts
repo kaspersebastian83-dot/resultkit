@@ -14,10 +14,13 @@ export interface UZeile {label:string;nr:number|null;stelle:string;
  ausstehend:boolean;vorlaeufig:boolean;nichtBeauftragt:boolean;
  /** Prüfberichte, aus denen die gezeigten Werte stammen */berichte:string[];
  /** Chlorid umgerechnet: Wert wie im Bericht, z. B. „45 mg/m²“ */original?:string;
- /** Wert für die Bewertung – wie im Bericht (eine im Projekt angepasste Skala gilt für dessen Einheit) */bewertet:Wert|null}
+ /** Wert für die Bewertung – wie im Bericht (eine im Projekt angepasste Skala gilt für dessen Einheit) */bewertet:Wert|null;
+ /** Konflikt (ab 2.2): zwei verschiedene Prüfberichte haben Werte für diese Probe; werte = Hauptwert je Bericht, wie im Bericht */
+ konflikt?:{werte:{r:string;u:string;bericht:string}[]}}
 export interface UGruppe {gruppe:Gruppe;zeilen:UZeile[];einheit:string;mitErgebnis:number}
 
-const SUMME=/^(?:Summe|Σ)\s*16\s*EPA[-– ]?PAK/i,CHLORID=/chlorid/i;
+// m8 (2.2): Chlorid am Anfang verankert wie in BerichtKit (/^Chlorid\b/) – „Vinylchlorid“ ist kein Chlorid
+const SUMME=/^(?:Summe|Σ)\s*16\s*EPA[-– ]?PAK/i,CHLORID=/^\s*Chlorid\b/i;
 const ASBEST=/asbest|chrysotil|amosit|krokydolith|tremolit|aktinolith|anthophyllit/i;
 const POSITIV=/nachgewiesen|positiv|enthalten|gefunden|^ja$|chrysotil|amosit|krokydolith|tremolit|aktinolith|anthophyllit/i;
 /** Flächenbezogene Einheit (µg/m², µg/cm², µg/100 cm² …). Liefert das Labor denselben Parameter auch je Probe (z. B. Chlorid
@@ -77,6 +80,9 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
    befund:g==='Asbest'?asbestBefund(w):null,weitere:g==='Weitere'?w.slice(0,2).map(x=>({p:x.p,r:x.r,u:x.u})):[],   // PAK/Chlorid ohne Hauptwert: nichts Fremdes in die Spalte
    ausstehend:z.status==='offen'||z.status==='ohneWerte',vorlaeufig:z.status==='vorlaeufig',nichtBeauftragt:z.status==='nichtBeauftragt',
    berichte:[...new Set(gezeigt.map(x=>x.bericht).filter(Boolean))],bewertet:roh?{p:roh.p,r:roh.r,u:roh.u,...(roh.loq?{loq:roh.loq}:{})}:null,...(um&&roh&&roh.u!==um.u?{original:`${roh.r} ${roh.u}`}:{})};
+  if(z.konflikt?.length){const gleich=roh?w.filter(x=>x.p===roh.p&&x.u===roh.u):[];
+   u.konflikt={werte:new Set(gleich.map(x=>x.bericht)).size>1?gleich.map(x=>({r:x.r,u:x.u,bericht:x.bericht})):[]};
+   if(u.konflikt.werte.length){u.bewertet=null;u.berichte=[...new Set(gleich.map(x=>x.bericht))];}}   // nichts bewerten, solange nicht klar ist, welcher Wert gilt
   map.set(g,[...(map.get(g)||[]),u]);
  }
  return GRUPPEN.filter(g=>map.has(g)).map(g=>{const z=map.get(g)!;const einheiten=z.map(x=>x.haupt?.u).filter(Boolean) as string[];
@@ -172,6 +178,7 @@ export const SPALTE_TITEL:Record<Gruppe,string>={PAK:'Σ16 EPA-PAK',Chlorid:'Chl
 /** Zelle als Text für Excel/Word: Wert wie im Bericht, Einheit nur wenn sie von der Spalte abweicht. */
 export function zelleText(g:Gruppe,z:UZeile|undefined,einheit:string){
  if(!z)return '';if(z.ausstehend)return 'ausstehend';
+ if(z.konflikt?.werte.length)return `${z.konflikt.werte.map(w=>`${w.r}${w.u&&w.u!==einheit?` ${w.u}`:''} (${w.bericht})`).join(' / ')} – 2 Berichte, ungeklärt`;
  if(g==='Asbest')return z.befund?.text||'';
  if(g==='Weitere')return z.weitere.map(w=>`${w.p} ${w.r}${w.u?` ${w.u}`:''}`).join(' · ');
  return z.haupt?`${z.haupt.r}${z.haupt.u&&z.haupt.u!==einheit?` ${z.haupt.u}`:''}`:'';

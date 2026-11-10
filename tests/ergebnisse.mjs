@@ -322,4 +322,101 @@ ok('Ordner: getrennt gelesene XML und PDF gleicher Berichtsnummer (andere Auftra
  const {getrennt:_a,...x2}=xml,{getrennt:_b,...p2}=pdf;
  assert.equal(E.uebersicht('99.9001',auftrag(),[{report:x2,geaendert:1},{report:p2,geaendert:2}]).berichte.length,1);
 });
+
+// ---- 2.2: Welcher Prüfbericht gilt (Audit K2, M1, m6, m8; Entscheidung 10.11.2026) – erfundene Nummern und Orte ----
+const fassung=(code,proben,opt={})=>report(code,proben,opt);
+const werteVon=(u,label)=>u.zeilen.find(z=>z.label===label).werte.map(w=>`${w.r}@${w.bericht}`);
+ok('berichtsFassung: Eurofins-Block -NN am Ende; anderes Labor oder ohne Block → eigener Bericht',()=>{
+ assert.deepEqual(E.berichtsFassung('AR-999-2099-000001-01','Eurofins'),{grund:'AR-999-2099-000001',fassung:1});
+ assert.deepEqual(E.berichtsFassung(' ar-999-2099-000001–02 ','Eurofins'),{grund:'AR-999-2099-000001',fassung:2},'Schreibung, Leerraum, Gedankenstrich');
+ assert.deepEqual(E.berichtsFassung('AR-999-2099-000001','Eurofins'),{grund:'AR-999-2099-000001',fassung:null},'sechs Ziffern sind kein Fassungsblock');
+ assert.deepEqual(E.berichtsFassung('AR-1-1','Eurofins'),{grund:'AR-1-1',fassung:null},'eine Ziffer ist kein Block');
+ assert.deepEqual(E.berichtsFassung('X-1-02','Labor Muster'),{grund:'X-1-02',fassung:null},'anderes Labor: Block nicht gelesen');
+});
+ok('M1: -01 und -02 desselben Berichts, die ältere Fassung später gespeichert → -02 gilt',()=>{
+ const u=E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-77-01',[[1,pak('12')]]),geaendert:9},{report:fassung('AR-77-02',[[1,pak('14')]]),geaendert:5}]);
+ assert.deepEqual(werteVon(u,'P1'),['14@AR-77-02','< 0,5@AR-77-02']);
+ assert.deepEqual(u.berichte.find(b=>b.bericht==='AR-77-01').ersetztDurch,['AR-77-02']);assert.deepEqual(u.konflikte,[]);
+ assert.deepEqual(E.ergebnisDatei(u,auftrag(),[],'2.2.0').berichte.map(b=>b.bericht),['AR-77-02']);
+ // nur gleiche Nummer und Fassung zweimal: dann (und nur dann) die neuere Datei
+ const zwei=E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-77-02',[[1,pak('14')]]),geaendert:5},{report:{...fassung('AR-77-02',[[1,pak('15')]]),quelle:'AR-77-02 (2).xml'},geaendert:9}]);
+ assert.equal(werteVon(zwei,'P1')[0],'15@AR-77-02');
+});
+ok('M1: vorläufige -02 schlägt endgültige -01 nicht; endgültige -02 ersetzt vorläufige -01 (wie bisher)',()=>{
+ const a=E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-78-01',[[1,pak('12')]]),geaendert:1},{report:fassung('AR-78-02',[[1,pak('20')]],{vorlaeufig:true}),geaendert:2}]);
+ assert.equal(werteVon(a,'P1')[0],'12@AR-78-01');
+ const b=E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-78-02',[[1,pak('20')]]),geaendert:1},{report:fassung('AR-78-01',[[1,pak('12')]],{vorlaeufig:true}),geaendert:2}]);
+ assert.equal(werteVon(b,'P1')[0],'20@AR-78-02');
+});
+// K2-Nachstellung aus dem Audit: Projekt mit 3 PAK-Proben und eigenem Bericht, dazu ein fremder Bericht (andere Nummer, „Probe 1–3“), Datei neuer.
+const auftrag3=()=>labelkitReport(JSON.stringify({version:'5.0.0',projekt:{nr:'99.9001'},proben:[1,2,3].map(i=>({_nr:i,matrix:'Wischprobe',datum:'08.10.2026',z2:`EG Testraum ${i}`,z3:'Wand',z4:'Ansicht',cm2:'400'}))}),'99.9001_Daten.json','99.9001 Musterort');
+const eigen=()=>fassung('AR-100-2026-000001-01',[[1,pak('14')],[2,pak('8')],[3,pak('2')]]);
+const anderswo=ref=>{const r=fassung('AR-200-2026-000009-01',[[1,pak('900')],[2,pak('700')],[3,pak('500')]],{ref});r.rows.forEach((x,i)=>x.desc=`OG Anderswo Raum ${i+1}, Decke, 400 cm²`);return r;};
+ok('K2 mit Projektnummer in der Auftragsreferenz: fremde Werte zählen nicht, eigener Bericht bleibt, Hinweis nennt Tippfehler',()=>{
+ const u=E.uebersicht('99.9001',auftrag3(),[{report:eigen(),geaendert:1},{report:anderswo('99.9002 Anderswo Hauptstr. 3'),geaendert:9}]);
+ assert.deepEqual(['P1','P2','P3'].map(l=>werteVon(u,l)[0]),['14@AR-100-2026-000001-01','8@AR-100-2026-000001-01','2@AR-100-2026-000001-01']);
+ const f=u.berichte.find(b=>b.bericht.startsWith('AR-200'));assert.equal(f.fremdProjekt,'99.9002');assert.equal(f.ersetztDurch,undefined);
+ assert.match(f.hinweise[0],/nennt Projekt 99\.9002 – dieses Projekt ist 99\.9001\. ResultKit übernimmt die Werte dieses Berichts nicht\. Das gilt auch, wenn nur die Auftragsreferenz einen Tippfehler hat/);
+ assert.equal(u.berichte.find(b=>b.bericht.startsWith('AR-100')).ersetztDurch,undefined);assert.deepEqual(u.konflikte,[]);
+ assert.ok(u.zeilen.every(z=>!z.hinweise.some(h=>/Beschreibung/.test(h))),'fremde Proben erzeugen keine Hinweise an den eigenen');
+ assert.equal(E.standText(u),'3 von 3 Proben mit Ergebnis');
+ const d=E.ergebnisDatei(u,auftrag3(),[],'2.2.0');
+ assert.deepEqual(d.berichte.map(b=>b.bericht),['AR-100-2026-000001-01']);assert.deepEqual(d.ersetzt,[]);
+ assert.ok(d.hinweise.some(h=>/AR-200-2026-000009-01 nennt Projekt 99\.9002/.test(h)));
+});
+ok('K2 ohne Projektnummer in der Auftragsreferenz: Konflikt, beide Werte sichtbar, nichts übernehmbar; Beschreibung weicht überall ab',()=>{
+ const u=E.uebersicht('99.9001',auftrag3(),[{report:eigen(),geaendert:1},{report:anderswo('Anderswo Hauptstr. 3'),geaendert:9}]);
+ assert.deepEqual(u.konflikte,[{berichte:['AR-100-2026-000001-01','AR-200-2026-000009-01'],proben:['P1','P2','P3']}]);
+ const p1=u.zeilen.find(z=>z.label==='P1');
+ assert.deepEqual(p1.werte.filter(w=>w.p===SUM).map(w=>`${w.r}@${w.bericht}`).sort(),['14@AR-100-2026-000001-01','900@AR-200-2026-000009-01']);
+ assert.deepEqual(p1.konflikt.map(k=>k.p),[SUM,'Benzo[a]pyren']);
+ assert.match(p1.hinweise[0],/^Zwei Prüfberichte: .*„14“.*„900“.*es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist\.$/);
+ assert.ok(u.berichte.every(b=>!b.ersetztDurch),'keiner ist „ersetzt“');
+ assert.ok(u.berichte.every(b=>b.konfliktMit?.length===1));
+ assert.throws(()=>E.ergebnisDatei(u,auftrag3(),[],'2.2.0'),/Nicht übernommen: AR-100-2026-000001-01 und AR-200-2026-000009-01 haben Werte für P1, P2, P3/);
+ assert.deepEqual(u.fremdVerdacht,[{bericht:'AR-200-2026-000009-01',proben:3}]);
+ const g=UE.uebersichtGruppen(u.zeilen)[0].zeilen[0];assert.deepEqual(g.konflikt.werte.map(w=>w.r).sort(),['14','900']);assert.equal(g.bewertet,null,'nicht bewertet');
+ assert.match(UE.zelleText('PAK',g,U),/14 \(AR-100-2026-000001-01\) \/ 900 \(AR-200-2026-000009-01\) – 2 Berichte, ungeklärt|900 \(AR-200-2026-000009-01\) \/ 14/);
+});
+ok('Beschreibung weicht bei allen Proben eines Berichts ab (ohne Überschneidung) → fremdVerdacht; bei einem Teil nicht',()=>{
+ const r=anderswo('Anderswo');const u=E.uebersicht('99.9001',auftrag3(),[{report:r,geaendert:1}]);
+ assert.deepEqual(u.fremdVerdacht,[{bericht:'AR-200-2026-000009-01',proben:3}]);assert.deepEqual(u.konflikte,[]);
+ const teil=anderswo('Anderswo');teil.rows[0].desc='EG Testraum 1, Wand, Ansicht, 400 cm²';
+ assert.deepEqual(E.uebersicht('99.9001',auftrag3(),[{report:teil,geaendert:1}]).fremdVerdacht,[]);
+});
+ok('Zwei verschiedene Berichte, gleiche Probe: Konflikt – auch vorläufig gegen endgültig (Entscheidung a)',()=>{
+ const u=E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-31-01',[[1,pak('12')]],{vorlaeufig:true}),geaendert:1},{report:fassung('AR-32-01',[[1,pak('14')]]),geaendert:2}]);
+ assert.deepEqual(u.konflikte.map(k=>k.proben),[['P1']]);assert.equal(u.berichte.find(b=>b.bericht==='AR-31-01').ersetztDurch,undefined);
+ // anderes Labor: „-01“/„-02“ ist dort keine Fassung → zwei Berichte
+ const lab=c=>({...fassung(c,[[1,pak(c.endsWith('1')?'3':'4')]]),labor:'Labor Muster'});
+ assert.equal(E.uebersicht('99.9001',auftrag(),[{report:lab('X-5-01'),geaendert:1},{report:lab('X-5-02'),geaendert:2}]).konflikte.length,1);
+ // Eurofins-Nummer ohne Block ist nicht dieselbe wie eine mit Block, auch wenn der Rest gleich ist
+ assert.equal(E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-6',[[1,pak('3')]]),geaendert:1},{report:fassung('AR-6-01',[[1,pak('4')]]),geaendert:2}]).konflikte.length,1);
+});
+ok('Teilberichte ohne Überschneidung (andere Proben oder andere Parameter) gelten nebeneinander',()=>{
+ const u=E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-41-01',[[1,pak('5')],[2,pak('6')]]),geaendert:1},{report:fassung('AR-42-01',[[3,pak('7')],[4,[{p:'Chlorid',r:'3',u:'µg/cm²'}]]]),geaendert:2},
+  {report:fassung('AR-43-01',[[1,[{p:'Chlorid',r:'2',u:'µg/cm²'}]]]),geaendert:3}]);
+ assert.deepEqual(u.konflikte,[]);assert.equal(E.vollstaendig(u),true);
+ assert.deepEqual(werteVon(u,'P1').sort(),['2@AR-43-01','5@AR-41-01','< 0,5@AR-41-01'].sort());
+ assert.deepEqual(E.ergebnisDatei(u,auftrag(),[],'2.2.0').berichte.map(b=>b.bericht),['AR-41-01','AR-42-01','AR-43-01']);
+});
+ok('regelGeaendert: alte Übernahme mit der älteren Fassung (Dateidatum) oder fremden Werten → erneut übernehmen; frisch nicht',()=>{
+ const u=E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-77-01',[[1,pak('12')]]),geaendert:9},{report:fassung('AR-77-02',[[1,pak('14')]]),geaendert:5}]);
+ const frisch=E.ergebnisDatei(u,auftrag(),[],'2.2.0');
+ const alt={...frisch,berichte:[{...frisch.berichte[0],bericht:'AR-77-01',proben:frisch.berichte[0].proben.map(p=>({...p,werte:[{p:SUM,r:'12',u:U}]}))}]};
+ assert.equal(E.regelGeaendert(alt,u),true);assert.equal(E.regelGeaendert(frisch,u),false);assert.equal(E.regelGeaendert(null,u),false);
+});
+ok('m6: Leerzeichen am Ende oder doppelt in einem LabelKit-Feld ist keine Abweichung',()=>{
+ assert.equal(E.beschreibungWeichtAb('EG Küche, Wand, Ansicht, 400 cm²','EG Küche , Wand, Ansicht, 400 cm²'),false,'LabelKit übergibt „EG Küche “ ungetrimmt');
+ assert.equal(E.beschreibungWeichtAb('EG Küche, Wand','EG  Küche ,  Wand '),false);
+ assert.equal(E.beschreibungWeichtAb('EG Küche, Wand',' EG Küche, , Wand'),false,'Feld nur aus Leerzeichen');
+ assert.equal(E.beschreibungWeichtAb('EG Küche, Wand','EG Küchen, Wand'),true,'ein echter Unterschied bleibt einer');
+ const d=JSON.parse(labelkit);d.proben[0].z2='EG Testraum 1 ';const a=labelkitReport(JSON.stringify(d),'a.json','99.9001 Musterort');
+ const r=report('AR-9-02',[[1,pak('3')]]);r.rows[0].desc='EG Testraum 1 , Wand, Ansicht, 400 cm²';   // so kommt es von Eurofins zurück
+ assert.equal(E.uebersicht('99.9001',a,[{report:r,geaendert:1}]).zeilen[0].hinweise.some(h=>/Beschreibung/.test(h)),false);
+});
+ok('m8: Vinylchlorid zählt nicht als beauftragtes Chlorid',()=>{
+ const u=E.uebersicht('99.9001',auftrag(),[{report:report('AR-3-02',[[4,[{p:'Vinylchlorid',r:'< 1',u:'µg/m³'}]]]),geaendert:1}]);
+ assert.match(u.zeilen.find(z=>z.label==='P4').hinweise.join(' '),/Chlorid beauftragt – der Bericht enthält dazu keinen Wert/);
+});
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);

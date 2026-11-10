@@ -11,7 +11,7 @@ import {Oberflaeche} from './oberflaeche';
 import {skalenAbgleich} from './skalen-archiv.js';
 import {readLabFiles,readLabGroup,reportWarnings,type LabReport} from './labreport';
 import {labelkitReport} from './labelkit';
-import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
+import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,regelGeaendert,konfliktText,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
 import {ort,ortZumSchreiben,zweiOrteZeilen,planDatei} from './so';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
@@ -20,7 +20,7 @@ import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,a
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 import {druckModell,druckHtml,type DruckKopf,type Bewerte} from './druck';
 
-export const APP_VERSION='2.1.1';
+export const APP_VERSION='2.2.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -196,9 +196,10 @@ function renderInnen(){
 
 // ---- Jetzt dran: der eine nächste Schritt ----
 function renderJetzt(s:Scan){
- const gueltig=s.u.berichte.filter(b=>!b.ersetztDurch&&!b.ohneWerte).length;
- const j=jetztDran({proben:s.u.zeilen.length,berichte:s.u.berichte.length,gueltig,auftrag:!!s.auftrag,stand:s.stand,
-  vorhanden:s.vorhanden?{stand:s.vorhanden.stand,uebernommen:s.vorhanden.uebernommen,vollstaendig:s.vorhanden.vollstaendig,ohneLage:ohneLage(s.vorhanden,s.auftrag),ohneNwg:ohneNwg(s.vorhanden,s.u),mitStorniert:mitStorniert(s.vorhanden,s.u)}:null,vorhandenFehler:s.vorhandenFehler,
+ const gueltig=s.u.berichte.filter(b=>!b.ersetztDurch&&!b.ohneWerte&&!b.fremdProjekt).length;
+ // Berichte anderer Projekte zählen für „Jetzt dran“ nicht (nur solche im Ordner: wie „noch keine Berichte“)
+ const j=jetztDran({proben:s.u.zeilen.length,berichte:s.u.berichte.filter(b=>!b.fremdProjekt).length,gueltig,auftrag:!!s.auftrag,stand:s.stand,
+  vorhanden:s.vorhanden?{stand:s.vorhanden.stand,uebernommen:s.vorhanden.uebernommen,vollstaendig:s.vorhanden.vollstaendig,ohneLage:ohneLage(s.vorhanden,s.auftrag),ohneNwg:ohneNwg(s.vorhanden,s.u),mitStorniert:mitStorniert(s.vorhanden,s.u),regel:regelGeaendert(s.vorhanden,s.u)}:null,vorhandenFehler:s.vorhandenFehler,konflikte:s.u.konflikte,
   hinweise:hinweisZahl(s),importiert:nachImport});
  letzteJetzt=j;
  const knopf=(k:Knopf|undefined,haupt:boolean)=>k?`<button type="button"${haupt&&k.aktion==='uebernehmen'?' id="btn-uebernehmen"':''} class="${haupt?'primary':''}" data-aktion="${k.aktion}"${beschaeftigt&&k.aktion!=='ansehen'?' disabled':''}>${esc(k.text)}</button>`:'';
@@ -320,7 +321,7 @@ function kopierDaten(){
 }
 const kopiertText=(n:number)=>`${n} Zeile${n===1?'':'n'} kopiert – in Excel oder Word einfügen (Strg+V).`;
 /** Hinweise an einem Ergebnis: ausstehend, vorläufig, nicht beauftragt, ⚠ Hinweis. */
-const hinweis=(z:UZeile,q:Zeile|undefined)=>`${z.ausstehend?'<span class="u-aus">ausstehend</span>':''}${!z.ausstehend&&z.vorlaeufig?' <small class="u-vorl" title="Nur vorläufiger Prüfbericht – der endgültige Wert kann sich noch ändern">vorläufig</small>':''}${z.nichtBeauftragt?' <small class="u-nb" title="Steht im Prüfbericht, aber nicht im Laborauftrag aus LabelKit">nicht beauftragt</small>':''}${q&&zeilenHinweise(q).length?` <small class="u-hw" title="${esc(zeilenHinweise(q).join(' '))}">⚠ Hinweis</small>`:''}`;
+const hinweis=(z:UZeile,q:Zeile|undefined)=>`${z.konflikt?' <small class="u-hw rk-konflikt-tag" title="Zwei verschiedene Prüfberichte haben Werte für diese Probe">⚠ 2 Berichte</small>':''}${z.ausstehend?'<span class="u-aus">ausstehend</span>':''}${!z.ausstehend&&z.vorlaeufig?' <small class="u-vorl" title="Nur vorläufiger Prüfbericht – der endgültige Wert kann sich noch ändern">vorläufig</small>':''}${z.nichtBeauftragt?' <small class="u-nb" title="Steht im Prüfbericht, aber nicht im Laborauftrag aus LabelKit">nicht beauftragt</small>':''}${q&&zeilenHinweise(q).length?` <small class="u-hw" title="${esc(zeilenHinweise(q).join(' '))}">⚠ Hinweis</small>`:''}`;
 /** Legende einer Probenart (2.0, E13.1): eine Zeile – Skala kurz, Farbpunkte mit Bereich; Kategorienamen und volle Skala im Tooltip. */
 function legendeFuer(g:UGruppe,mitName=false){
  const skalen=new Map<string,{scale:Scale;u:string;quelle:string}>();let bg=false;
@@ -343,6 +344,8 @@ function mitGeschoss<T>(zeilen:T[],stelle:(z:T)=>string,an:boolean,spalten:numbe
 function ergebnis(gruppe:Gruppe,einheit:string,z:UZeile){
  if(gruppe==='Asbest')return z.befund?(z.befund.gefunden?punktWert(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen',true):`<span class="rk-w">${esc(z.befund.text)}</span>`):'';
  if(gruppe!=='Weitere'&&!z.haupt)return z.ausstehend?'':`<span class="u-aus">kein ${gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
+ // K2 (2.2): zwei Berichte, beide Werte wie im Bericht, ohne Bewertung – bis eine Datei aus dem Ordner genommen ist
+ if(z.konflikt?.werte.length)return `<span class="rk-w rk-konflikt" title="Zwei verschiedene Prüfberichte – es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist">${z.konflikt.werte.map(w=>`<span><span class="u-wert">${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}</span> <small>${esc(w.bericht)}</small></span>`).join('')}</span>`;
  if(gruppe==='Weitere')return z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
  const w=z.haupt!,b=z.bewertet?bewertung(z.bewertet):null,text=`${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}`;
  const titel=[b?.text,z.original?`laut Bericht ${z.original}`:''].filter(Boolean).join(' · ');
@@ -369,7 +372,8 @@ function probeDetails(s:Scan,z:Zeile){
  const hinweise=z.hinweise;
  const bericht=(b:Bericht)=>`${esc(b.bericht||b.sources.xml||b.sources.pdf||'ohne Nummer')}${b.vorlaeufig?' (vorläufig)':''}${b.datum?` vom ${esc(datum(b.datum))}`:''}${b.ersetztDurch?' – ersetzt':''} · ${b.sources.xml?'XML ✓':'XML fehlt'} · ${b.sources.pdf?'PDF ✓':'ohne PDF'}`;
  const feld=(titel:string,inhalt:string,cls='')=>inhalt?`<div${cls?` class="${cls}"`:''}><dt>${titel}</dt><dd>${inhalt}</dd></div>`:'';
- const params=z.werte.length?`<table class="rk-param"><caption>Alle Parameter (${z.werte.length})</caption><tbody>${z.werte.map(w=>`<tr><th scope="row" title="${esc(w.p)}">${esc(shortParameter(w.p))}</th><td>${wertZelle(w)}</td><td>${esc(w.u)}${w.nwg?` <small>(NWG ${esc(w.nwg)})</small>`:''}</td></tr>`).join('')}</tbody></table>`
+ const mitBericht=!!z.konflikt?.length;   // K2 (2.2): bei zwei Berichten steht an jedem Wert, woher er kommt
+ const params=z.werte.length?`<table class="rk-param"><caption>Alle Parameter (${z.werte.length})</caption><tbody>${z.werte.map(w=>`<tr><th scope="row" title="${esc(w.p)}">${esc(shortParameter(w.p))}</th><td>${wertZelle(w)}</td><td>${esc(w.u)}${w.nwg?` <small>(NWG ${esc(w.nwg)})</small>`:''}</td>${mitBericht?`<td><small>${esc(w.bericht)}</small></td>`:''}</tr>`).join('')}</tbody></table>`
   :`<p class="rk-param-leer"><b>Alle Parameter (0)</b> · <span class="muted">noch keine Messwerte</span></p>`;
  const beschreibung=z.desc&&stelleText(z.desc)!==z.desc?feld('Beschreibung',esc(z.desc)):'';
  return `<div class="rk-det">${hinweise.length?`<ul class="u-hinweise">${hinweise.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:''}
@@ -382,11 +386,11 @@ function probeDetails(s:Scan,z:Zeile){
  </dl></div></div>`;
 }
 function renderBerichte(s:Scan){
- const b=s.u.berichte,gueltig=b.filter(x=>!x.ersetztDurch),ersetzt=b.length-gueltig.length;
+ const b=s.u.berichte,gueltig=b.filter(x=>!x.ersetztDurch&&!x.fremdProjekt),ersetzt=b.filter(x=>x.ersetztDurch).length,fremd=b.filter(x=>x.fremdProjekt).length;
  $('berichte-zahl').textContent=b.length?`${b.length}`:'';
  const codes=gueltig.map(x=>x.bericht).filter(Boolean);
- $('berichte-kurz').textContent=[b.length?berichtZeile(codes,b):'Noch keine',ersetzt?`${ersetzt} ersetzt`:'',s.fehler.length?`${s.fehler.length} nicht lesbar`:'','Neue hier ablegen'].filter(Boolean).join(' · ');
- if(!b.length||s.fehler.length)($('berichte-block') as HTMLDetailsElement).open=true;
+ $('berichte-kurz').textContent=[b.length?berichtZeile(codes,b):'Noch keine',ersetzt?`${ersetzt} ersetzt`:'',fremd?`${fremd} anderes Projekt`:'',s.u.konflikte.length?'⚠ Werte doppelt – erst klären':'',s.fehler.length?`${s.fehler.length} nicht lesbar`:'','Neue hier ablegen'].filter(Boolean).join(' · ');
+ if(!b.length||s.fehler.length||s.u.konflikte.length)($('berichte-block') as HTMLDetailsElement).open=true;
  const storniert=new Set(s.u.storniert);   // ab 1.13: in LabelKit stornierte Proben im Bericht kennzeichnen
  $('berichte').innerHTML=b.length?[...b].sort((x,y)=>(x.ersetztDurch?1:0)-(y.ersetztDurch?1:0)||y.geaendert-x.geaendert).map(x=>berichtKarte(x,storniert)).join(''):`<p class="leer">${s.ohneOrdner?`Noch kein Ordner „${esc(LABOR)}“ im Projekt – er wird beim ersten Import angelegt.`:`Noch keine Prüfberichte in „${esc(LABOR)}“.`}</p>`;
 }
@@ -397,11 +401,12 @@ function wertAbgleichText(b:Bericht){const w=b.wertAbgleich;if(!w)return '';
  return w.erkannt?'Hauptwerte im PDF nicht zuzuordnen':'Werte im PDF nicht erkannt – nicht abgeglichen';}
 function berichtKarte(b:Bericht,storniert:Set<string>){
  const proben=b.proben,daten=[...new Set(proben.map(p=>p.datum).filter(Boolean))].sort() as string[];
- const zustand=b.ersetztDurch?['ersetzt','ersetzt']:b.ohneWerte?['ohne Messwerte','offen']:b.vorlaeufig?['vorläufig','vorl']:['endgültig','ok'];
+ const zustand=b.fremdProjekt?[`anderes Projekt (${b.fremdProjekt})`,'ersetzt']:b.ersetztDurch?['ersetzt','ersetzt']:b.ohneWerte?['ohne Messwerte','offen']:b.vorlaeufig?['vorläufig','vorl']:['endgültig','ok'];
+ const konflikt=b.konfliktMit?.length?' <span class="badge konflikt">⚠ Werte auch in einem anderen Bericht</span>':'';
  const spalten=[...new Map(proben.flatMap(p=>kernwerte(p.werte||[])).map(w=>[`${w.p}|${w.u}`,w])).values()].slice(0,5);
  const alle=[...new Map(proben.flatMap(p=>p.werte||[]).map(w=>[`${w.p}|${w.u}`,w])).values()];
  const zelle=(werte:Wert[]|undefined,p:string,u:string)=>{const w=wertFuer(werte||[],p,u);return w?wertZelle(w):'<span class="muted">–</span>';};
- const kopf=`<span class="eyebrow">PRÜFBERICHT</span><h3>${esc(b.bericht||b.sources.xml||b.sources.pdf||'ohne Nummer')} <span class="badge ${zustand[1]}">${zustand[0]}</span></h3>
+ const kopf=`<span class="eyebrow">PRÜFBERICHT</span><h3>${esc(b.bericht||b.sources.xml||b.sources.pdf||'ohne Nummer')} <span class="badge ${zustand[1]}">${esc(zustand[0])}</span>${konflikt}</h3>
   <p class="meta">${b.datum?`Bericht vom ${datum(b.datum)} · `:''}${proben.length} Probe${proben.length===1?'':'n'}${daten.length?` · Probenahme ${daten.map(datum).join(' – ')}`:''}${b.auftragsreferenz?` · Auftragsreferenz „${esc(b.auftragsreferenz)}“`:''} · ${[b.sources.xml?`XML ✓`:'XML fehlt',b.sources.pdf?'PDF ✓':'ohne PDF',wertAbgleichText(b)].filter(Boolean).join(' · ')} · Datei vom ${esc(uhr(b.geaendert))}</p>`;
  const hinweise=b.hinweise.length?`<ul class="bericht-hinweise">${b.hinweise.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:'';
  if(b.ersetztDurch)return `<article class="bericht ersetzt"><details><summary>${kopf}</summary>${hinweise}</details></article>`;
@@ -409,7 +414,7 @@ function berichtKarte(b:Bericht,storniert:Set<string>){
   <tbody>${proben.map(p=>`<tr><th scope="row">${esc(p.label||p.ref)}${p.label&&storniert.has(p.label)?' <small class="u-nb" title="In LabelKit storniert – der Wert wird nicht übernommen">storniert</small>':''}</th><td class="beschreibung">${esc(p.desc)}</td>${spalten.map(w=>`<td>${zelle(p.werte,w.p,w.u)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'';
  const voll=alle.length>spalten.length?`<details class="alle"><summary>Alle Parameter (${alle.length})</summary><div class="tabelle-scroll"><table class="werte-tabelle alle-tabelle"><thead><tr><th scope="col">Parameter</th><th scope="col">Einheit</th>${proben.map(p=>`<th scope="col">${esc(p.label||p.ref)}</th>`).join('')}</tr></thead>
   <tbody>${alle.map(w=>`<tr><th scope="row">${esc(w.p)}</th><td>${esc(w.u)}</td>${proben.map(p=>`<td>${zelle(p.werte,w.p,w.u)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`:'';
- return `<article class="bericht">${kopf}${hinweise}${tabelle}${voll}</article>`;
+ return `<article class="bericht${b.fremdProjekt?' fremd':''}${b.konfliktMit?.length?' konflikt':''}">${kopf}${hinweise}${tabelle}${voll}</article>`;
 }
 // ---- Projekt öffnen ----
 async function neuEinlesen(still=false){
@@ -455,9 +460,15 @@ async function uebernehmen(){
   const frisch=await einlesen(f);if(folder!==f)return;
   if(frisch.stand!==scan.stand){scan=frisch;toast('Im Ordner hat sich gerade etwas geändert – bitte die Übersicht prüfen und erneut auf „Ergebnisse übernehmen“ klicken.',true);return;}
   scan=frisch;const u=frisch.u;
-  const bedenken=[...(vollstaendig(u)?[]:[`Noch nicht vollständig: ${standText(u)}.`]),...u.berichte.flatMap(b=>b.hinweise.filter(h=>/nennt Projekt/.test(h)))];
+  // K2 (2.2): zwei verschiedene Berichte mit Werten für dieselben Proben → nichts übernehmen, kein „Trotzdem“
+  if(u.konflikte.length){toast(konfliktText(u.konflikte),true);return;}
+  // Berichte eines anderen Projekts zählen nicht (stehen nur in der Liste) – daher keine Rückfrage mehr dafür.
+  // Weicht die Beschreibung bei allen Proben eines Berichts von LabelKit ab, gehört er vermutlich zu einem anderen Projekt.
+  const bedenken=[...u.fremdVerdacht.map(v=>`Bei Prüfbericht ${v.bericht} weicht die Probenbeschreibung bei ${v.proben===1?'der einzigen Probe':`allen ${v.proben} Proben`} von LabelKit ab. Gehört der Bericht wirklich zu diesem Projekt? Wenn nicht: Abbrechen und die Datei aus „Laborergebnisse“ nehmen.`),
+   ...(vollstaendig(u)?[]:[`Noch nicht vollständig: ${standText(u)}.`])];
   if(bedenken.length){beschaeftigt=false;render();
-   if(await frage('Ergebnisse übernehmen?',`${bedenken.join('\n\n')}\n\nPlanKit und FotoKit zeigen dann diesen Zwischenstand. Kommen weitere Berichte, einfach erneut übernehmen.`,['Abbrechen','Trotzdem übernehmen'])!=='Trotzdem übernehmen')return;
+   const zwischen=vollstaendig(u)?'':'\n\nPlanKit und FotoKit zeigen dann diesen Zwischenstand. Kommen weitere Berichte, einfach erneut übernehmen.';
+   if(await frage('Ergebnisse übernehmen?',`${bedenken.join('\n\n')}${zwischen}`,['Abbrechen','Trotzdem übernehmen'])!=='Trotzdem übernehmen')return;
    if(folder!==f||scan?.stand!==frisch.stand){toast('Abgebrochen – die Übersicht hat sich inzwischen geändert.',true);return;}
    beschaeftigt=true;render();}
   const ablage=(await ortZumSchreiben(f.dir,'resultkit')).dir;   // bisher „Laborergebnisse“, künftig „_Spektron/ResultKit“
@@ -580,6 +591,7 @@ $('projekt').addEventListener('click',e=>{const t=e.target as HTMLElement;
   else if(aktion==='import'){wahl.value='';wahl.click();}
   else if(aktion==='ansehen'){nachImport=null;if(scan)renderJetzt(scan);document.getElementById('u-kacheln')?.scrollIntoView({behavior:'smooth',block:'start'});}
   else if(aktion==='hinweise')hinweiseZeigen();
+  else if(aktion==='berichte'){const b=$('berichte-block') as HTMLDetailsElement;b.open=true;(document.querySelector('#berichte .bericht.konflikt')||b).scrollIntoView({behavior:'smooth',block:'start'});}
   return;}
  // Probe auf- und zuklappen: Klick auf die Zeile (nicht beim Markieren von Text)
  const tr=t.closest<HTMLElement>('tr.u-zeile');if(!tr||!scan||String(getSelection()||''))return;

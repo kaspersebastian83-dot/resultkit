@@ -164,4 +164,8 @@ ok('Kopieren für Excel: Werte wie im Bericht, Einheit im Kopf, Tabulatoren, kei
   const rolle=Object.fromEntries(D.druckModell(datei).zeilen.map(r=>[r.labels.join(' '),r.rolle]));
   assert.deepEqual(rolle,{P1:'referenz',P2:'frei',P3:''});
  });}
+ok('m8: Vinylchlorid ohne Probenart steht nicht in der Spalte Chlorid',()=>{
+ const g=U.uebersichtGruppen([z('P9','EG Lager',[['Vinylchlorid','3','µg/m³']]),z('P8','EG Flur',[['Chlorid','2','µg/cm²']])]);
+ assert.deepEqual(g.map(x=>[x.gruppe,x.zeilen.map(r=>r.label)]),[['Chlorid',['P8']],['Weitere',['P9']]]);
+});
 console.log(`${n} Prüfungen Übersicht bestanden`);

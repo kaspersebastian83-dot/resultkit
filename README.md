@@ -22,8 +22,13 @@ PlanKit, FotoKit und die Projektzentrale lesen nur diese Datei. Die vorige Über
 - Werte kommen ausschließlich aus der XML. Eine PDF allein liefert keine Werte (Hinweis „XML ergänzen“).
 - Liegt die PDF dazu vor, werden die Hauptwerte (Σ16 EPA-PAK, Chlorid, Asbest) mit der PDF-Ergebnistabelle abgeglichen; Abweichungen erscheinen als Hinweis an der Probe, geändert wird nichts.
 - Die Prüfungen am Bericht (Probenzahl laut Bericht, doppelte Probenreferenz oder P-Nummer) laufen beim Import und beim Einlesen des Ordners. Heißen XML und PDF gleich, gehören aber nicht zum selben Bericht, liest ResultKit sie getrennt und weist darauf hin – keine Datei fällt still weg.
-- Gleicher Bericht mehrfach im Ordner → die neuere Datei zählt. Gleiche Probe/Parameter/Einheit in mehreren Berichten →
-  endgültig vor vorläufig, sonst der neuere Bericht (wie im Datenarchiv der Projektzentrale). Ein vollständig ersetzter Bericht wird als „ersetzt“ gezeigt und nicht übernommen.
+- **Welcher Prüfbericht gilt (ab 2.2, Entscheidung 10.11.2026):**
+  - Gleiche Nummer in gleicher Fassung mehrfach im Ordner → die Datei mit Messwerten, dann endgültig vor vorläufig, sonst die neuere Datei (nur hier zählt das Dateidatum).
+  - Eurofins-Nummern enden auf einen Fassungsblock (`-01`, `-02` …); „gleicher Bericht“ = gleiche Nummer ohne diesen Block. Je Probe/Parameter/Einheit gilt endgültig vor vorläufig, dann die höhere Fassung. Ohne lesbaren Block (anderes Labor, keine zwei Ziffern am Ende) steht ein Bericht für sich.
+  - Verschiedene Berichte ersetzen einander nie. Haben zwei einen Wert für dieselbe Probe/Parameter/Einheit, bleiben beide sichtbar und „Ergebnisse übernehmen“ ist gesperrt (ohne „Trotzdem“), bis eine Datei aus „Laborergebnisse“ genommen ist – auch bei vorläufig/endgültig mit verschiedener Grundnummer. Teilberichte für andere Proben oder Parameter gelten nebeneinander.
+  - Nennt die Auftragsreferenz eine andere Projektnummer, steht der Bericht in der Liste, seine Werte zählen nicht (wie im Import-Dialog; auch bei einem Tippfehler in der Auftragsreferenz).
+  - Weicht die Beschreibung bei allen vergleichbaren Proben eines Berichts von LabelKit ab, fragt „Ergebnisse übernehmen“ vorher.
+  - Ein vollständig ersetzter Bericht wird als „ersetzt“ gezeigt und nicht übernommen.
 - Chlorid: VdS 2357, 5–10 µg/cm² korrosionschemisch relevante Größenordnung (< 5 grün, 5 – < 10 amber, ≥ 10 rot), unabhängig von der Nutzung; in ResultKit, PlanKit und FotoKit gleich (Block KORROSION-CHLORID v1). Ältere Berichte in mg/m² werden umgerechnet (1 µg/cm² = 10 mg/m²).
 - Bewertung nur aus vorhandenen Skalen: Ergebniskarten-Einstellungen aus PlanKit, sonst VdS-2357-Referenz nach der Nutzung in `_Projekt.json`,
   sonst die Büro-Skalen (`_Spektron-Skalen.json`). Ohne Skala bleibt ein Wert unbewertet – ResultKit erfindet keine Grenzwerte.
