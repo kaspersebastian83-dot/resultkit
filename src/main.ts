@@ -13,14 +13,14 @@ import {readLabFiles,readLabGroup,reportWarnings,type LabReport} from './labrepo
 import {labelkitReport} from './labelkit';
 import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
-import {ort,ortZumSchreiben} from './so';
+import {ort,ortZumSchreiben,zweiOrteZeilen,planDatei} from './so';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
 import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,stelleText,geschossKopf,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 import {druckModell,druckHtml,type DruckKopf,type Bewerte} from './druck';
 
-export const APP_VERSION='2.1.0';
+export const APP_VERSION='2.1.1';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -101,7 +101,7 @@ function frage(titel:string,text:string,wahl:string[]):Promise<string>{return ne
  d.onclose=()=>resolve(wahl[0]);d.showModal();});}
 
 // ---- Zustand ----
-interface Scan {auftrag:LabReport|null;auftragDatei:DateiStand|null;auftragFehler:string;eingaenge:Eingang[];fehler:{name:string;text:string}[];dateien:DateiStand[];stand:string;u:Uebersicht;vorhanden:ErgebnisDatei|null;vorhandenText:string|null;vorhandenFehler:string;ohneOrdner:boolean}
+interface Scan {auftrag:LabReport|null;auftragDatei:DateiStand|null;auftragFehler:string;eingaenge:Eingang[];fehler:{name:string;text:string}[];dateien:DateiStand[];stand:string;u:Uebersicht;vorhanden:ErgebnisDatei|null;vorhandenText:string|null;vorhandenFehler:string;ohneOrdner:boolean;zweiOrte:string[]}
 let folder:ProjectFolder|null=null,scan:Scan|null=null,einstellungen:ResultSettings|null=null,laeuft=0,beschaeftigt=false;
 /** Gelesene Berichte je Dateistand – PDFs werden nicht bei jedem Einlesen neu ausgewertet. */
 /** Eine gelesene Gruppe kann (bei XML und PDF gleichen Namens aus verschiedenen Berichten) zwei Berichte ergeben. */
@@ -133,12 +133,13 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
  let vorhanden:ErgebnisDatei|null=null,vorhandenText:string|null=null,vorhandenFehler='';
  const ablage=(await ort(f.dir,'resultkit')).dir;   // _Ergebnisse.json: „Laborergebnisse“ oder künftig „_Spektron/ResultKit“
  if(ablage){try{const file=await fileInfo(ablage,DATEI);if(file){vorhandenText=await file.text();vorhanden=liesErgebnisDatei(vorhandenText);}}catch(e){vorhandenFehler=meldung(e);}}
- return {auftrag,auftragDatei,auftragFehler,eingaenge,fehler,dateien:alle,stand:standKennung(alle),u:uebersicht(f.nr,auftrag,eingaenge),vorhanden,vorhandenText,vorhandenFehler,ohneOrdner:!labor};
+ const zweiOrte=await zweiOrteZeilen(f.dir,['resultkit','labelkit','plankit','projekt']);   // K1: Dateien an zwei Orten – es gilt „_Spektron“
+ return {auftrag,auftragDatei,auftragFehler,eingaenge,fehler,dateien:alle,stand:standKennung(alle),u:uebersicht(f.nr,auftrag,eingaenge),vorhanden,vorhandenText,vorhandenFehler,ohneOrdner:!labor,zweiOrte};
 }
 
 /** Bewertungsregel wie in PlanKit/FotoKit: Einstellungen der Ergebniskarte aus dem Probenplan, sonst Nutzung aus _Projekt.json. */
 async function planEinstellungen(f:ProjectFolder):Promise<ResultSettings|null>{
- try{const d=(await ort(f.dir,'plankit')).dir,file=d?await fileInfo(d,`Probenplan ${f.name}.probenplan`):null;if(!file)return null;
+ try{const d=(await ort(f.dir,'plankit')).dir,file=d?await planDatei(d,f.name):null;if(!file)return null;   // K1: auch nach umbenanntem Ordner
   const r=JSON.parse(await file.text())?.results;   // Skalen wie in PlanKit geprüft: Farben gelangen ins HTML
   if(r&&typeof r==='object')return {usage:r.usage==='residential'||r.usage==='industrial'?r.usage:undefined,vds:gueltigeSkalen(r.vds),scales:gueltigeSkalen(r.scales)};
  }catch{/* Plan nicht lesbar: Nutzung aus den Projektdaten */}
@@ -210,7 +211,9 @@ function renderJetzt(s:Scan){
 }
 function renderHinweise(s:Scan){
  const liste=ordnerHinweise(s);
- $('hinweise').innerHTML=liste.length?`<div class="hinweis-liste" role="note">${liste.map(h=>`<p>${esc(h)}</p>`).join('')}</div>`:'';
+ // K1: eigene, immer sichtbare Zeile (nicht in den aufklappbaren Hinweisen der Proben)
+ $('hinweise').innerHTML=(s.zweiOrte.length?`<div class="hinweis-liste zwei-orte" role="status">${s.zweiOrte.map(h=>`<p>${esc(h)}</p>`).join('')}</div>`:'')+
+  (liste.length?`<div class="hinweis-liste" role="note">${liste.map(h=>`<p>${esc(h)}</p>`).join('')}</div>`:'');
 }
 /** „⚠ Hinweise“: Proben und Berichte mit Hinweisen aufklappen und zum ersten springen. */
 function hinweiseZeigen(){

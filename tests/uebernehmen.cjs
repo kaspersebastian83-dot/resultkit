@@ -19,7 +19,7 @@ function ordner(dateien){
   // 1. A wird eingelesen und hängt im Parser; inzwischen B (gleicher Dateiname, Größe, Zeit) – B bekommt seinen eigenen Bericht
   {
     const angehalten = warte(), weiter = warte(); let aufrufe = 0;
-    const c = { console, Map, WeakMap, LABOR: 'Laborergebnisse', DATEI: '_Ergebnisse.json', findSubdir: async (d, n) => d.unter[n] || null, ort: async () => ({ dir: null }),
+    const c = { console, Map, WeakMap, LABOR: 'Laborergebnisse', DATEI: '_Ergebnisse.json', findSubdir: async (d, n) => d.unter[n] || null, ort: async () => ({ dir: null }), zweiOrteZeilen: async () => [],
       standKennung: x => JSON.stringify(x), uebersicht: () => ({}), meldung: e => e.message,
       readLabFiles: async files => { aufrufe++; const t = await files[0].text(); if (t === 'BERICHT A'){ angehalten.auf(); await weiter.p; } return { rows: [{ synthetisch: t }], bericht: 'Synthetisch', warnings: [] }; } };
     vm.createContext(c); vm.runInContext(stueck('const cache=', '/** Bewertungsregel') + '\nthis.einlesen = einlesen;', c);
