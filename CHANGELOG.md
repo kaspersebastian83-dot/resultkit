@@ -2,6 +2,7 @@
 
 ## 2.1.1 · 10.11.2026 – Dateien an zwei Orten (Audit K1)
 - `src/spektron-ordner.js` byte-gleich mit Projektzentrale 1.43.0: liegen `_Ergebnisse.json`, die LabelKit-Datei, der Plan oder `_Projekt.json` in `_Spektron`, gilt `_Spektron` – eine Datei am früheren Ort (z. B. eine kopierte `_Ergebnisse.json` in „Laborergebnisse“) schaltet das Projekt nicht mehr zurück. Lesen und „Ergebnisse übernehmen“ gehen nach `_Spektron`.
+- Skalen und Nutzung aus PlanKit: fehlt in „_Spektron/PlanKit“ der Plan unter dem genauen Namen (Projektordner umbenannt), liest ResultKit den neuesten Plan, der als PlanKit-Hauptdatei dieses Projekts zählt (gleiche Projektnummer, kein Sicherungs-Zusatz – dieselbe Regel wie `spektron-ordner.js`, `planDatei` in `src/so.ts`). Vorher fiel die Bewertung dann still auf die Nutzung aus `_Projekt.json` und die Standardskalen zurück, auch auf der Druckseite.
 - Neue Zeile oben in den Hinweisen (`.zwei-orte`, eigener Block, nicht aufklappbar): beide Dateien mit Datum, welche gilt (`zweiOrteZeilen` in `src/so.ts`). Gelöscht wird nichts.
 
 ## 2.1.0 · 06.11.2026 – Übersicht drucken

@@ -13,7 +13,7 @@ import {readLabFiles,readLabGroup,reportWarnings,type LabReport} from './labrepo
 import {labelkitReport} from './labelkit';
 import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
-import {ort,ortZumSchreiben,zweiOrteZeilen} from './so';
+import {ort,ortZumSchreiben,zweiOrteZeilen,planDatei} from './so';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
 import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,stelleText,geschossKopf,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
@@ -139,7 +139,7 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
 
 /** Bewertungsregel wie in PlanKit/FotoKit: Einstellungen der Ergebniskarte aus dem Probenplan, sonst Nutzung aus _Projekt.json. */
 async function planEinstellungen(f:ProjectFolder):Promise<ResultSettings|null>{
- try{const d=(await ort(f.dir,'plankit')).dir,file=d?await fileInfo(d,`Probenplan ${f.name}.probenplan`):null;if(!file)return null;
+ try{const d=(await ort(f.dir,'plankit')).dir,file=d?await planDatei(d,f.name):null;if(!file)return null;   // K1: auch nach umbenanntem Ordner
   const r=JSON.parse(await file.text())?.results;   // Skalen wie in PlanKit geprüft: Farben gelangen ins HTML
   if(r&&typeof r==='object')return {usage:r.usage==='residential'||r.usage==='industrial'?r.usage:undefined,vds:gueltigeSkalen(r.vds),scales:gueltigeSkalen(r.scales)};
  }catch{/* Plan nicht lesbar: Nutzung aus den Projektdaten */}
