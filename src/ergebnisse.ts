@@ -115,10 +115,12 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
  const kandidaten=new Map<string,Bericht[]>();
  for(const b of zaehlt)for(const s of b.proben)for(const w of s.werte||[]){const k=wkey(s,w),l=kandidaten.get(k)||[];if(!l.includes(b))l.push(b);kandidaten.set(k,l);}
  /** je Schlüssel die geltenden Berichte: einer, oder bei Konflikt der beste je Grundnummer */
+ // In LabelKit stornierte Proben sind keine Proben: ihre Werte gehen nirgends hin, zwei Berichte dafür sperren nichts (Codex, PR #33)
+ const stornoLabels=new Set((auftrag?.storniert||[]).map(gross).filter(l=>!(auftrag?.rows||[]).some(r=>gross(r.label)===l)));
  const gilt=new Map<string,Bericht[]>(),konfliktKeys=new Map<string,Bericht[]>();
  for(const [k,l] of kandidaten){const jeGrund=new Map<string,Bericht>();
   for(const b of l){const g=`${b.fassung===null?'ohne':'mit'}:${b.grund}`,alt=jeGrund.get(g);if(!alt||besser(b,alt)>0)jeGrund.set(g,b);}   // „AR-1“ ohne Block ist nicht „AR-1-01“
-  const g=[...jeGrund.values()];gilt.set(k,g);if(g.length>1)konfliktKeys.set(k,g);}
+  const g=[...jeGrund.values()];gilt.set(k,g);if(g.length>1&&!stornoLabels.has(gross(k.split('\u0000')[0])))konfliktKeys.set(k,g);}
  for(const b of berichte){let blieb=false;const durch=new Set<string>();
   if(b.fremdProjekt)continue;   // anderes Projekt: die Karte zeigt seine Werte, sie zählen aber nirgends (nicht in Zeilen, nicht in _Ergebnisse.json)
   for(const s of b.proben){if(!s.werte)continue;s.werte=s.werte.filter(w=>{const g=gilt.get(wkey(s,w))||[];if(g.includes(b))return true;for(const x of g)durch.add(x.bericht||x.sources.xml||'');return false;});if(s.werte.length)blieb=true;}

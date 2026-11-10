@@ -168,4 +168,13 @@ ok('m8: Vinylchlorid ohne Probenart steht nicht in der Spalte Chlorid',()=>{
  const g=U.uebersichtGruppen([z('P9','EG Lager',[['Vinylchlorid','3','µg/m³']]),z('P8','EG Flur',[['Chlorid','2','µg/cm²']])]);
  assert.deepEqual(g.map(x=>[x.gruppe,x.zeilen.map(r=>r.label)]),[['Chlorid',['P8']],['Weitere',['P9']]]);
 });
+ok('Konflikt bei Asbest: beide Befunde mit Bericht, nicht als „nachgewiesen“ zusammengefasst (Codex, PR #33)',()=>{
+ const zeile={...z('P6','KG Flur Putz',[],{typ:'Asbest'}),werte:[{p:'Asbestgehalt',r:'-',u:'%',bericht:'AR-A-01',vorlaeufig:false},{p:'Asbestgehalt',r:'-',u:'%',bericht:'AR-B-01',vorlaeufig:false},
+  {p:'Asbestart',r:'Kein Asbest nachgewiesen',u:'',bericht:'AR-A-01',vorlaeufig:false},{p:'Asbestart',r:'Chrysotil',u:'',bericht:'AR-B-01',vorlaeufig:false}],
+  konflikt:[{p:'Asbestgehalt',u:'%',berichte:['AR-A-01','AR-B-01']},{p:'Asbestart',u:'',berichte:['AR-A-01','AR-B-01']}]};
+ const r=U.uebersichtGruppen([zeile])[0].zeilen[0];
+ assert.deepEqual(r.konflikt.werte,[{p:'Asbestart',r:'Kein Asbest nachgewiesen',u:'',bericht:'AR-A-01'},{p:'Asbestart',r:'Chrysotil',u:'',bericht:'AR-B-01'}]);
+ assert.equal(r.befund.gefunden,false);
+ assert.equal(U.zelleText('Asbest',r,''),'Asbestart: Kein Asbest nachgewiesen (AR-A-01) / Asbestart: Chrysotil (AR-B-01) – 2 Berichte, ungeklärt');
+});
 console.log(`${n} Prüfungen Übersicht bestanden`);

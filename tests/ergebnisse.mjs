@@ -419,4 +419,9 @@ ok('m8: Vinylchlorid zählt nicht als beauftragtes Chlorid',()=>{
  const u=E.uebersicht('99.9001',auftrag(),[{report:report('AR-3-02',[[4,[{p:'Vinylchlorid',r:'< 1',u:'µg/m³'}]]]),geaendert:1}]);
  assert.match(u.zeilen.find(z=>z.label==='P4').hinweise.join(' '),/Chlorid beauftragt – der Bericht enthält dazu keinen Wert/);
 });
+ok('Zwei Berichte mit Wert nur für eine in LabelKit stornierte Probe sperren nichts (Codex, PR #33)',()=>{
+ const u=E.uebersicht('99.9001',auftragStorno([2],false),[{report:fassung('AR-51-01',[[1,pak('3')],[2,pak('40')]]),geaendert:1},{report:fassung('AR-52-01',[[2,pak('41')],[3,pak('1')]]),geaendert:2}]);
+ assert.deepEqual(u.konflikte,[]);assert.ok(u.berichte.every(b=>!b.konfliktMit));
+ assert.deepEqual(E.ergebnisDatei(u,auftragStorno([2],false),[],'2.2.0').berichte.map(b=>[b.bericht,b.proben.map(p=>p.label)]),[['AR-51-01',['P1']],['AR-52-01',['P3']]]);
+});
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);

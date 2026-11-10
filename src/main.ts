@@ -342,10 +342,10 @@ function mitGeschoss<T>(zeilen:T[],stelle:(z:T)=>string,an:boolean,spalten:numbe
 }
 /** Ergebnis einer Probe als Zelle (Farbpunkt nach Skala, Asbest-Befund rot) – in beiden Ansichten gleich. */
 function ergebnis(gruppe:Gruppe,einheit:string,z:UZeile){
+ // K2 (2.2): zwei Berichte, beide Werte wie im Bericht, ohne Bewertung – bis eine Datei aus dem Ordner genommen ist
+ if(z.konflikt?.werte.length)return `<span class="rk-w rk-konflikt" title="Zwei verschiedene Prüfberichte – es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist">${z.konflikt.werte.map(w=>`<span><span class="u-wert">${w.p?`${esc(shortParameter(w.p))}: `:''}${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}</span> <small>${esc(w.bericht)}</small></span>`).join('')}</span>`;
  if(gruppe==='Asbest')return z.befund?(z.befund.gefunden?punktWert(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen',true):`<span class="rk-w">${esc(z.befund.text)}</span>`):'';
  if(gruppe!=='Weitere'&&!z.haupt)return z.ausstehend?'':`<span class="u-aus">kein ${gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
- // K2 (2.2): zwei Berichte, beide Werte wie im Bericht, ohne Bewertung – bis eine Datei aus dem Ordner genommen ist
- if(z.konflikt?.werte.length)return `<span class="rk-w rk-konflikt" title="Zwei verschiedene Prüfberichte – es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist">${z.konflikt.werte.map(w=>`<span><span class="u-wert">${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}</span> <small>${esc(w.bericht)}</small></span>`).join('')}</span>`;
  if(gruppe==='Weitere')return z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
  const w=z.haupt!,b=z.bewertet?bewertung(z.bewertet):null,text=`${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}`;
  const titel=[b?.text,z.original?`laut Bericht ${z.original}`:''].filter(Boolean).join(' · ');
