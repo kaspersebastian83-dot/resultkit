@@ -6,10 +6,14 @@
 // Zusammenführen (ab 2.2, Audit K2/M1, Entscheidung 10.11.2026): gleicher Bericht (gleiche Nummer) mehrfach abgelegt → die Datei mit
 // Messwerten (XML), dann endgültig vor vorläufig, sonst die neueste Datei – nur hier zählt das Dateidatum. „Gleicher Bericht“ in
 // mehreren Fassungen (Eurofins: letzter Block „-01“, „-02“ …): je Probe/Parameter/Einheit endgültig vor vorläufig, dann die höhere
-// Fassung. Verschiedene Berichte (andere Grundnummer) ersetzen einander nie: gleiche Probe/Parameter/Einheit in zwei Berichten ist
+// Fassung. Verschiedene Berichte (andere Grundnummer) ersetzen einander nie: gleiche Probe/Parameter in zwei Berichten ist
 // ein Konflikt – beide Werte bleiben sichtbar, übernommen wird nichts, bis eine Datei aus dem Ordner genommen ist. Ein Bericht,
 // dessen Auftragsreferenz ein anderes Projekt nennt, steht in der Liste, seine Werte zählen nicht. Ein Bericht, von dem nichts
 // übrig bleibt, gilt als ersetzt.
+// Einheit (ab 2.5, Audit o41, Entscheidung 11.11.2026, Variante A): Probe + Parameter entscheiden, die Einheit nicht – eine neue
+// Fassung ersetzt die ältere auch dann, wenn sie den Wert in einer anderen Einheit angibt (Eurofins wechselte zwischen mg/m² und
+// µg/cm²), und zwei Grundnummern mit Werten für dieselbe Probe/Parameter sind auch in verschiedenen Einheiten ein Konflikt.
+// Umgerechnet wird dafür nichts; gezeigt und weitergegeben wird die Einheit wie im Bericht.
 import type {LabReport,Abweichung} from './labreport';
 import {referenceLabel,mitPdfAbgleichen,abgleichHinweis,ABGLEICH} from './labreport';
 import type {LabOrigin,LabSample,Wert} from './model';
@@ -32,6 +36,9 @@ export function beschreibungWeichtAb(auftrag:unknown,bericht:unknown,art=''){
  const a=beschreibungKey(auftrag),b=beschreibungKey(bericht);
  return a!==b&&a.replace(/, tiefe: [^,]*$/,'')!==b;
 }
+/** Einheit nur in der Schreibweise angleichen, nie umrechnen: griechisches My, Leerraum um „/“, hochgestellte Zwei (ab 2.5, o41).
+ *  Gleich wie `einheit` im Datenarchiv der Projektzentrale (archiv/auswertung.js) – dort gleich halten. Nur zum Vergleichen. */
+export const einheitKey=(u:unknown)=>tidy(u).replace(/\u03BC/g,'\u00B5').replace(/\s*\/\s*/g,'/').replace(/m2\b/g,'m²').replace(/cm2\b/g,'cm²');
 const norm=(s:unknown)=>tidy(s).toLocaleLowerCase('de').replace(/[^\p{L}\p{N}]/gu,'');
 const nummer=(label:string)=>{const n=Number(label.replace(/^P/i,''));return Number.isSafeInteger(n)&&n>0?n:null;};
 
@@ -44,7 +51,8 @@ export interface Eingang {report:LabReport;geaendert:number}
 export interface Bericht extends LabOrigin {datum?:string;proben:LabSample[];geaendert:number;hinweise:string[];ersetztDurch?:string[];ohneWerte:boolean;wertAbgleich?:{erkannt:boolean;geprueft:number;abweichend:number};
  grund:string;fassung:number|null;fremdProjekt?:string;konfliktMit?:string[]}
 export type Status='ergebnis'|'vorlaeufig'|'ohneWerte'|'offen'|'nichtBeauftragt';
-/** konflikt (ab 2.2): Parameter/Einheit, für die zwei verschiedene Berichte einen Wert haben – alle Werte stehen in `werte`. */
+/** konflikt (ab 2.2): Parameter, für die zwei verschiedene Berichte einen Wert haben – alle Werte stehen in `werte`; u = Einheit
+ *  des ersten Werts (ab 2.5 können die Berichte verschiedene Einheiten nennen). */
 export interface Zeile {label:string;nr:number|null;ref:string;desc:string;typ?:string;art?:string;datum?:string;erwartet:boolean;status:Status;werte:(Wert&{bericht:string;vorlaeufig:boolean})[];berichte:string[];hinweise:string[];
  konflikt?:{p:string;u:string;berichte:string[]}[]}
 /** Konflikt (ab 2.2): zwei verschiedene Prüfberichte mit Werten für dieselben Proben. */
@@ -105,13 +113,15 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   if(r.wertAbgleich&&r.sources.xml&&r.sources.pdf){b.wertAbgleich={erkannt:r.wertAbgleich.erkannt,geprueft:r.wertAbgleich.geprueft,abweichend:0};abweichungen.set(b,r.wertAbgleich.abweichend);}
   if(b.ohneWerte)b.hinweise.push(r.sources.xml?'Der Bericht enthält keine Messwerte.':'Nur die PDF liegt vor – Messwerte kommen aus der XML. Bitte die XML des Berichts von Eurofins (EOL) ergänzen.');
   return b;});
- // 2. Je Probe/Parameter/Einheit (ab 2.2): innerhalb eines Berichts (gleiche Grundnummer) endgültig vor vorläufig, dann die höhere
+ // 2. Je Probe/Parameter (ab 2.2; Einheit bis 2.4): innerhalb eines Berichts (gleiche Grundnummer) endgültig vor vorläufig, dann die höhere
  //    Fassung, zuletzt die neuere Datei (nur, wenn auch die Fassung nicht lesbar ist). Verschiedene Berichte ersetzen einander nie –
- //    haben zwei einen Wert für dieselbe Probe/Parameter/Einheit, bleiben beide stehen (Konflikt, Übernahme gesperrt).
+ //    haben zwei einen Wert für dieselbe Probe/Parameter, bleiben beide stehen (Konflikt, Übernahme gesperrt). Die Einheit gehört
+ //    ab 2.5 nicht zum Schlüssel (o41): „-02“ in µg/cm² ersetzt „-01“ in mg/m²; innerhalb eines Berichts bleiben alle Einheiten
+ //    eines Parameters stehen (Chlorid „µg/Probe“ und „µg/cm²“).
  //    Berichte eines anderen Projekts zählen gar nicht.
  const besser=(a:Bericht,b:Bericht)=>(a.vorlaeufig?0:1)-(b.vorlaeufig?0:1)||(a.fassung??-1)-(b.fassung??-1)||a.geaendert-b.geaendert;
  const zaehlt=berichte.filter(b=>!b.fremdProjekt),probeKey=(s:LabSample)=>s.label||norm(s.ref)||norm(s.labNr);
- const wkey=(s:LabSample,w:Wert)=>`${probeKey(s)}\u0000${tidy(w.p)}\u0000${tidy(w.u)}`;
+ const wkey=(s:LabSample,w:Wert)=>`${probeKey(s)}\u0000${tidy(w.p)}`;
  const kandidaten=new Map<string,Bericht[]>();
  for(const b of zaehlt)for(const s of b.proben)for(const w of s.werte||[]){const k=wkey(s,w),l=kandidaten.get(k)||[];if(!l.includes(b))l.push(b);kandidaten.set(k,l);}
  /** je Schlüssel die geltenden Berichte: einer, oder bei Konflikt der beste je Grundnummer */
@@ -136,7 +146,7 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
  for(const b of berichte)if(b.konfliktMit)b.hinweise.unshift(`Werte für dieselben Proben stehen auch in ${b.konfliktMit.join(', ')} – ein anderer Bericht, keine neue Fassung. Es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist.`);
  // Abweichungen XML↔PDF nur für Werte, die noch gelten (ein neuerer Bericht kann einzelne Parameter ersetzen)
  for(const [b,alle] of abweichungen){const gilt:Record<string,Abweichung[]>={};
-  for(const s of b.proben){const k=norm(s.ref),a=(alle[k]||[]).filter(x=>(s.werte||[]).some(w=>tidy(w.p)===tidy(x.p)&&tidy(w.u)===tidy(x.u)));if(a.length)gilt[k]=a;}
+  for(const s of b.proben){const k=norm(s.ref),a=(alle[k]||[]).filter(x=>(s.werte||[]).some(w=>tidy(w.p)===tidy(x.p)&&einheitKey(w.u)===einheitKey(x.u)));if(a.length)gilt[k]=a;}
   abweichungen.set(b,gilt);const n=Object.values(gilt).flat().length;b.wertAbgleich!.abweichend=n;
   const h=abgleichHinweis(Object.keys(gilt).map(k=>b.proben.find(s=>norm(s.ref)===k)?.ref||k),n);if(h)b.hinweise.push(h);}
  // 3. Zeilen je Probe: erwartet (LabelKit) ∪ in Berichten. In LabelKit stornierte Proben (ab 1.13) bekommen keine Zeile:
@@ -168,12 +178,13 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   for(const w of s.werte||[])z.werte.push({...w,bericht:b.bericht,vorlaeufig:!!b.vorlaeufig});}
  // Konflikt an der Probe: welche Parameter, welche Berichte, welche Werte
  for(const z of zeilen.values()){const jeP=new Map<string,typeof z.werte>();
-  for(const w of z.werte){const k=`${tidy(w.p)}\u0000${tidy(w.u)}`;jeP.set(k,[...(jeP.get(k)||[]),w]);}
+  for(const w of z.werte){const k=tidy(w.p);jeP.set(k,[...(jeP.get(k)||[]),w]);}   // wie der Wertschlüssel: ohne Einheit (o41)
   const strittig=[...jeP.values()].filter(l=>new Set(l.map(w=>w.bericht)).size>1);if(!strittig.length)continue;
   z.konflikt=strittig.map(l=>({p:l[0].p,u:l[0].u,berichte:[...new Set(l.map(w=>w.bericht))]}));
   // ein Satz je Probe: der Hauptwert (Σ16 EPA-PAK, Chlorid, Asbest), sonst der erste strittige Parameter, dazu die Zahl der übrigen
   const l=strittig.find(x=>HAUPTWERT.test(x[0].p))||strittig[0],rest=strittig.length-1;
-  z.hinweise.unshift(`Zwei Prüfberichte: ${l.map(w=>`${w.bericht} „${w.r}“`).join(', ')} (${l[0].p}${l[0].u?`, ${l[0].u}`:''}${rest?` und ${rest} weitere${rest===1?'r':''} Parameter`:''}) – es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist.`);}
+  const eineEinheit=new Set(l.map(w=>einheitKey(w.u))).size===1;   // verschiedene Einheiten: je Wert mit seiner Einheit (o41)
+  z.hinweise.unshift(`Zwei Prüfberichte: ${l.map(w=>`${w.bericht} „${w.r}${!eineEinheit&&w.u?` ${w.u}`:''}“`).join(', ')} (${l[0].p}${eineEinheit&&l[0].u?`, ${l[0].u}`:''}${rest?` und ${rest} weitere${rest===1?'r':''} Parameter`:''}) – es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist.`);}
  const fremdVerdacht:FremdVerdacht[]=[...vergleich].filter(([,v])=>v.n>0&&v.ab===v.n).map(([b,v])=>({bericht:code(b),proben:v.n}));
  for(const z of zeilen.values()){
   // Endgültig erst, wenn kein Wert der Probe mehr nur vorläufig ist (z. B. PAK endgültig, Chlorid erst vorläufig → noch vorläufig)

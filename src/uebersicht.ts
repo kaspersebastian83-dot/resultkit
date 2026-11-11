@@ -81,10 +81,12 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
    ausstehend:z.status==='offen'||z.status==='ohneWerte',vorlaeufig:z.status==='vorlaeufig',nichtBeauftragt:z.status==='nichtBeauftragt',
    berichte:[...new Set(gezeigt.map(x=>x.bericht).filter(Boolean))],bewertet:roh?{p:roh.p,r:roh.r,u:roh.u,...(roh.loq?{loq:roh.loq}:{})}:null,...(um&&roh&&roh.u!==um.u?{original:`${roh.r} ${roh.u}`}:{})};
   // Hauptwert der Spalte; bei Asbest/Weitere (kein Hauptwert) der erste strittige Parameter der Gruppe – sonst der erste (Codex, PR #33)
-  if(z.konflikt?.length){const inhalt=(x:{p:string;u:string})=>w.some(v=>v.p===x.p&&v.u===x.u&&!/^[-–—]?$/.test(v.r.trim()));   // „Asbestgehalt: -“ (nicht untersucht) zeigt nichts
+  // Konflikt je Parameter, die Einheit gehört nicht dazu (ab 2.5, o41): beide Berichte können verschiedene Einheiten nennen
+  if(z.konflikt?.length){const inhalt=(x:{p:string;u:string})=>w.some(v=>v.p===x.p&&!/^[-–—]?$/.test(v.r.trim()));   // „Asbestgehalt: -“ (nicht untersucht) zeigt nichts
    const passend=z.konflikt.filter(x=>g!=='Asbest'||ASBEST.test(x.p));
-   const k=roh?z.konflikt.find(x=>x.p===roh.p&&x.u===roh.u):passend.find(inhalt)||passend[0]||z.konflikt[0];
-   const gleich=k?w.filter(x=>x.p===k.p&&x.u===k.u):[];
+   const k=roh?z.konflikt.find(x=>x.p===roh.p):passend.find(inhalt)||passend[0]||z.konflikt[0];
+   // je Fläche vor „je Probe“ wie beim Hauptwert (bevorzugt): Chlorid „µg/Probe“ neben „µg/cm²“ erscheint nicht zusätzlich
+   const alleP=k?w.filter(x=>x.p===k.p):[],gleich=alleP.some(x=>FLAECHE.test(x.u))?alleP.filter(x=>FLAECHE.test(x.u)):alleP;
    u.konflikt={werte:new Set(gleich.map(x=>x.bericht)).size>1?gleich.map(x=>({...(roh?{}:{p:x.p}),r:x.r,u:x.u,bericht:x.bericht})):[]};
    if(u.konflikt.werte.length){u.bewertet=null;u.befund=u.befund&&{text:u.befund.text,gefunden:false};u.berichte=[...new Set(gleich.map(x=>x.bericht))];}}   // kein „nachgewiesen“ aus einem vermischten Befund   // nichts bewerten, solange nicht klar ist, welcher Wert gilt
   map.set(g,[...(map.get(g)||[]),u]);

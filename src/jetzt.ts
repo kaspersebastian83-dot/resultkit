@@ -45,7 +45,7 @@ export function jetztDran(e:JetztEingabe):Jetzt{
   const neu=[e.vorhanden.ohneLage?'Oberflächenart und Raum aus LabelKit gehen mit an PlanKit (Balken am Plan, Raumbuch)':'',
    e.vorhanden.ohneNwg?'Asbestwerte tragen die Nachweisgrenze aus dem Prüfbericht (0,001 % / 0,1 % / 1 %)':'',
    e.vorhanden.mitStorniert?'in LabelKit stornierte Proben zählen nicht mehr als offen und gehen nicht an PlanKit und FotoKit':'',
-   e.vorhanden.regel?'bei mehreren Fassungen eines Prüfberichts gilt die höhere Fassung (-02 vor -01), nicht mehr die zuletzt gespeicherte Datei, und Berichte eines anderen Projekts zählen nicht mit':''].filter(Boolean).join('; ');
+   e.vorhanden.regel?'bei mehreren Fassungen eines Prüfberichts gilt die höhere Fassung (-02 vor -01) – auch wenn sie die Werte in einer anderen Einheit angibt –, nicht mehr die zuletzt gespeicherte Datei, und Berichte eines anderen Projekts zählen nicht mit':''].filter(Boolean).join('; ');
   return {...basis,art:'geaendert',titel:'Bitte einmal erneut übernehmen',
    text:'Neu: '+neu+'. Die Übernahme vom '+uhr(e.vorhanden.uebernommen)+' enthält das noch nicht – '+(e.vorhanden.regel?'dabei ändern sich übernommene Werte – bitte die Übersicht vorher ansehen.':e.vorhanden.mitStorniert?'die Werte der übrigen Proben ändern sich dadurch nicht.':'Werte ändern sich dadurch nicht.'),haupt:{aktion:'uebernehmen',text:'Erneut übernehmen'},neben:IMPORT};}
  if(e.vorhanden&&e.vorhanden.stand===e.stand)
