@@ -5,11 +5,14 @@ import './spektron-ordner.js';
 import {fileInfo,listFiles,type Dir} from './ordner';
 export type Bereich='projekt'|'fotokit'|'fotokitPruefsummen'|'labelkit'|'labelkitAblage'|'resultkit'|'plankit'|'belegkit'|'buero'|'anlagenProtokoll';
 export interface Ort{dir:Dir|null;wo:'neu'|'alt';pfad:string;konflikt:boolean;umgezogen:boolean;unterbrochen?:boolean;bereich:Bereich}
+/** LabelKit-Projektdatei nach der Regel von LabelKit 5.1 (spektron-ordner.js labelkitWahl): datei null = keine Datei dieses Projekts. */
+export interface LabelkitWahl{datei:{name:string;file:File;text:string}|null;fremd:string[];eigene:string[]}
 /** Eintrag aus zweiOrte() – nur durchgereicht an zweiOrteText(). */
 export interface ZweiOrte{bereich:Bereich;app:string;wo:'neu'|'alt'}
 interface Api{ORDNER:string;AB:string;UMSTELLUNG:boolean;ort(dir:Dir,bereich:Bereich,o?:{anlegen?:boolean}):Promise<Ort>;istSpektronProjekt(dir:Dir):Promise<boolean>;
  zweiOrte?(dir:Dir,bereiche?:Bereich[]):Promise<ZweiOrte[]>;zweiOrteText?(e:ZweiOrte):string;
- projektNr?(name:string):string;planHaupt?(name:string,art:string,k?:{nr:string}):boolean}
+ projektNr?(name:string):string;planHaupt?(name:string,art:string,k?:{nr:string}):boolean;
+ labelkitWahl(dir:Dir,projektName:string):Promise<LabelkitWahl>}
 export const SO=(globalThis as unknown as {SpektronOrdner:Api}).SpektronOrdner;
 /** Wo liegt der Bereich? Nur lesen – legt nichts an. */
 export const ort=(dir:Dir,bereich:Bereich)=>SO.ort(dir,bereich);
@@ -30,3 +33,6 @@ export async function planDatei(dir:Dir,ordnerName:string):Promise<File|null>{
  for(const f of await listFiles(dir,/\.probenplan$/i))if(haupt(f.name,'file',k))return f.handle.getFile();   // listFiles: neueste zuerst
  return null;
 }
+/** Audit m1 (11.11.2026): welche „…_Daten.json“ gilt? Nur Dateien, deren Name mit der Projektnummer beginnt; „<Nr>_Daten.json“ vor
+    einer anderen eigenen (die nur mit späterem „gespeichertAm“); fremde werden nie gelesen. Dieselbe Regel wie LabelKit, PlanKit, FotoKit. */
+export const labelkitDatei=(dir:Dir,ordnerName:string)=>SO.labelkitWahl(dir,ordnerName);

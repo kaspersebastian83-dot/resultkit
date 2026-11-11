@@ -13,14 +13,14 @@ import {readLabFiles,readLabGroup,reportWarnings,type LabReport} from './labrepo
 import {labelkitReport} from './labelkit';
 import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,regelGeaendert,konfliktText,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
-import {ort,ortZumSchreiben,zweiOrteZeilen,planDatei} from './so';
+import {ort,ortZumSchreiben,zweiOrteZeilen,planDatei,labelkitDatei} from './so';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
 import type {ResultSettings,Scale,Wert} from './model';
 import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,alsTSV,stelleText,geschossKopf,SPALTE_TITEL,type UGruppe,type UZeile,type Gruppe,type MZeile,type MSpalte} from './uebersicht';
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 import {druckModell,druckHtml,type DruckKopf,type Bewerte} from './druck';
 
-export const APP_VERSION='2.2.0';
+export const APP_VERSION='2.3.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -110,12 +110,17 @@ const cache=new WeakMap<ProjectFolder,Map<string,Gelesen[]>>();   // je geöffne
 
 async function einlesen(f:ProjectFolder):Promise<Scan>{
  let berichteCache=cache.get(f);if(!berichteCache){berichteCache=new Map();cache.set(f,berichteCache);}
- const labor=await findSubdir(f.dir,LABOR),auftraege=(await ort(f.dir,'labelkit')).dir;   // LabelKit-Datei: „Laboraufträge“ oder künftig „_Spektron/LabelKit“
- let auftrag:LabReport|null=null,auftragDatei:DateiStand|null=null,auftragFehler='';
- if(auftraege){const liste=await listFiles(auftraege,/_Daten\.json$/i);   // LabelKit lädt immer die neueste – sie enthält den ganzen Auftrag
-  if(liste[0]){const file=await liste[0].handle.getFile();auftragDatei={name:`${AUFTRAEGE}/${liste[0].name}`,size:file.size,t:file.lastModified};   // feste Kennung, auch nach dem Umzug (wie Projektzentrale/FotoKit/PlanKit)
-   try{let ohneNummer=false;auftrag=labelkitReport(await file.text(),liste[0].name,f.name,()=>{ohneNummer=true;return true;});
-    if(ohneNummer)auftrag.warnings.push(`„${liste[0].name}“ enthält keine Projektnummer (ältere LabelKit-Datei) – sie liegt im Projektordner und wird daher diesem Projekt zugeordnet.`);}
+ const labor=await findSubdir(f.dir,LABOR),lk=await ort(f.dir,'labelkit'),auftraege=lk.dir;   // LabelKit-Datei: „Laboraufträge“ oder „_Spektron/LabelKit“
+ let auftrag:LabReport|null=null,auftragDatei:DateiStand|null=null,auftragFehler='',lkZeile='';
+ // Audit m1 (2.3.0): nur die LabelKit-Datei dieses Projekts (Regel wie LabelKit 5.1) – nie die neueste beliebige …_Daten.json.
+ // Dieselbe Datei geht in den Stand (wie Projektzentrale, PlanKit und FotoKit ihn nachrechnen).
+ if(auftraege){const w=await labelkitDatei(auftraege,f.name),pfad=lk.wo==='neu'?lk.pfad:AUFTRAEGE;
+  const fremd=w.fremd.length?`„${w.fremd[0]}“${w.fremd.length>1?` und ${w.fremd.length-1} weitere`:''}`:'';
+  if(!w.datei&&fremd)lkZeile=`⚠ In „${pfad}“ liegt keine LabelKit-Datei von Projekt ${f.nr} – nur ${fremd} (nach dem Namen nicht von diesem Projekt). ResultKit lädt sie nicht.`;
+  else if(fremd)lkZeile=`⚠ In „${pfad}“ liegt auch ${fremd} – nach dem Namen nicht von Projekt ${f.nr}. ResultKit nimmt sie nicht.`;
+  if(w.datei){const file=w.datei.file;auftragDatei={name:`${AUFTRAEGE}/${w.datei.name}`,size:file.size,t:file.lastModified};   // feste Kennung, auch nach dem Umzug (wie Projektzentrale/FotoKit/PlanKit)
+   try{let ohneNummer=false;auftrag=labelkitReport(w.datei.text,w.datei.name,f.name,()=>{ohneNummer=true;return true;});
+    if(ohneNummer)auftrag.warnings.push(`„${w.datei.name}“ enthält keine Projektnummer (ältere LabelKit-Datei) – sie liegt im Projektordner und wird daher diesem Projekt zugeordnet.`);}
    catch(e){auftragFehler=meldung(e);}}}
  const dateien:DateiStand[]=[],gruppen=new Map<string,{file:File;name:string}[]>();
  if(labor)for await(const h of labor.values()){
@@ -133,7 +138,7 @@ async function einlesen(f:ProjectFolder):Promise<Scan>{
  let vorhanden:ErgebnisDatei|null=null,vorhandenText:string|null=null,vorhandenFehler='';
  const ablage=(await ort(f.dir,'resultkit')).dir;   // _Ergebnisse.json: „Laborergebnisse“ oder künftig „_Spektron/ResultKit“
  if(ablage){try{const file=await fileInfo(ablage,DATEI);if(file){vorhandenText=await file.text();vorhanden=liesErgebnisDatei(vorhandenText);}}catch(e){vorhandenFehler=meldung(e);}}
- const zweiOrte=await zweiOrteZeilen(f.dir,['resultkit','labelkit','plankit','projekt']);   // K1: Dateien an zwei Orten – es gilt „_Spektron“
+ const zweiOrte=[...await zweiOrteZeilen(f.dir,['resultkit','labelkit','plankit','projekt']),...(lkZeile?[lkZeile]:[])];   // K1: Dateien an zwei Orten; Audit m1: fremde LabelKit-Datei
  return {auftrag,auftragDatei,auftragFehler,eingaenge,fehler,dateien:alle,stand:standKennung(alle),u:uebersicht(f.nr,auftrag,eingaenge),vorhanden,vorhandenText,vorhandenFehler,ohneOrdner:!labor,zweiOrte};
 }
 

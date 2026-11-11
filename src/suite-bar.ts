@@ -196,7 +196,12 @@
     try{ var fo = await bereich('fotokit', 'Fotos'); if (fo) s.fotos = await fo.getFileHandle('_Bildumbenenner.json').then(function(){ return true; }, function(){ return false; }); }catch(e4){}
     try{
       var la = await bereich('labelkit', 'Laboraufträge');
-      if (la) for await (var f of la.values()) if (f.kind === 'file' && /_Daten\.json$/i.test(f.name)){ s.label = true; break; }
+      // ✓ nur für die LabelKit-Datei dieses Projekts (Audit o8; Regel wie LabelKit 5.1): Name beginnt mit der Projektnummer, danach keine Ziffer
+      var lkM = /^(\d{2}\.\d{2,6})(?:[\s_-]|$)/.exec(nfc(proj.name).trim()), lkNr = lkM ? ((/(?<!\d)\d{2}\.\d{3,6}(?!\d)/.exec(lkM[1]) || [''])[0]) : '';
+      if (la) for await (var f of la.values()) if (f.kind === 'file' && /_Daten\.json$/i.test(nfc(f.name))){
+        var lkN = nfc(f.name).trim();
+        if (!lkNr || (lkN.indexOf(lkNr) === 0 && !/^\d/.test(lkN.slice(lkNr.length)))){ s.label = true; break; }
+      }
     }catch(e5){}
     try{ var le = await bereich('resultkit', 'Laborergebnisse'); if (le) s.ergebnis = await le.getFileHandle('_Ergebnisse.json').then(function(){ return true; }, function(){ return false; }); }catch(e8){}   // ResultKit: geprüfte Ergebnisse übernommen
     try{
