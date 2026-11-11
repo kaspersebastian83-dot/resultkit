@@ -95,7 +95,7 @@ try{
    for(const e of ['Prüfberichte zeigen','Übersicht drucken …','Ansicht: Nach Stelle','Ansicht: Je Probenart','Ordner neu einlesen','Anderes Projekt öffnen …','Kurzanleitung','Version und Änderungen'])assert.ok(eintraege.some(x=>x.endsWith(e)),`„Mehr …“ fehlt ${e}: ${eintraege.join(' | ')}`);
    assert.ok(eintraege.some(x=>/Handbuch/.test(x))&&eintraege.some(x=>/Rückmeldung/.test(x)),'Handbuch und Rückmeldung von der Leiste');
    await page.locator('#rk-m-version').click();const d=page.locator('#rk-hilfe');await d.waitFor();
-   assert.match(await d.textContent(),/Prüfberichte importieren.*Ergebnisse prüfen.*Ergebnisse übernehmen.*Übersicht drucken.*Neu in ResultKit 2\.0\.0.*ResultKit v2\.3\.0/s);
+   assert.match(await d.textContent(),/Prüfberichte importieren.*Ergebnisse prüfen.*Ergebnisse übernehmen.*Übersicht drucken.*Neu in ResultKit 2\.0\.0.*ResultKit v2\.4\.0/s);
    await page.keyboard.press('Escape');assert.equal(await d.isVisible(),false);
   });
 
@@ -173,7 +173,7 @@ try{
    // Chlorid: VdS 2357, 5–10 µg/cm² korrosionschemisch relevant – 26 µg/cm² liegt darüber
    const cl=page.locator('.u-gruppe').nth(1);
    assert.deepEqual(await cl.locator('thead th').allTextContents(),['Probe','Probenahmestelle','Chlorid (µg/cm²)']);
-   assert.match(await cl.locator('.u-legende').textContent(),/< 5 µg\/cm².*5 – < 10 µg\/cm².*≥ 10 µg\/cm²/s);
+   assert.match(await cl.locator('.u-legende').textContent(),/< 5 µg\/cm².*5 – 10 µg\/cm².*> 10 µg\/cm²/s);
    assert.deepEqual((await cl.locator('.u-legende .rk-leg').evaluateAll(l=>l.map(x=>x.title))).map(t=>t.split(' ')[0]),['unterhalb','im','oberhalb']);
    const clChip=cl.locator('tbody .rk-w').first();assert.equal(await clChip.textContent(),'26');assert.match(await clChip.getAttribute('title'),/oberhalb/);
    await page.getByRole('button',{name:'Nur auffällige'}).click();

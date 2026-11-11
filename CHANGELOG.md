@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.0 · 11.11.2026 – Chlorid genau 10 µg/cm² „im Bereich“ (Audit m7, Entscheidung 4)
+- `KORROSION-CHLORID v2` (gleich in ResultKit, PlanKit, FotoKit, BerichtKit): die Stufe „oberhalb“ trägt `ueber: true` und zählt erst über 10 µg/cm² (100 mg/m² usw.); genau 10 liegt „im Bereich“, genau 5 bleibt „im Bereich“. Keine neue Zahl, keine Rundung.
+- `rate` und `rangeText` nutzen `stufeErreicht`: Farben und Titel der Werte, Übersicht, Filter „auffällig“, Druckseite, Legende „5 – 10 µg/cm²“ · „> 10 µg/cm²“.
+- In PlanKit angepasste Chlorid-Skala (`.probenplan`, `results.vds`): gleiche Stufen und Grenzen wie die Referenz → gleiche Regel (`vdsRegel`, nur im Speicher); andere Grenzen → ab dem „ab“-Wert wie bisher. Dateiformat unverändert, `ueber` steht in keiner Datei.
+
 ## 2.3.0 · 11.11.2026 – Nur die LabelKit-Datei dieses Projekts (Audit m1, o13, o16)
 - **Laborauftrag:** statt der neuesten beliebigen `…_Daten.json` die Datei dieses Projekts nach der Regel von LabelKit 5.1 (`labelkitWahl` in `spektron-ordner.js`): Name beginnt mit der Projektnummer, danach keine Ziffer; `<Nr>_Daten.json` gilt, eine andere eigene nur mit späterem `gespeichertAm`; ohne feste Datei die neueste eigene. Fremde Dateien werden nie gelesen.
 - Keine eigene Datei → kein Laborauftrag geladen, eine gelbe Zeile („… liegt keine LabelKit-Datei von Projekt … – nur „…“ … ResultKit lädt sie nicht.“); eigene und fremde → Zeile „… liegt auch …“.
