@@ -85,8 +85,10 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
   if(z.konflikt?.length){const inhalt=(x:{p:string;u:string})=>w.some(v=>v.p===x.p&&!/^[-–—]?$/.test(v.r.trim()));   // „Asbestgehalt: -“ (nicht untersucht) zeigt nichts
    const passend=z.konflikt.filter(x=>g!=='Asbest'||ASBEST.test(x.p));
    const k=roh?z.konflikt.find(x=>x.p===roh.p):passend.find(inhalt)||passend[0]||z.konflikt[0];
-   // je Fläche vor „je Probe“ wie beim Hauptwert (bevorzugt): Chlorid „µg/Probe“ neben „µg/cm²“ erscheint nicht zusätzlich
-   const alleP=k?w.filter(x=>x.p===k.p):[],gleich=alleP.some(x=>FLAECHE.test(x.u))?alleP.filter(x=>FLAECHE.test(x.u)):alleP;
+   // je Bericht: je Fläche vor „je Probe“ wie beim Hauptwert (bevorzugt) – Chlorid „µg/Probe“ neben „µg/cm²“ desselben Berichts
+   // erscheint nicht zusätzlich; ein Bericht nur mit „µg/Probe“ bleibt sichtbar (Codex, PR #36)
+   const alleP=k?w.filter(x=>x.p===k.p):[],flaeche=(b:string)=>alleP.some(x=>x.bericht===b&&FLAECHE.test(x.u));
+   const gleich=alleP.filter(x=>!flaeche(x.bericht)||FLAECHE.test(x.u));
    u.konflikt={werte:new Set(gleich.map(x=>x.bericht)).size>1?gleich.map(x=>({...(roh?{}:{p:x.p}),r:x.r,u:x.u,bericht:x.bericht})):[]};
    if(u.konflikt.werte.length){u.bewertet=null;u.befund=u.befund&&{text:u.befund.text,gefunden:false};u.berichte=[...new Set(gleich.map(x=>x.bericht))];}}   // kein „nachgewiesen“ aus einem vermischten Befund   // nichts bewerten, solange nicht klar ist, welcher Wert gilt
   map.set(g,[...(map.get(g)||[]),u]);
