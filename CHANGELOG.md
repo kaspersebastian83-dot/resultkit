@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.0 · 11.11.2026 – Einheit im Wertschlüssel (Audit o41, Entscheidung 11.11.2026: Variante A)
+- **Fassungsregel ohne Einheit:** welcher Wert gilt, entscheiden Probe + Parameter. Eine neuere Fassung (-02) ersetzt die ältere (-01) für diese Probe und diesen Parameter, auch wenn sie eine andere Einheit nennt (mg/m² → µg/cm², `μg / m2` → `µg/m²`) – bisher blieben beide stehen, die Übersicht zeigte den älteren Wert und `_Ergebnisse.json` enthielt beide. Innerhalb eines Berichts bleiben alle Einheiten eines Parameters (Chlorid „µg/Probe“ und „µg/cm²“); aus einer ersetzten Fassung bleibt nichts, auch kein Wert in einer Einheit, die die neue Fassung nicht mehr nennt.
+- **Konfliktregel ohne Einheit:** zwei verschiedene Grundnummern mit Werten für dieselbe Probe und denselben Parameter sind ein Konflikt, auch in verschiedenen Einheiten – beide Werte sichtbar, „Ergebnisse übernehmen“ gesperrt. Hinweis bei verschiedenen Einheiten je Wert mit Einheit: „Zwei Prüfberichte: AR-1-01 „120 mg/m²“, AR-2-01 „14 µg/cm²“ (Chlorid) – es gilt keiner, …“.
+- **Schreibweise:** wo Einheiten noch verglichen werden (Abgleich XML↔PDF), angeglichen wie im Datenarchiv (`einheitKey` = `einheit` in `archiv/auswertung.js`: µ/μ, Leerraum um „/“, m2/cm2). Nichts umgerechnet, gezeigt und gespeichert wird die Einheit wie im Bericht.
+- Übernahme mit beiden Werten (ResultKit ≤ 2.4): wird nie von selbst geändert; bei unverändertem Ordner „Bitte einmal erneut übernehmen“ (`regelGeaendert`). `_Ergebnisse.json` unverändert im Format.
+
 ## 2.4.0 · 11.11.2026 – Chlorid genau 10 µg/cm² „im Bereich“ (Audit m7, Entscheidung 4)
 - `KORROSION-CHLORID v2` (gleich in ResultKit, PlanKit, FotoKit, BerichtKit): die Stufe „oberhalb“ trägt `ueber: true` und zählt erst über 10 µg/cm² (100 mg/m² usw.); genau 10 liegt „im Bereich“, genau 5 bleibt „im Bereich“. Keine neue Zahl, keine Rundung.
 - `rate` und `rangeText` nutzen `stufeErreicht`: Farben und Titel der Werte, Übersicht, Filter „auffällig“, Druckseite, Legende „5 – 10 µg/cm²“ · „> 10 µg/cm²“.
