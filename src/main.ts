@@ -20,7 +20,7 @@ import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,a
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 import {druckModell,druckHtml,type DruckKopf,type Bewerte} from './druck';
 
-export const APP_VERSION='2.3.0';
+export const APP_VERSION='2.4.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----

@@ -9,7 +9,8 @@ export interface Wert {p:string;r:string;u:string;loq?:string;nwg?:string;norm?:
 export interface LabData {ref:string;desc:string;art?:string;labNr?:string;datum?:string;bericht?:string;reportId?:string;werte?:Wert[]}
 export type Surface='floor'|'wall'|'ceiling';
 export interface LabSample extends LabData {label:string;typ?:string;surface?:Surface;raum?:string}
-export interface Category {name:string;from:number;color?:string}
+/** ueber: nur im Speicher (KORROSION-CHLORID v2) – zählt erst über `from`; steht nie in einer Datei. */
+export interface Category {name:string;from:number;color?:string;ueber?:boolean}
 export interface Scale {name:string;cats:Category[]}
 export interface ResultSettings {usage?:'residential'|'industrial';parameter?:string;scales?:Record<string,Scale>;vds?:Record<string,Scale|null>}
 export const MAX_RAUM=80;

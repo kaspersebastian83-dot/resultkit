@@ -65,22 +65,35 @@ export function vdsScale(parameter:string,unit:string,usage:ResultSettings['usag
  const label=usage==='industrial'?'Industrie':nutzung==='Gesundheit & Labor'?'Gesundheit & Labor, Referenz < 10 µg/m²':'Wohn-/Büroräume';
  return {name:`VdS 2357 · ${label} · Hintergrundreferenz`,cats:[{name:'unter Referenzwert',from:0,color:'#4caf50'},{name:'Referenzwert erreicht/überschritten',from:limit,color:'#e0453a'}]};
 }
-/* ===== KORROSION-CHLORID v1 – in ResultKit, PlanKit (TypeScript) und FotoKit (JavaScript) gleich halten =====
+/* ===== KORROSION-CHLORID v2 – in ResultKit, PlanKit (TypeScript), FotoKit und BerichtKit (JavaScript) gleich halten =====
    Chlorid auf Oberflächen: VdS 2357 nennt 5–10 µg/cm² als korrosionschemisch relevante Größenordnung (Vorgabe des Büros).
    Gilt unabhängig von der Nutzung. Die Grenzen werden in die Einheit des Berichts umgerechnet (1 µg/cm² = 10 mg/m²),
-   damit ältere Berichte in mg/m² gleich bewertet werden. Wie die PAK-Referenz in PlanKit anpassbar (dann nur im Projekt). */
+   damit ältere Berichte in mg/m² gleich bewertet werden. Wie die PAK-Referenz in PlanKit anpassbar (dann nur im Projekt).
+   v2 (Audit m7, Entscheidung 4): genau 10 µg/cm² liegt noch „im Bereich“, „oberhalb“ erst über 10; genau 5 bleibt „im Bereich“.
+   Keine neue Zahl: die Stufe „oberhalb“ trägt `ueber: true` (zählt erst über ihrem Wert), jede andere Stufe zählt ab ihrem Wert.
+   `ueber` steht nie in einer Datei. Eine in PlanKit angepasste Chlorid-Skala mit denselben Grenzen wie die Referenz bekommt es
+   beim Lesen (vdsRegel); eine mit anderen Grenzen zählt ab ihren „ab“-Werten. */
 export const CHLORID_JE_UG_CM2:Record<string,number>={'µg/cm2':1,'mg/m2':10,'µg/m2':10000,'mg/cm2':.001,'µg/100cm2':100,'mg/dm2':.1};
 export const chloridEinheit=(unit:string)=>CHLORID_JE_UG_CM2[unit.replace(/μ/g,'µ').replace(/²/g,'2').replace(/\s+/g,'').toLowerCase()];
 export function chloridScale(parameter:string,unit:string):Scale|undefined{
  const f=/^Chlorid\b/i.test(parameter.trim())?chloridEinheit(unit):undefined;if(!f)return;
  return {name:'VdS 2357 · Chlorid · korrosionschemisch relevant 5–10 µg/cm²',cats:[{name:'unterhalb der korrosionschemisch relevanten Größenordnung',from:0,color:'#4caf50'},
-  {name:'im Bereich der korrosionschemisch relevanten Größenordnung',from:5*f,color:'#f0a030'},{name:'oberhalb der korrosionschemisch relevanten Größenordnung',from:10*f,color:'#e0453a'}]};
+  {name:'im Bereich der korrosionschemisch relevanten Größenordnung',from:5*f,color:'#f0a030'},{name:'oberhalb der korrosionschemisch relevanten Größenordnung',from:10*f,color:'#e0453a',ueber:true}]};
 }
-/* ===== Ende KORROSION-CHLORID v1 ===== */
+/** Wert in dieser Stufe? `ueber`: erst über dem Wert, sonst ab dem Wert. */
+export const stufeErreicht=(c:{from:number;ueber?:boolean},v:number)=>c.ueber?v>c.from:v>=c.from;
+/** Angepasste Skala zu einer Referenz: gleiche Zahl Stufen mit denselben Grenzen → Regel der Referenz (`ueber`), nur im Speicher. */
+export function vdsRegel<S extends {cats:{from:number;ueber?:boolean}[]}>(eigen:S,vds:{cats:{from:number;ueber?:boolean}[]}):S{
+ if(!vds.cats.some(c=>c.ueber)||eigen.cats.length!==vds.cats.length||eigen.cats.some((c,i)=>Number(c.from)!==vds.cats[i].from))return eigen;
+ return {...eigen,cats:eigen.cats.map((c,i)=>vds.cats[i].ueber?{...c,ueber:true}:c)};
+}
+/** Skala ohne `ueber` – so wird sie gespeichert (Dateiformat unverändert). */
+export function ohneUeber<S extends {cats:{ueber?:boolean}[]}>(s:S):S{return {...s,cats:s.cats.map(({ueber,...c})=>c)} as S;}
+/* ===== Ende KORROSION-CHLORID v2 ===== */
 export function shortParameter(p:string){return p.replace(/^Summe 16 EPA-PAK.*$/i,'Σ16 EPA-PAK').replace(/^Benzo\[a\]pyren$/i,'BaP');}
 
 /** Index der Kategorie: letzte Kategorie, deren „ab“-Wert erreicht ist (wie in FotoKit). */
-export function rate(scale:Scale|undefined,value:number){if(!scale?.cats.length||!Number.isFinite(value)||value<0)return -1;let index=0;scale.cats.forEach((c,i)=>{if(i>0&&value>=c.from)index=i;});return index;}
+export function rate(scale:Scale|undefined,value:number){if(!scale?.cats.length||!Number.isFinite(value)||value<0)return -1;let index=0;scale.cats.forEach((c,i)=>{if(i>0&&stufeErreicht(c,value))index=i;});return index;}
 
 type Shared=Record<string,{name?:string;cats?:{name:string;from:number}[];geaendert?:string}>;
 export function sharedScales():Shared{try{const v=JSON.parse(localStorage.getItem('bu-scales')||'{}');return v&&typeof v==='object'?v:{};}catch{return {};}}
@@ -97,10 +110,10 @@ export function fromShared(key:string):Scale|null{
  *  Beide bleiben bearbeitbar; keine Skala wird erfunden. */
 export function scaleFor(settings:ResultSettings|undefined,parameter:string,unit:string):{scale?:Scale;vds?:Scale;angepasst:boolean}{
   const key=scaleKey(parameter,unit),vds=(settings?.usage?vdsScale(parameter,unit,settings.usage):undefined)??chloridScale(parameter,unit);   // Chlorid-Referenz gilt ohne Nutzung
-  if(vds){const eigen=settings?.vds?.[key];return {scale:eigen||vds,vds,angepasst:!!eigen};}
+  if(vds){const eigen=settings?.vds?.[key];return {scale:eigen?vdsRegel(eigen,vds):vds,vds,angepasst:!!eigen};}   // gleiche Grenzen wie die Referenz → ihre Regel (KORROSION-CHLORID v2)
   return {scale:settings?.scales?.[key],angepasst:false};
 }
-export function rangeText(scale:Scale,i:number,unit:string){const c=scale.cats[i],next=scale.cats[i+1],n=(v:number)=>v.toLocaleString('de-DE');return next?(i===0?`< ${n(next.from)} ${unit}`:`${n(c.from)} – < ${n(next.from)} ${unit}`):(i===0?`alle Werte`:`≥ ${n(c.from)} ${unit}`);}
+export function rangeText(scale:Scale,i:number,unit:string){const c=scale.cats[i],next=scale.cats[i+1],n=(v:number)=>v.toLocaleString('de-DE'),bis=next?.ueber?'':'< ',ab=c.ueber?'> ':'';return next?(i===0?`${next.ueber?'≤':'<'} ${n(next.from)} ${unit}`:`${ab}${n(c.from)} – ${bis}${n(next.from)} ${unit}`):(i===0?`alle Werte`:`${c.ueber?'>':'≥'} ${n(c.from)} ${unit}`);}
 /** Farben kommen auch aus der Projektdatei (.probenplan) – nur „#rrggbb“ gelangt ins HTML, sonst die Ersatzfarbe. */
 export const FARBE=/^#[0-9a-f]{6}$/i;
 export const farbeSicher=(farbe:unknown,ersatz=UNRATED)=>typeof farbe==='string'&&FARBE.test(farbe)?farbe:ersatz;
