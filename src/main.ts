@@ -9,7 +9,7 @@ import './druck.css';
 import './suite-bar';
 import {Oberflaeche} from './oberflaeche';
 import {skalenAbgleich} from './skalen-archiv.js';
-import {readLabFiles,readLabGroup,reportWarnings,type LabReport} from './labreport';
+import {readLabFiles,readLabGroup,reportWarnings,projektnummerIn,type LabReport} from './labreport';
 import {labelkitReport} from './labelkit';
 import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,regelGeaendert,konfliktText,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
@@ -20,7 +20,7 @@ import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,a
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 import {druckModell,druckHtml,type DruckKopf,type Bewerte} from './druck';
 
-export const APP_VERSION='2.5.0';
+export const APP_VERSION='2.6.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -510,7 +510,7 @@ async function importieren(files:File[]){
   for(const dateien of gruppen.values()){
    const v:Vorschau={dateien,hinweise:[],ziel:new Map(),schonDa:false,fremd:false};
    try{v.report=await readLabFiles(dateien);if(!v.report.rows.length&&!v.report.bericht)v.fehler=v.report.warnings.join(' ')||'Kein Prüfbericht erkannt.';else v.hinweise=reportWarnings(v.report,{report:f.name});}catch(e){v.fehler=meldung(e);}
-   const nr=v.report?.auftragsreferenz.match(/\b\d{2}\.\d{3,6}\b/)?.[0];if(nr&&nr!==f.nr){v.fremd=true;v.hinweise.unshift(`Auftragsreferenz nennt Projekt ${nr} – geöffnet ist ${f.nr}.`);}
+   const nr=v.report?projektnummerIn(v.report.auftragsreferenz,f.nr):'';if(nr&&nr!==f.nr){v.fremd=true;v.hinweise.unshift(`Auftragsreferenz nennt Projekt ${nr} – geöffnet ist ${f.nr}.`);}
    // Gleichnamige Dateien: identisch → liegt schon da; abweichend → ganze Gruppe unter „Name (2)“, damit XML und PDF zusammenbleiben.
    let konflikt=false,alleDa=true;
    for(const d of dateien){const da=labor?await fileInfo(labor,d.name):null;if(!da){alleDa=false;continue;}if(!await gleich(da,d)){konflikt=true;alleDa=false;}}
