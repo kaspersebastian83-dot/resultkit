@@ -15,7 +15,7 @@
 // µg/cm²), und zwei Grundnummern mit Werten für dieselbe Probe/Parameter sind auch in verschiedenen Einheiten ein Konflikt.
 // Umgerechnet wird dafür nichts; gezeigt und weitergegeben wird die Einheit wie im Bericht.
 import type {LabReport,Abweichung} from './labreport';
-import {referenceLabel,mitPdfAbgleichen,abgleichHinweis,ABGLEICH} from './labreport';
+import {referenceLabel,mitPdfAbgleichen,abgleichHinweis,ABGLEICH,projektnummerIn} from './labreport';
 import type {LabOrigin,LabSample,Wert} from './model';
 
 export const FORMAT='spektron-ergebnisse',VERSION=1,DATEI='_Ergebnisse.json';
@@ -59,8 +59,9 @@ export interface Zeile {label:string;nr:number|null;ref:string;desc:string;typ?:
 export interface Konflikt {berichte:string[];proben:string[]}
 /** Alle vergleichbaren Beschreibungen eines Berichts weichen von LabelKit ab (ab 2.2) – vor dem Übernehmen fragen. */
 export interface FremdVerdacht {bericht:string;proben:number}
-/** storniert (ab 1.13): Probennummern, die in LabelKit storniert sind – keine Proben mehr, nicht offen, nicht gezählt, nicht übernommen. */
-export interface Uebersicht {projekt:string;auftrag:{quelle:string;proben:number;hinweise:string[]}|null;berichte:Bericht[];zeilen:Zeile[];storniert:string[];konflikte:Konflikt[];fremdVerdacht:FremdVerdacht[];
+/** storniert (ab 1.13): Probennummern, die in LabelKit storniert sind – keine Proben mehr, nicht offen, nicht gezählt, nicht übernommen.
+ *  storniertMitWert (ab 2.6): davon die, für die ein geltender Prüfbericht dieses Projekts Messwerte hat (für BelegKit, Audit Lauf 2 B1). */
+export interface Uebersicht {projekt:string;auftrag:{quelle:string;proben:number;hinweise:string[]}|null;berichte:Bericht[];zeilen:Zeile[];storniert:string[];storniertMitWert:string[];konflikte:Konflikt[];fremdVerdacht:FremdVerdacht[];
  zaehler:{erwartet:number|null;ergebnis:number;vorlaeufig:number;offen:number;nichtBeauftragt:number};hinweise:string[]}
 
 /** Was je Probenart im Bericht stehen sollte (grob, nur für einen Hinweis – nie zum Aussortieren). */
@@ -73,8 +74,6 @@ export function stornoHinweis(label:string,berichte:string[],mitWerten:boolean){
 }
 const gross=(s:string)=>s.toUpperCase();
 const HAUPTWERT=/^\s*(?:(?:Summe|Σ)\s*16\s*EPA|Chlorid\b|Asbest)/i;
-/** Projektnummer „26.0142“ aus einer Auftragsreferenz. */
-const projektnummer=(s:string)=>s.match(/\b\d{2}\.\d{3,6}\b/)?.[0]||'';
 /** Berichtsnummer in Grundnummer und Fassung teilen (ab 2.2, Entscheidung 10.11.2026): echte Eurofins-Nummern enden auf einen
  *  Fassungsblock („AR-…-01“, „-02“); eine Änderung am Bericht gibt die nächste Fassung. Gelesen wird er nur bei Eurofins und nur
  *  als genau zwei Ziffern nach dem letzten Strich. Sonst (anderes Labor, kein Block) ist die ganze Nummer der Grund, Fassung null:
@@ -109,7 +108,7 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   proben:r.rows.map(row=>({...row,label:row.label||referenceLabel(row.ref),bericht:r.bericht,...(row.werte?{werte:row.werte.map(w=>({...w}))}:{})})),geaendert:e.geaendert,hinweise:[...new Set(r.warnings.filter(h=>!h.startsWith(ABGLEICH)))],ohneWerte:!r.rows.some(row=>row.werte?.length),
    ...(r.bericht&&!r.getrennt?berichtsFassung(r.bericht,r.labor):{grund:`?${r.quelle}`,fassung:null})};   // ohne Nummer (oder getrennt gelesen): eigener Bericht
   // Anderes Projekt (K2): wie im Import-Dialog – steht in der Liste, die Werte zählen nicht
-  const nr=projektnummer(r.auftragsreferenz);if(projekt&&nr&&nr!==projekt){b.fremdProjekt=nr;b.hinweise.unshift(fremdHinweis(r.auftragsreferenz,nr,projekt));}
+  const nr=projektnummerIn(r.auftragsreferenz,projekt);if(projekt&&nr&&nr!==projekt){b.fremdProjekt=nr;b.hinweise.unshift(fremdHinweis(r.auftragsreferenz,nr,projekt));}
   if(r.wertAbgleich&&r.sources.xml&&r.sources.pdf){b.wertAbgleich={erkannt:r.wertAbgleich.erkannt,geprueft:r.wertAbgleich.geprueft,abweichend:0};abweichungen.set(b,r.wertAbgleich.abweichend);}
   if(b.ohneWerte)b.hinweise.push(r.sources.xml?'Der Bericht enthält keine Messwerte.':'Nur die PDF liegt vor – Messwerte kommen aus der XML. Bitte die XML des Berichts von Eurofins (EOL) ergänzen.');
   return b;});
@@ -203,7 +202,8 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
  for(const l of storniert){const e=stornoImBericht.get(gross(l));if(e)hinweise.push(stornoHinweis(l,e.berichte,e.werte));}
  if(!auftrag)hinweise.push('Kein Laborauftrag aus LabelKit gefunden (Ordner „Laboraufträge“) – welche Proben noch fehlen, lässt sich nicht prüfen.');
  for(const b of berichte)if(b.fremdProjekt)hinweise.push(`Prüfbericht ${code(b)} nennt Projekt ${b.fremdProjekt} – seine Werte zählen hier nicht.`);
- return {projekt,auftrag:auftrag?{quelle:auftrag.quelle,proben:auftrag.rows.length,hinweise:[...auftrag.warnings]}:null,berichte,zeilen:liste,storniert,konflikte,fremdVerdacht,
+ const storniertMitWert=storniert.filter(l=>stornoImBericht.get(gross(l))?.werte);
+ return {projekt,auftrag:auftrag?{quelle:auftrag.quelle,proben:auftrag.rows.length,hinweise:[...auftrag.warnings]}:null,berichte,zeilen:liste,storniert,storniertMitWert,konflikte,fremdVerdacht,
   zaehler:{erwartet:auftrag?auftrag.rows.length:null,ergebnis:zahl('ergebnis'),vorlaeufig:zahl('vorlaeufig'),offen:zahl('offen')+zahl('ohneWerte'),nichtBeauftragt:zahl('nichtBeauftragt')},hinweise};
 }
 
@@ -220,8 +220,10 @@ export const vollstaendig=(u:Uebersicht)=>u.zaehler.erwartet!==null&&u.zaehler.e
 export interface DateiStand {name:string;size:number;t:number}
 export const standKennung=(dateien:DateiStand[])=>[...dateien].sort((a,b)=>a.name.localeCompare(b.name)).map(d=>`${d.name}|${d.size}|${d.t}`).join('\n');
 
+/** storniertMitWert (ab 2.6, optional – Leser müssen ohne das Feld arbeiten; fehlt es, ist es unbekannt, nicht leer): in LabelKit stornierte
+ *  Proben, für die ein geltender Prüfbericht Messwerte hat. Die Werte selbst stehen nie in `berichte`. Liest BelegKit (Hinweis vor der Rechnung). */
 export interface ErgebnisDatei {format:typeof FORMAT;version:typeof VERSION;projekt:string;uebernommen:string;app:{name:'ResultKit';version:string};
- vollstaendig:boolean;stand:string;dateien:DateiStand[];auftrag:{quelle:string;proben:{label:string;typ?:string;ref:string;desc:string;surface?:LabSample['surface'];raum?:string}[]}|null;
+ vollstaendig:boolean;stand:string;dateien:DateiStand[];storniertMitWert?:string[];auftrag:{quelle:string;proben:{label:string;typ?:string;ref:string;desc:string;surface?:LabSample['surface'];raum?:string}[]}|null;
  berichte:(LabOrigin&{datum?:string;proben:LabSample[]})[];ersetzt:{bericht:string;durch:string[]}[];offen:string[];hinweise:string[]}
 
 /** Inhalt von „_Ergebnisse.json“: nur geltende Werte (ersetzte entfallen), je Bericht mit Herkunft wie in PlanKit. */
@@ -238,7 +240,7 @@ export function ergebnisDatei(u:Uebersicht,auftrag:LabReport|null,dateien:DateiS
   proben:b.proben.filter(s=>(!b.ohneWerte?s.werte?.length:true)&&!istStorniert(s)).map(s=>({...s,...ergaenzt(s),reportId:b.id,werte:(s.werte||[]).map(w=>({...w}))}))}));
  return {format:FORMAT,version:VERSION,projekt:u.projekt,uebernommen:jetzt.toISOString(),app:{name:'ResultKit',version:app},vollstaendig:vollstaendig(u),stand:standKennung(dateien),dateien:[...dateien],
   auftrag:auftrag?{quelle:auftrag.quelle,proben:auftrag.rows.map(r=>({label:r.label,...(r.typ?{typ:r.typ}:{}),ref:r.ref,desc:r.desc,...(r.surface?{surface:r.surface}:{}),...(r.raum?{raum:r.raum}:{})}))}:null,
-  berichte,ersetzt:u.berichte.filter(b=>b.ersetztDurch).map(b=>({bericht:b.bericht,durch:b.ersetztDurch!})),
+  berichte,ersetzt:u.berichte.filter(b=>b.ersetztDurch).map(b=>({bericht:b.bericht,durch:b.ersetztDurch!})),storniertMitWert:[...(u.storniertMitWert||[])],
   offen:u.zeilen.filter(z=>z.status==='offen'||z.status==='ohneWerte').map(z=>z.label||z.ref),hinweise:[...u.hinweise,...u.zeilen.flatMap(z=>z.hinweise.map(h=>`${z.label||z.ref}: ${h}`))]};
 }
 

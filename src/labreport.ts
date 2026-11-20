@@ -2,6 +2,14 @@
 // Projektnummer. Eurofins-XML liefert die Werte, die PDF dient dem Abgleich (Proben, Labor-Nr., Datum, Art) und der Ablage.
 import type {LabSample,LabSources} from './model';
 export function sourceFilename(value:string){return value.split(/[\\/]/).at(-1)||'';}
+/* ===== PROJEKTNUMMER v1 – in ResultKit (src/labreport.ts), Projektzentrale (archiv/auswertung.js) und PlanKit (src/labreport.ts) gleich halten =====
+   Projektnummern „26.0142“ in einer Auftragsreferenz (Freitext im Eurofins-Portal). Ein Datum ist nie eine Projektnummer: in „18.11.2026“
+   steht „11.2026“ direkt hinter „18.“ und zählt nicht (Audit Lauf 2, B3, Entscheidung 20.11.2026). Stehen mehrere Nummern da, gilt die des
+   Projekts; sonst die erste (→ anderes Projekt). Keine Nummer → '' (kein Projektbezug, wie bisher). */
+export const PROJEKTNUMMER=/(?<!\d)(?<!\d\.)\d{2}\.\d{3,6}(?!\d)/g;
+export const projektnummern=(text:string)=>[...String(text??'').matchAll(PROJEKTNUMMER)].map(m=>m[0]);
+export function projektnummerIn(text:string,projekt=''){const l=projektnummern(text);return projekt&&l.includes(projekt)?projekt:l[0]||'';}
+/* ===== Ende PROJEKTNUMMER v1 ===== */
 export interface TextItem {text:string;x:number;y:number;width:number;height:number}
 export interface TextPage {width:number;height:number;items:TextItem[]}
 export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;quelle:string;batch:string;sources:LabSources;rows:LabSample[];expected:number|null;references:string[];warnings:string[];vorlaeufig?:boolean;/** Datum des Prüfberichts (Unterschrift, sonst Bearbeitungsende), JJJJ-MM-TT */datum?:string;results:{ref:string;parameter:string;result:string;unit:string;loq:string;nwg:string;norm:string}[];
@@ -134,7 +142,7 @@ export function pruefHinweise(report:LabReport){
 }
 export function reportWarnings(report:LabReport,p?:{report?:string}){
  const warnings=[...report.warnings];if(report.vorlaeufig)warnings.push(`Vorläufiger Prüfbericht${report.bericht?` ${report.bericht}`:''}: Die Werte können sich mit dem endgültigen Bericht noch ändern. Sie werden in Ergebniskarte, Raumbuch und Anlagen als vorläufig gekennzeichnet.`);warnings.push(...pruefHinweise(report));
- const number=(s:string)=>s.match(/\b\d{2}\.\d{3,}\b/)?.[0];if(p?.report&&report.auftragsreferenz&&number(p.report)!==number(report.auftragsreferenz)&&p.report!==report.auftragsreferenz)warnings.push(`Auftragsreferenz „${report.auftragsreferenz}“ passt möglicherweise nicht zur Gutachtennummer „${p.report}“.`);
+ const eigene=p?.report?projektnummerIn(p.report):'';if(p?.report&&report.auftragsreferenz&&eigene!==projektnummerIn(report.auftragsreferenz,eigene)&&p.report!==report.auftragsreferenz)warnings.push(`Auftragsreferenz „${report.auftragsreferenz}“ passt möglicherweise nicht zur Gutachtennummer „${p.report}“.`);
  return [...new Set(warnings)];
 }
 // Ignore layout whitespace / Unicode hyphens, but retain ID punctuation and leading zeros.

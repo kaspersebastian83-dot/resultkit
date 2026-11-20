@@ -10,7 +10,7 @@ registerHooks({
 });
 const E=await import('../src/ergebnisse.ts');
 const {labelkitReport}=await import('../src/labelkit.ts');
-const {nachweisgrenze,pruefHinweise}=await import('../src/labreport.ts');
+const LR=await import('../src/labreport.ts');const {nachweisgrenze,pruefHinweise}=LR;
 const UE=await import('../src/uebersicht.ts');
 let n=0;const ok=(name,fn)=>{fn();n++;console.log('OK Ergebnisse: '+name);};
 
@@ -108,6 +108,20 @@ ok('nur PDF: keine Werte, Hinweis auf XML; Probe bleibt offen',()=>{
 ok('fremde Projektnummer in der Auftragsreferenz → Hinweis am Bericht',()=>{
  const u=E.uebersicht('99.9001',auftrag(),[{report:report('AR-5-01',[[1,pak('2')]],{ref:'99.9002 Anderswo'}),geaendert:1}]);
  assert.match(u.berichte[0].hinweise.join(' '),/nennt Projekt 99\.9002/);
+});
+ok('Auftragsreferenz: ein Datum ist nie eine Projektnummer, bei mehreren gilt die des Projekts (Audit Lauf 2, B3)',()=>{
+ const {projektnummerIn,projektnummern}=LR;
+ const fall=ref=>E.uebersicht('99.9001',null,[{report:report('AR-6-01',[[1,pak('2')]],{ref}),geaendert:1}]).berichte[0].fremdProjekt??'';
+ for(const ref of ['99.9001 Musterort','99.9001 vom 18.11.2026','Brandschaden 18.11.2026','Musterort, Ortstermin 18.11.2026','Ortstermin 18.11.2026 / 99.9001','1.11.2026','18.11.26','Probenahme 8.11.2026','25.0100 / 99.9001'])
+  assert.equal(fall(ref),'',ref);
+ assert.equal(fall('25.0100 Anderswo'),'25.0100');assert.equal(fall('Ortstermin 18.11.2026 / 25.0100'),'25.0100','Datum übersprungen, fremde Nummer zählt');
+ assert.deepEqual(projektnummern('Ortstermin 18.11.2026, 26.0604 und 25.0100'),['26.0604','25.0100']);
+ assert.equal(projektnummerIn('25.0100 / 26.0604','26.0604'),'26.0604');assert.equal(projektnummerIn('25.0100 / 26.0604'),'25.0100');
+ assert.equal(projektnummerIn('26.0604.2 Nachtrag','26.0604'),'26.0604','Nummer mit Anhang bleibt erkannt');assert.equal(projektnummerIn('126.06045'),'','keine Ziffern davor/danach');
+ // Hinweis beim Import (reportWarnings): Datum in der Referenz gibt keinen falschen Hinweis mehr
+ const r=report('AR-6-01',[[1,pak('2')]],{ref:'99.9001 vom 18.11.2026'});
+ assert.ok(!LR.reportWarnings(r,{report:'99.9001 Musterort'}).some(h=>/passt möglicherweise nicht/.test(h)));
+ assert.ok(LR.reportWarnings({...r,auftragsreferenz:'Ortstermin 18.11.2026 / 25.0100'},{report:'99.9001 Musterort'}).some(h=>/passt möglicherweise nicht/.test(h)));
 });
 ok('gleicher Bericht zweimal abgelegt → neuere Datei, Hinweis',()=>{
  const alt=report('AR-6-01',[[1,pak('5')]]),neu={...report('AR-6-01',[[1,pak('6')]]),quelle:'AR-6-01 (2).xml'};
@@ -273,6 +287,11 @@ ok('Storno: Laborwert für eine stornierte Probe → eigener Hinweis, kein Ergeb
  const datei=E.ergebnisDatei(u,auftragStorno(),[],'1.13.0');
  assert.deepEqual(datei.berichte[0].proben.map(p=>p.label),['P1','P3','P9'],'Wert der stornierten Probe geht nicht an PlanKit/FotoKit');
  assert.ok(datei.hinweise.some(h=>h.startsWith('P2 ist in LabelKit storniert')),'Hinweis geht mit nach _Ergebnisse.json');
+ // 2.6 (Audit Lauf 2, B1): stornierte Proben mit Messwert als eigenes, optionales Feld – für BelegKit
+ assert.deepEqual(u.storniertMitWert,['P2','P4']);assert.deepEqual(datei.storniertMitWert,['P2','P4']);
+ assert.deepEqual(E.ergebnisDatei(E.uebersicht('99.9001',auftragStorno(),[]),auftragStorno(),[],'2.6.0').storniertMitWert,[],'kein Wert → leer, aber vorhanden');
+ const ohneWert=E.uebersicht('99.9001',auftragStorno(),[{report:report('AR-5-03',[[1],[2]],{xml:false}),geaendert:1}]);
+ assert.deepEqual(ohneWert.storniertMitWert,[],'im Bericht ohne Messwerte zählt nicht');
  assert.deepEqual(datei.offen,[]);
  // Bericht ohne Messwerte (nur PDF) nennt die stornierte Probe: eigener Satz; ersetzter Bericht meldet nichts
  const nurPdf=E.uebersicht('99.9001',auftragStorno(),[{report:report('AR-5-03',[[2]],{xml:false}),geaendert:1}]);

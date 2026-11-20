@@ -94,6 +94,9 @@ tr.rk-geschoss>th{background:var(--sp-panel2);color:var(--sp-muted);font-size:12
 .m-tabelle tbody tr.sel{background:color-mix(in srgb,var(--sp-app) 10%,var(--sp-panel))}
 .m-tabelle tbody tr.cur>th{box-shadow:inset 3px 0 0 var(--sp-app)}
 .m-tabelle td.rk-wz{width:190px}
+/* 2.6 (Audit Lauf 2, B7): die festen Kopfbreiten von „Je Probenart“ (.u-tabelle th 1/3) gelten nicht für „Nach Stelle“ – sonst bricht die
+   Probenahmestelle bei 1190 px um, während die Wertespalten leer bleiben */
+.m-tabelle thead th:nth-child(n){width:auto}
 /* Aufgeklappte Probe: kompakt, Tabelle bleibt sichtbar */
 tr.u-detail>td{background:var(--sp-panel2);padding:10px 16px 14px 30px;text-align:left}
 .rk-det{display:grid;gap:8px}
