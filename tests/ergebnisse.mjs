@@ -123,6 +123,18 @@ ok('Auftragsreferenz: ein Datum ist nie eine Projektnummer, bei mehreren gilt di
  assert.ok(!LR.reportWarnings(r,{report:'99.9001 Musterort'}).some(h=>/passt möglicherweise nicht/.test(h)));
  assert.ok(LR.reportWarnings({...r,auftragsreferenz:'Ortstermin 18.11.2026 / 25.0100'},{report:'99.9001 Musterort'}).some(h=>/passt möglicherweise nicht/.test(h)));
 });
+ok('Auftragsreferenz ganz ohne Projektnummer: ruhiger Hinweis am Bericht, Werte zählen (Audit Lauf 5, E11)',()=>{
+ const u=ref=>E.uebersicht('99.9001',auftrag(),[{report:report('AR-7-01',[[1,pak('2')]],{ref}),geaendert:1}]);
+ for(const ref of ['Brandschaden Musterort','Ortstermin 18.11.2026','Musterort, Wohnhaus']){
+  const x=u(ref),b=x.berichte[0];
+  assert.equal(b.fremdProjekt,undefined,ref);assert.equal(x.zaehler.ergebnis,1,'Wert zählt: '+ref);
+  assert.ok(b.hinweise.some(h=>h===`Die Auftragsreferenz „${ref}“ nennt keine Projektnummer – bitte prüfen, ob der Bericht zu Projekt 99.9001 gehört. Die Werte zählen.`),ref);
+ }
+ for(const ref of ['99.9001 Musterort','Ortstermin 18.11.2026 / 99.9001','',' ']){const b=u(ref).berichte[0];assert.ok(!b.hinweise.some(h=>/keine Projektnummer/.test(h)),JSON.stringify(ref));}
+ assert.ok(!u('25.0100 Anderswo').berichte[0].hinweise.some(h=>/keine Projektnummer/.test(h)),'fremdes Projekt: nur der Hinweis „nennt Projekt …“');
+ // ohne Projektnummer des Ordners (Projekt unbekannt) kein Hinweis
+ assert.ok(!E.uebersicht('',null,[{report:report('AR-7-01',[[1,pak('2')]],{ref:'Brandschaden'}),geaendert:1}]).berichte[0].hinweise.some(h=>/keine Projektnummer/.test(h)));
+});
 ok('gleicher Bericht zweimal abgelegt → neuere Datei, Hinweis',()=>{
  const alt=report('AR-6-01',[[1,pak('5')]]),neu={...report('AR-6-01',[[1,pak('6')]]),quelle:'AR-6-01 (2).xml'};
  const u=E.uebersicht('99.9001',auftrag(),[{report:alt,geaendert:1},{report:neu,geaendert:5}]);

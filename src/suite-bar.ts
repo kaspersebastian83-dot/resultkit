@@ -560,5 +560,5 @@
   window.MosaikLeiste = { start: start, aktualisieren: aktualisieren, oeffnen: projektNavigation, mehr: mehr };
 })();
 /* ===== Ende MOSAIK-LEISTE v3 ===== */
-window.MosaikLeiste.start('ergebnis', {kopfband: true, version: () => (document.getElementById('app-version')?.textContent || '').replace(/^v/, '')});   // ResultKit 2.0: Kopfband (84 px) – Lesen-App ohne Karte
+window.MosaikLeiste.start('ergebnis', {kompakt: true, kopfband: true, version: () => (document.getElementById('app-version')?.textContent || '').replace(/^v/, '')});   // ResultKit 2.6.1: Kopfband kompakt (56 px) wie LabelKit, FotoKit, PlanKit (Audit Lauf 5, E7) – Lesen-App ohne Karte
 export {};

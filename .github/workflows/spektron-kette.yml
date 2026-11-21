@@ -1,0 +1,58 @@
+name: Spektron-Kette
+
+# Eigene Datei (Audit Lauf 5, E3): Die Kette läuft gegen den aktuellen Stand der anderen Apps. Wird sie rot, weil sich eine andere
+# App geändert hat, soll das ResultKit nicht am Veröffentlichen hindern – pages.yml wartet nur auf „Automated tests“.
+# Der Jobname bleibt gleich (Pflichtprüfung im Ruleset).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # nachts gegen den aktuellen Stand der anderen Apps (sie ändern sich ohne ResultKit-PR)
+    - cron: '17 2 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kette-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spektron-kette:
+    name: Spektron-Kette (LabelKit → ResultKit → Projektzentrale → PlanKit → FotoKit → BüroKit → BelegKit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Andere Apps daneben holen (gleichnamiger Zweig, falls vorhanden, sonst main)
+        env:
+          ZWEIG: ${{ github.head_ref }}
+        run: |
+          for repo in labelkit Projektzentrale probenplan bildumbenenner buerokit aufwandkit; do
+            ziel="../$(echo "$repo" | tr '[:upper:]' '[:lower:]')"
+            git clone --quiet --depth 1 --branch "$ZWEIG" "https://github.com/kaspersebastian83-dot/$repo.git" "$ziel" 2>/dev/null \
+              || git clone --quiet --depth 1 "https://github.com/kaspersebastian83-dot/$repo.git" "$ziel"
+            echo "$repo: $(git -C "$ziel" log --oneline -1)"
+          done
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        timeout-minutes: 10
+        run: |
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt
+          pnpm exec playwright install --with-deps chromium
+      - name: ResultKit bauen
+        run: pnpm build
+      - name: PlanKit bauen
+        working-directory: ../probenplan
+        run: pnpm install --frozen-lockfile && pnpm build
+      - name: Spektron-Kette
+        run: node tests/suite-kette.mjs

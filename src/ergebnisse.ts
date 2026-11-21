@@ -87,6 +87,9 @@ export function berichtsFassung(bericht:string,labor:string):{grund:string;fassu
 export const fremdHinweis=(ref:string,nr:string,projekt:string)=>`Die Auftragsreferenz „${ref}“ nennt Projekt ${nr} – dieses Projekt ist ${projekt}. ResultKit übernimmt die Werte dieses Berichts nicht. `+
  `Das gilt auch, wenn nur die Auftragsreferenz einen Tippfehler hat – dann gibt es keinen zweiten Bericht zu suchen: lass sie bei Eurofins berichtigen (der berichtigte Bericht kommt als neue Fassung). Gehört der Bericht nicht hierher, nimm die Datei aus „Laborergebnisse“.`;
 
+/** E11: Auftragsreferenz ohne jede Projektnummer (nur Hinweis, Werte zählen). */
+export const ohneNummerHinweis=(ref:string,projekt:string)=>`Die Auftragsreferenz „${ref}“ nennt keine Projektnummer – bitte prüfen, ob der Bericht zu Projekt ${projekt} gehört. Die Werte zählen.`;
+
 export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Eingang[]):Uebersicht{
  const hinweise:string[]=[];
  // 1. Gleicher Bericht mehrfach abgelegt → die Datei mit Messwerten (XML), dann endgültig vor vorläufig, sonst die neuere.
@@ -109,6 +112,8 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
    ...(r.bericht&&!r.getrennt?berichtsFassung(r.bericht,r.labor):{grund:`?${r.quelle}`,fassung:null})};   // ohne Nummer (oder getrennt gelesen): eigener Bericht
   // Anderes Projekt (K2): wie im Import-Dialog – steht in der Liste, die Werte zählen nicht
   const nr=projektnummerIn(r.auftragsreferenz,projekt);if(projekt&&nr&&nr!==projekt){b.fremdProjekt=nr;b.hinweise.unshift(fremdHinweis(r.auftragsreferenz,nr,projekt));}
+  // E11 (Audit Lauf 5): Referenz ganz ohne Projektnummer – nur ein ruhiger Hinweis, die Werte zählen (K2 unverändert). PlanKit lässt ihn weg.
+  else if(projekt&&!nr&&tidy(r.auftragsreferenz))b.hinweise.push(ohneNummerHinweis(tidy(r.auftragsreferenz),projekt));
   if(r.wertAbgleich&&r.sources.xml&&r.sources.pdf){b.wertAbgleich={erkannt:r.wertAbgleich.erkannt,geprueft:r.wertAbgleich.geprueft,abweichend:0};abweichungen.set(b,r.wertAbgleich.abweichend);}
   if(b.ohneWerte)b.hinweise.push(r.sources.xml?'Der Bericht enthält keine Messwerte.':'Nur die PDF liegt vor – Messwerte kommen aus der XML. Bitte die XML des Berichts von Eurofins (EOL) ergänzen.');
   return b;});
