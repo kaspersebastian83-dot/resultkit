@@ -2,7 +2,7 @@ name: Spektron-Kette
 
 # Eigene Datei (Audit Lauf 5, E3): Die Kette läuft gegen den aktuellen Stand der anderen Apps. Wird sie rot, weil sich eine andere
 # App geändert hat, soll das ResultKit nicht am Veröffentlichen hindern – pages.yml wartet nur auf „Automated tests“.
-# Der Jobname bleibt gleich (Pflichtprüfung im Ruleset).
+# Der Jobname bleibt gleich (Pflichtprüfung im Ruleset) – auch seit BerichtKit mitläuft (E10, Lauf 5).
 on:
   pull_request:
   push:
@@ -30,7 +30,7 @@ jobs:
         env:
           ZWEIG: ${{ github.head_ref }}
         run: |
-          for repo in labelkit Projektzentrale probenplan bildumbenenner buerokit aufwandkit; do
+          for repo in labelkit Projektzentrale probenplan bildumbenenner berichtkit buerokit aufwandkit; do
             ziel="../$(echo "$repo" | tr '[:upper:]' '[:lower:]')"
             git clone --quiet --depth 1 --branch "$ZWEIG" "https://github.com/kaspersebastian83-dot/$repo.git" "$ziel" 2>/dev/null \
               || git clone --quiet --depth 1 "https://github.com/kaspersebastian83-dot/$repo.git" "$ziel"

@@ -1,28 +1,29 @@
-// Spektron-Kette (Integrationstest): LabelKit → ResultKit → Projektzentrale → PlanKit → FotoKit → BüroKit → BelegKit mit den echten Apps.
+// Spektron-Kette (Integrationstest): LabelKit → ResultKit → Projektzentrale → PlanKit → FotoKit → BerichtKit → BüroKit → BelegKit mit den echten Apps.
 // Alle vier Apps laufen unter einem lokalen Server auf demselben Ursprung wie auf GitHub Pages und teilen sich daher den
 // Archivordner (IndexedDB „mosaik-suite“/„kv“/„archiv“) – hier ein Ordner im privaten Browserdateisystem (OPFS).
 // Ein erfundenes Projekt läuft einmal durch: Proben in LabelKit, vorläufiger und (teilweise) endgültiger Prüfbericht in ResultKit,
 // Stand in der Projektzentrale, Werte und Warnleiste in PlanKit, Ergebnistabelle fürs Gutachten in FotoKit; danach vollständiger Bericht,
-// Übergabe ans Büro, Versand in BüroKit, Abrechnung in BelegKit – bis die Projektzentrale „Versandt und abgerechnet“ zeigt. Geprüft wird vor allem, was zwischen den Apps kaputtgehen kann:
+// das Gutachten als Word aus BerichtKit (E10, Audit Lauf 5: Werte aus ResultKit im Text, Lücken-Nachfrage der Projektzentrale), Übergabe ans Büro, Versand in BüroKit, Abrechnung in BelegKit – bis die Projektzentrale „Versandt und abgerechnet“ zeigt. Geprüft wird vor allem, was zwischen den Apps kaputtgehen kann:
 // gleiche Probennummern und -bezeichnungen überall, Vollständigkeit, „Plan liegt hinter ResultKit“.
 // Nur erfundene Daten. Fehler nennen die App, in der der Schritt scheiterte.
 //
-// Voraussetzungen: ResultKit gebaut (pnpm build), daneben LabelKit, Projektzentrale, FotoKit und gebautes PlanKit:
+// Voraussetzungen: ResultKit gebaut (pnpm build), daneben LabelKit, Projektzentrale, FotoKit, BerichtKit, BüroKit, BelegKit und gebautes PlanKit:
 //   LABELKIT_DIR=../labelkit  ZENTRALE_DIR=../projektzentrale  PLANKIT_DIST=../probenplan/dist  FOTOKIT_DIR=../bildumbenenner
-//   BUEROKIT_DIR=../buerokit  BELEGKIT_DIR=../aufwandkit  node tests/suite-kette.mjs
+//   BUEROKIT_DIR=../buerokit  BELEGKIT_DIR=../aufwandkit  BERICHTKIT_DIR=../berichtkit  node tests/suite-kette.mjs
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFile,stat} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import {labXML} from './lab-fixtures.mjs';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'@playwright/test');
 
 const neben=(env,...namen)=>{if(process.env[env])return path.resolve(process.env[env]);const d=namen.map(n=>path.resolve('..',n)).find(existsSync);if(!d)throw Error(`${env}: ${namen.join(' / ')} liegt nicht neben ResultKit`);return d;};
 // Erster Pfadteil → Ordner (ohne Groß-/Kleinschreibung, wie die Links der Apps: ../labelkit/, ../Projektzentrale/, ../Probenplan/)
-const APPS={labelkit:neben('LABELKIT_DIR','labelkit'),resultkit:path.resolve('dist'),projektzentrale:neben('ZENTRALE_DIR','projektzentrale','Projektzentrale'),probenplan:neben('PLANKIT_DIST','probenplan/dist','Probenplan/dist'),bildumbenenner:neben('FOTOKIT_DIR','bildumbenenner','Bildumbenenner'),buerokit:neben('BUEROKIT_DIR','buerokit'),aufwandkit:neben('BELEGKIT_DIR','aufwandkit')};
+const APPS={berichtkit:neben('BERICHTKIT_DIR','berichtkit'),labelkit:neben('LABELKIT_DIR','labelkit'),resultkit:path.resolve('dist'),projektzentrale:neben('ZENTRALE_DIR','projektzentrale','Projektzentrale'),probenplan:neben('PLANKIT_DIST','probenplan/dist','Probenplan/dist'),bildumbenenner:neben('FOTOKIT_DIR','bildumbenenner','Bildumbenenner'),buerokit:neben('BUEROKIT_DIR','buerokit'),aufwandkit:neben('BELEGKIT_DIR','aufwandkit')};
 for(const [app,dir] of Object.entries(APPS))if(!existsSync(path.join(dir,'index.html')))throw Error(`${app}: index.html fehlt in ${dir}${app==='resultkit'||app==='probenplan'?' – vorher bauen':''}`);
 const TYP={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.woff2':'font/woff2','.wasm':'application/wasm','.txt':'text/plain'};
 const server=http.createServer(async(req,res)=>{
@@ -60,6 +61,13 @@ const until=async(fn,was,ms=20000)=>{const ende=Date.now()+ms;for(;;){const v=aw
 /** Datei im Projektordner lesen (Pfad relativ zum Projekt) bzw. Ordnerinhalt auflisten. */
 const lies=(p,pfad)=>p.evaluate(async([projekt,pfad])=>{let d=await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Archiv')).getDirectoryHandle(projekt);const t=pfad.split('/');
  try{for(const x of t.slice(0,-1))d=await d.getDirectoryHandle(x);return await (await (await d.getFileHandle(t.at(-1))).getFile()).text();}catch{return null;}},[PROJEKT,pfad]);
+/** Datei binär (Word = ZIP) und ein Eintrag daraus als Text. */
+const liesBinaer=async(p,pfad)=>Buffer.from(await p.evaluate(async([projekt,pfad])=>{let d=await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Archiv')).getDirectoryHandle(projekt);const t=pfad.split('/');
+ for(const x of t.slice(0,-1))d=await d.getDirectoryHandle(x);const b=new Uint8Array(await (await (await d.getFileHandle(t.at(-1))).getFile()).arrayBuffer());let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s);},[PROJEKT,pfad]),'base64');
+const zipEintrag=(buf,name)=>{let e=buf.length-22;while(e>0&&buf.readUInt32LE(e)!==0x06054b50)e--;assert.ok(e>0,'kein ZIP (Word-Datei)');let o=buf.readUInt32LE(e+16);
+ for(let i=0;i<buf.readUInt16LE(e+10);i++){const art=buf.readUInt16LE(o+10),laenge=buf.readUInt32LE(o+20),nl=buf.readUInt16LE(o+28),xl=buf.readUInt16LE(o+30),kl=buf.readUInt16LE(o+32),lo=buf.readUInt32LE(o+42);
+  if(buf.toString('utf8',o+46,o+46+nl)===name){const d=lo+30+buf.readUInt16LE(lo+26)+buf.readUInt16LE(lo+28),roh=buf.subarray(d,d+laenge);return (art?zlib.inflateRawSync(roh):roh).toString('utf8');}o+=46+nl+xl+kl;}
+ return null;};
 const liste=(p,pfad)=>p.evaluate(async([projekt,pfad])=>{let d=await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Archiv')).getDirectoryHandle(projekt);for(const x of pfad.split('/'))d=await d.getDirectoryHandle(x);const o=[];for await(const [k] of d.entries())o.push(k);return o.sort();},[PROJEKT,pfad]);
 
 try{
@@ -72,7 +80,7 @@ try{
   for(const s of ['Laboraufträge','Laborergebnisse','Pläne','Fotos'])await p.getDirectoryHandle(s,{create:true});
   await schreib(p,'_Projekt.json',JSON.stringify({format:'mosaik-projekt',version:1,projektnummer:projekt.slice(0,7),schadenort:'Kettenort',objekt:'Fiktives Testhaus, Musterweg 1',nutzung:'Wohnen',auftraggeber:'Fiktive Versicherung AG, Beispielweg 2'}));
   await schreib(archiv,'_Spektron-Mitarbeiter.json',JSON.stringify({format:'spektron-mitarbeiter',version:1,personen:[{ordnerKuerzel:'SK',appKuerzel:'SK',name:'Sven Beispiel',aktiv:true},{ordnerKuerzel:'Nad',appKuerzel:'Nad',name:'Nora Test',aktiv:true}]}));
-  await schreib(await p.getDirectoryHandle('Mitteilungen',{create:true}),'Gutachten 26.0601.docx','synthetisch');
+  await p.getDirectoryHandle('Mitteilungen',{create:true});   // das Gutachten schreibt BerichtKit (Schritt 7b)
   await schreib(await p.getDirectoryHandle('Pläne'),'Grundriss EG.svg',svg);
   await new Promise((ok,nein)=>{const r=indexedDB.open('mosaik-suite',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onerror=()=>nein(r.error);
    r.onsuccess=()=>{const tx=r.result.transaction('kv','readwrite');tx.objectStore('kv').put(archiv,'archiv');tx.oncomplete=()=>{r.result.close();ok();};tx.onerror=()=>nein(tx.error);};});
@@ -221,22 +229,54 @@ try{
   assert.deepEqual(e.ersetzt.map(x=>x.bericht),['AR-9-01'],'vorläufiger Bericht jetzt ganz ersetzt');
  });
 
+ // ---- 7b. BerichtKit: Brandbericht aus den übernommenen Werten als Word in „Mitteilungen“ (E10, Audit Lauf 5) ----
+ const WORT='Mitteilungen/1._Mitteilung_26.0601.docx';
+ const br=await neueSeite('BerichtKit');
+ await schritt('BerichtKit','Brandbericht mit den Werten aus ResultKit als Word speichern → „Mitteilungen“',async()=>{
+  await br.goto(`${base}/berichtkit/#projekt=${encodeURIComponent(PROJEKT)}`);
+  await br.locator('#app:not([hidden]) .blatt').first().waitFor();
+  assert.match(await br.title(),/^Brandbericht · 26\.0601 Kettenort/,'Brandbericht aus den LabelKit-Proben (PAK- und Chlorid-Wischproben)');
+  await until(async()=>/14 µg\/m² in Probe 1/.test(await br.locator('#vorschau').textContent()),'Vorschau mit dem endgültigen Σ16 von P1');
+  assert.equal(await br.inputValue('#fMitteilung'),'1','erste Mitteilung');
+  await br.locator('#btnErstellen').click();
+  await until(async()=>/✓ Gespeichert: Mitteilungen\/1\._Mitteilung_26\.0601\.docx/.test(await br.locator('#status').textContent()),'BerichtKit: gespeichert');
+  const buf=await liesBinaer(br,WORT);assert.equal(buf.subarray(0,2).toString(),'PK','Word-Datei (ZIP)');
+  const text=zipEintrag(buf,'word/document.xml').replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ');
+  // Werte und Prüfberichte so, wie ResultKit sie zuletzt übernommen hat: endgültige Werte, ersetzter Bericht AR-9-01 nirgends
+  assert.match(text,/Probe 4, EG Küche\) ergab 3,5 µg\/cm²/,'Chlorid P4 aus AR-9-02 (vorläufig waren es 3)');
+  assert.match(text,/zwischen 7,5 und 14 µg\/m²/,'Σ16 von P2 und P1 aus den endgültigen Berichten');
+  assert.match(text,/14 µg\/m² in Probe 1 \(EG Küche\)/,'Probennummer und Stelle wie in LabelKit');
+  assert.match(text,/Bei Probe 3 war keine der untersuchten PAK-Einzelverbindungen/,'P3 alles unter BG');
+  assert.match(text,/Anlage 1: Prüfbericht Nr\. AR-9-02.*Anlage 2: Prüfbericht Nr\. AR-9-03/,'Anlagen: die geltenden Prüfberichte');
+  assert.doesNotMatch(text,/AR-9-01/,'der ersetzte vorläufige Bericht kommt nicht in den Bericht');
+  assert.doesNotMatch(text,/\b12 µg\/m²/,'kein vorläufiger Σ16-Wert von P1');
+  const z=JSON.parse(await lies(br,'_Spektron/BerichtKit/_BerichtKit.json'));
+  assert.equal(z.projekt,NR);assert.deepEqual(z.berichte.map(b=>b.datei),['1._Mitteilung_26.0601.docx'],'Bericht im Projektordner vermerkt');
+  assert.equal(await br.getAttribute('#btnUebergabe','href'),`../Projektzentrale/#projekt=${encodeURIComponent(PROJEKT)}&uebergabe=${encodeURIComponent(WORT)}`,'„Ans Büro übergeben →“ mit diesem Word');
+ });
+ await br.close();
+
  // ---- 8. Projektzentrale: Labor fertig, Gutachten ans Büro übergeben ----
  const pzZeile=()=>pz.locator(`.proj[data-name="${PROJEKT}"]`);
  const pzStand=async(gruppe,kurz)=>until(async()=>(await pzZeile().getAttribute('data-gruppe'))===gruppe&&(await pzZeile().locator('.stand').textContent())===kurz,`Liste: ${gruppe} · ${kurz}`);
  await schritt('Projektzentrale','Labor „vollständig übernommen“, dann „Ans Büro übergeben“ → Aufgabe für BüroKit',async()=>{
   await pz.bringToFront();await pz.evaluate(()=>localStorage.setItem('spektron-ich','SK'));await pz.reload();
   const t=await pzStufe();assert.match(t,/Ergebnisse vollständig übernommen/,`Labor-Stufe (war: „${t}“)`);
-  await pz.locator('[data-ab-summary]').click();
-  await pz.locator('[data-ab-word]').selectOption('Mitteilungen/Gutachten 26.0601.docx');
+  // Mit einer Mitteilung in „Mitteilungen“ ist „Ans Büro übergeben“ dran – die Projektzentrale klappt das Formular selbst auf
+  await until(async()=>(await pz.locator('[data-ab-word]').getAttribute('data-key'))?.includes(WORT),'Word aus BerichtKit in der Auswahl');
+  if(!await pz.locator('[data-ab-form]').evaluate(f=>f.open))await pz.locator('[data-ab-summary]').click();
+  await pz.locator('[data-ab-word]').selectOption(WORT);   // das Word aus BerichtKit
   if(!await pz.locator('[data-ab-an="0"]').isChecked())await pz.locator('[data-ab-an="0"]').check();
   assert.match(await pz.locator('[data-ab-details="0"]').inputValue(),/Fiktive Versicherung AG/,'Auftraggeber aus den Projektdaten');
   await pz.locator('[data-ab-los]').click();
-  // Ab Projektzentrale 1.38 prüft „Ans Büro übergeben“ die Word-Datei auf Lücken. Die synthetische Datei ist kein echtes .docx
-  // → Rückfrage „Word-Datei nicht geprüft“; ältere Fassungen übergeben ohne Rückfrage.
+  // „Ans Büro übergeben“ prüft das Word auf Lücken (ab 1.38). Das Gutachten aus BerichtKit hat noch offene Stellen ([Schadendatum], [Labor] …)
+  // → die Projektzentrale muss sie im echten Word finden und nachfragen.
   const uebergeben=pz.locator('#bueroPanel [data-ab-msg]').filter({hasText:'✓ Ans Büro übergeben'}),nachfrage=pz.locator('#dYes',{hasText:'Trotzdem übergeben'});
-  await uebergeben.or(nachfrage).first().waitFor();
-  if(await nachfrage.isVisible()){assert.match(await pz.locator('h3',{hasText:'nicht geprüft'}).textContent(),/Word-Datei nicht geprüft/);await nachfrage.click();}
+  await nachfrage.waitFor();
+  assert.equal(await pz.locator('#dialog h3').textContent(),'Noch Lücken im Gutachten','Lücken im Word aus BerichtKit erkannt');
+  const luecken=await pz.locator('#dialog').textContent();
+  assert.match(luecken,/1\._Mitteilung_26\.0601\.docx/);assert.match(luecken,/\[Schadendatum\]/);assert.match(luecken,/\[Labor\]/);
+  await nachfrage.click();
   await uebergeben.waitFor();
   const aufgaben=await liste(pz,'_Spektron/Buero/aufgaben');assert.equal(aufgaben.length,1,'eine Aufgabe in „_Spektron/Buero/aufgaben“');
   await pz.locator('#btnRescan').click();await pzStand('laeuft','Beim Büro');
@@ -267,7 +307,7 @@ try{
 
  // ---- 10. BelegKit: Zeiten erfassen, Abrechnungsstand speichern ----
  const bl=await neueSeite('BelegKit');
- await schritt('BelegKit','Zeiten erfassen und „Stand speichern“ → Abrechnung im Projektordner',async()=>{
+ await schritt('BelegKit','Zeiten erfassen, Bericht aus BerichtKit ankreuzen (9 Seiten), „Stand speichern“ → Abrechnung im Projektordner',async()=>{
   await bl.goto(`${base}/aufwandkit/#zeiten&projekt=${encodeURIComponent(PROJEKT)}`);
   await bl.waitForFunction(n=>typeof A!=='undefined'&&A.proj?.name===n,PROJEKT);
   await bl.locator('button[data-tab="zeiten"]').click();
@@ -276,9 +316,19 @@ try{
   const z=f=>bl.locator(`#zRows tr[data-i="0"] [data-f="${f}"]`);
   await z('datum').fill(HEUTE);await z('stunden').fill('6');
   await bl.waitForFunction(()=>/gespeichert in „_Spektron\/BelegKit\/Aufwand_SK\.json“/.test(document.getElementById('status').textContent));
-  await bl.locator('button[data-tab="abrechnung"]').click();await bl.locator('#aStand').click();
+  // „Bericht & Fotos“: das Word aus BerichtKit zur Abrechnung ankreuzen, Seitenzahl bestätigen (E10)
+  await bl.locator('button[data-tab="bericht"]').click();
+  const zeile=bl.locator('#bRows tr',{hasText:'1._Mitteilung_26.0601'});await zeile.waitFor();
+  assert.equal(await bl.locator('#bRows tr').count(),1,'genau ein Bericht in „Mitteilungen“: der aus BerichtKit');
+  await zeile.locator('input[data-ab]').check();await zeile.locator('input[data-seiten]').fill('9');await zeile.locator('input[data-seiten]').press('Tab');
+  await until(async()=>{const j=await lies(bl,'_Spektron/BelegKit/_Abrechnung.json')??await lies(bl,'Abrechnung/_Abrechnung.json');const b=j&&JSON.parse(j).berichte?.['1._Mitteilung_26.0601'];return b&&b.abrechnen&&b.seiten==='9';},'Bericht angekreuzt, 9 Seiten gespeichert');
+  await bl.locator('button[data-tab="abrechnung"]').click();
+  assert.match(await bl.locator('table.abr').textContent(),/3\.002[^]*9 Berichtsseiten/,'3.002 nach den Seiten des BerichtKit-Berichts');
+  assert.doesNotMatch(await bl.locator('#seite').textContent(),/Kein Bericht zur Abrechnung ausgewählt/);
+  await bl.locator('#aStand').click();
   await until(async()=>(await liste(bl,'_Spektron/BelegKit')).includes(`${NR.replace('.','-')}_Aufwand_${HEUTE}.json`),'Abrechnungsstand gespeichert (JSON in _Spektron/BelegKit)');
   await until(async()=>(await liste(bl,'Abrechnung')).includes(`${NR.replace('.','-')}_Aufwand_${HEUTE}.csv`),'CSV des Stands bleibt sichtbar in „Abrechnung“');
+  assert.match(await lies(bl,`_Spektron/BelegKit/${NR.replace('.','-')}_Aufwand_${HEUTE}.json`),/9 Berichtsseiten/,'Stand enthält die Berichtsseiten');
  });
  await schritt('Projektzentrale','nach dem Abrechnungsstand: „Versandt · Rechnung beim Büro“',async()=>{
   await pz.bringToFront();await pz.reload();await pzStand('laeuft','Versandt · Rechnung beim Büro');
