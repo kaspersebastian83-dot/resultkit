@@ -54,12 +54,12 @@ Die Druckseite prüft `tests/druck-browser.mjs` (Zeilen, ausgeblendete Spalten, 
 
 ### Spektron-Kette (Integrationstest über die Apps)
 
-`tests/suite-kette.mjs` führt ein erfundenes Projekt durch die echten Apps: **LabelKit** (Proben erfassen, speichern) → **ResultKit** (vorläufiger, dann teilweise endgültiger Prüfbericht, übernehmen) → **Projektzentrale** (Stand der Stufe Labor) → **PlanKit** (Proben und Werte übernehmen, Warnleiste „Neuerer Laborstand“, Aktualisieren) → **FotoKit** (Ergebnistabelle fürs Gutachten aus dem übernommenen Stand) → vollständiger Bericht → **Projektzentrale** (Ans Büro übergeben) → **BüroKit** (Gegenlesen, PDF, Versand) → **BelegKit** (Zeiten, Abrechnungsstand) → Projektzentrale „Versandt und abgerechnet“. Geprüft wird, was zwischen den Apps kaputtgehen kann: gleiche Probennummern und Beschreibungen überall, Vollständigkeit, „Plan liegt hinter ResultKit“. Ein Fehler nennt die App, in der der Schritt scheiterte.
+`tests/suite-kette.mjs` führt ein erfundenes Projekt durch die echten Apps: **LabelKit** (Proben erfassen, speichern) → **ResultKit** (vorläufiger, dann teilweise endgültiger Prüfbericht, übernehmen) → **Projektzentrale** (Stand der Stufe Labor) → **PlanKit** (Proben und Werte übernehmen, Warnleiste „Neuerer Laborstand“, Aktualisieren) → **FotoKit** (Ergebnistabelle fürs Gutachten aus dem übernommenen Stand) → vollständiger Bericht → **BerichtKit** (Brandbericht als Word: Werte und Prüfberichte so, wie ResultKit sie übernommen hat) → **Projektzentrale** (Ans Büro übergeben, Lücken im Word erkannt) → **BüroKit** (Gegenlesen, PDF, Versand) → **BelegKit** (Zeiten, Bericht unter „Bericht & Fotos“ abrechnen, Abrechnungsstand) → Projektzentrale „Versandt und abgerechnet“. Geprüft wird, was zwischen den Apps kaputtgehen kann: gleiche Probennummern und Beschreibungen überall, Vollständigkeit, „Plan liegt hinter ResultKit“. Ein Fehler nennt die App, in der der Schritt scheiterte.
 
 Alle Apps laufen dafür unter einem lokalen Server auf demselben Ursprung (wie auf GitHub Pages) und teilen sich einen Archivordner im privaten Browserdateisystem. In CI läuft die Kette bei jedem Pull Request und jede Nacht gegen den aktuellen Stand der anderen Apps (Job „Spektron-Kette“).
 
 ```
-# LabelKit, Projektzentrale, FotoKit, BüroKit, BelegKit und gebautes PlanKit daneben
-# (../labelkit, ../projektzentrale, ../bildumbenenner, ../buerokit, ../aufwandkit, ../probenplan/dist)
+# LabelKit, Projektzentrale, FotoKit, BerichtKit, BüroKit, BelegKit und gebautes PlanKit daneben
+# (../labelkit, ../projektzentrale, ../bildumbenenner, ../berichtkit, ../buerokit, ../aufwandkit, ../probenplan/dist)
 pnpm build && pnpm test:kette
 ```
