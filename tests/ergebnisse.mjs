@@ -532,6 +532,7 @@ ok('2.7 F4: Fälle A–G – Stand je Auftrag, neue Proben, „doppelt beim Labo
  assert.throws(()=>E.ergebnisDatei(u,a,[],'2.7.0'),e=>e.message==='Nicht übernommen: '+satz&&!/Nimm die falsche Datei|berichtigte Fassung/.test(e.message));
  assert.ok(u.berichte.every(b=>!b.hinweise.some(h=>/aus „Laborergebnisse“ genommen/.test(h))),'kein Rat „Datei herausnehmen“ am Bericht');
  assert.match(u.zeilen.find(z=>z.label==='P1').hinweise[0],/es gilt keiner, bis mit dem Labor geklärt ist, welcher Bericht gilt/);
+ const gE=UE.uebersichtGruppen(u.zeilen);assert.equal(gE.find(x=>x.gruppe==='PAK').mitErgebnis,4,'Kachel: strittig zählt nicht als Ergebnis');assert.equal(gE.find(x=>x.gruppe==='Chlorid').mitErgebnis,0);
  // F: ein Bericht für beide Runden → vollständig, kein Konflikt
  u=U([ar('AR-73-01',r2(1,21))]);assert.equal(E.vollstaendig(u),true);assert.deepEqual(u.konflikte,[]);
  // G: Liste von 5.4.0 entfernt → gleiche Kennungen und Sätze wie C

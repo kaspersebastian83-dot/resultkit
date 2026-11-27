@@ -96,7 +96,7 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
  }
  return GRUPPEN.filter(g=>map.has(g)).map(g=>{const z=map.get(g)!;const einheiten=z.map(x=>x.haupt?.u).filter(Boolean) as string[];
   const einheit=einheiten.sort((a,b)=>einheiten.filter(x=>x===b).length-einheiten.filter(x=>x===a).length)[0]||'';
-  return {gruppe:g,zeilen:z,einheit,mitErgebnis:z.filter(x=>!x.ausstehend).length};});
+  return {gruppe:g,zeilen:z,einheit,mitErgebnis:z.filter(x=>!x.ausstehend&&!x.konflikt).length};});   // strittig (2.7.0, R5) zählt nicht als Ergebnis
 }
 
 /** Geschoss aus der Probenbezeichnung (von groß nach klein, z. B. „Haus A 1OG Bad Wand B“): KG/UG < EG < 1.OG … < DG. */

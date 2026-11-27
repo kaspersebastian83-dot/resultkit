@@ -272,8 +272,9 @@ function renderUebersicht(s:Scan){
  $('u-filter').hidden=!gruppen.length;
  if(!gruppen.length){$('u-kacheln').innerHTML='';$('u-tabellen').innerHTML='';return;}
  $('u-kacheln').innerHTML=gruppen.map(g=>{const n=g.zeilen.length,offen=n-g.mitErgebnis,auff=g.zeilen.filter(auffaellig).length;
-  const vorl=g.zeilen.filter(z=>z.vorlaeufig).length;
-  const teile=[g.gruppe==='Asbest'?`${auff} Asbest nachgewiesen`:auff?`${auff} auffällig`:'',vorl?`${vorl} vorläufig`:'',offen?`${offen} offen`:'',!offen&&!auff&&!vorl?'alle mit Ergebnis':''].filter(Boolean);
+  const vorl=g.zeilen.filter(z=>z.vorlaeufig&&!z.konflikt).length,strittig=g.zeilen.filter(z=>z.konflikt).length;
+  const ausst=g.zeilen.filter(z=>z.ausstehend).length;
+  const teile=[g.gruppe==='Asbest'?`${auff} Asbest nachgewiesen`:auff?`${auff} auffällig`:'',strittig?`${strittig} strittig`:'',vorl?`${vorl} vorläufig`:'',ausst?`${ausst} offen`:'',!offen&&!auff&&!vorl?'alle mit Ergebnis':''].filter(Boolean);
   return `<div class="u-kachel"><span class="u-k-name">${esc(GTITEL[g.gruppe])}</span><span class="u-k-zahl">${g.mitErgebnis} / ${n}</span><span class="u-k-text">${esc(teile.join(' · '))}</span></div>`;}).join('');
  const fokusDrin=!!document.activeElement?.closest('#m-tabelle');
  const stelle=ansicht==='stelle';$('u-kopieren').hidden=!stelle;
