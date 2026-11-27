@@ -80,4 +80,20 @@ ok('2.2: alte Übernahme nach der früheren Regel → einmal erneut übernehmen,
  const r=j({vorhanden:{stand:'S1',uebernommen:'2026-11-10T10:00:00Z',vollstaendig:true,regel:true}});
  assert.equal(r.art,'geaendert');assert.match(r.text,/höhere Fassung.*anderen Projekts.*dabei ändern sich übernommene Werte/);
 });
+ok('2.7 R6: Übernahme einer neueren Fassung → nur ansehen, kein Übernehmen – auch vor Konflikt und „erneut übernehmen“',()=>{
+ for(const x of [{},{konflikte:[{berichte:['A','B'],proben:['P1']}]},{vorhandenFehler:'unbekanntes Format (Version 2)'},{stand:'S2',vorhanden:{stand:'S1',uebernommen:'2026-11-27T10:00:00Z',vollstaendig:true}}]){
+  const r=j({...x,neuer:'ResultKit 2.8.0',version:'2.7.0'});
+  assert.equal(r.art,'neuer');assert.ok(![r.haupt?.aktion,r.neben?.aktion].includes('uebernehmen'));
+  assert.equal(r.text,'Die Übernahme in „_Ergebnisse.json“ stammt von ResultKit 2.8.0 – neuer als dieses Fenster (2.7.0). Ansehen geht; übernehmen nicht, damit nichts von der neueren Fassung verloren geht. Bitte die Seite neu laden (Strg+F5).');}
+ assert.equal(j({}).art,'uebernehmen','ohne neuere Fassung wie bisher');
+});
+ok('2.7: Übernahme ohne Laborauftrag je Probe → einmal erneut übernehmen, Werte ändern sich nicht',()=>{
+ const r=j({vorhanden:{stand:'S1',uebernommen:'2026-11-27T10:00:00Z',vollstaendig:false,ohneAuftrag:true}});
+ assert.equal(r.art,'geaendert');assert.equal(r.titel,'Bitte einmal erneut übernehmen');assert.equal(r.haupt.aktion,'uebernehmen');
+ assert.match(r.text,/^Neu: zu jeder Probe steht der Laborauftrag aus LabelKit \(für die Mitteilungen in der Projektzentrale\)\. .*Werte ändern sich dadurch nicht\.$/);
+});
+ok('2.7 R5: „doppelt beim Labor“ → neutraler Satz statt „Nimm die falsche Datei“, Sperre bleibt',()=>{
+ const r=j({konflikte:[{berichte:['AR-1-01','AR-2-01'],proben:['P1'],satz:'P1 (Auftrag 1) stehen in AR-1-01 und in AR-2-01 – vermutlich gingen sie doppelt ans Labor. … bis dahin übernimmt ResultKit nichts.'}]});
+ assert.equal(r.art,'konflikt');assert.doesNotMatch(r.text,/Nimm die falsche Datei/);assert.match(r.text,/^P1 \(Auftrag 1\) stehen in/);assert.equal(r.haupt.aktion,'berichte');
+});
 console.log(`${n} Prüfungen „Jetzt dran“ bestanden`);

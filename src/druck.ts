@@ -39,8 +39,13 @@ export function zeilenAusDatei(d:ErgebnisDatei):Zeile[]{
   if(code&&!z.berichte.includes(code))z.berichte.push(code);
   for(const w of Array.isArray(s.werte)?s.werte:[])if(w&&typeof w==='object')z.werte.push({...w,p:String(w.p??''),r:String(w.r??''),u:String(w.u??''),bericht:code,vorlaeufig:!!b.vorlaeufig});   // Werte wie in der Datei, nichts angeglichen
  }
+ // Lesart (ab 2.7.0, ErgebnisDatei): trägt eine Probe des Laborauftrags eine Kennung, ist eine Probe ohne Kennung und ohne Bericht neu
+ const mitAuftraegen=!!auftrag?.proben.some(p=>p&&typeof p.auftrag==='string'&&p.auftrag);
+ const kennung=new Map((auftrag?.proben||[]).filter(p=>p&&typeof p.auftrag==='string'&&p.auftrag).map(p=>[tidy(p.label).toUpperCase(),p.auftrag as string]));
  for(const z of zeilen.values()){const endgueltig=z.werte.length>0&&!z.werte.some(w=>w.vorlaeufig);
-  z.status=!z.erwartet?'nichtBeauftragt':z.werte.length?(endgueltig?'ergebnis':'vorlaeufig'):z.berichte.length?'ohneWerte':'offen';}
+  z.status=!z.erwartet?'nichtBeauftragt':z.werte.length?(endgueltig?'ergebnis':'vorlaeufig'):z.berichte.length?'ohneWerte':'offen';
+  const k=z.erwartet&&auftrag?kennung.get(z.label.toUpperCase()):undefined;if(k)z.auftrag=k;
+  if(mitAuftraegen&&auftrag&&z.erwartet&&!k&&z.status==='offen')z.neu=true;}
  return [...zeilen.values()].sort((a,b)=>(a.nr??1e9)-(b.nr??1e9)||a.ref.localeCompare(b.ref,'de',{numeric:true}));
 }
 
@@ -96,7 +101,7 @@ const datumDE=(iso:string)=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||'');r
 function zelle(g:UGruppe,z:UZeile|undefined,mehrere:boolean,bewerte:Bewerte){
  if(!z)return '<td class="dr-w dr-leer"></td>';
  const p=mehrere?` <small class="dr-p">${esc(z.label)}</small>`:'';
- if(z.ausstehend)return `<td class="dr-w dr-aus">ausstehend${p}</td>`;
+ if(z.ausstehend)return `<td class="dr-w dr-aus">${z.neu?'noch nicht beim Labor':'ausstehend'}${p}</td>`;
  if(g.gruppe==='Asbest'){if(!z.befund)return `<td class="dr-w dr-aus">–${p}</td>`;
   return `<td class="dr-w dr-asb${z.befund.gefunden?' dr-asb-ja':''}"${z.befund.gefunden?` style="--c:${ASBEST_ROT}"`:''}>${esc(z.befund.text)}${p}</td>`;}
  if(g.gruppe==='Weitere')return `<td class="dr-w dr-text">${z.weitere.map(w=>`${esc(w.p)} ${esc(w.r)}${w.u?` ${esc(w.u)}`:''}`).join(' · ')}${p}</td>`;

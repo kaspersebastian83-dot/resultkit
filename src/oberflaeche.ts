@@ -52,7 +52,9 @@ export class Oberflaeche {
     <li><b>Ergebnisse übernehmen.</b> Der große Knopf unten rechts schreibt die geltenden Werte nach „_Ergebnisse.json“ – erst dann sehen PlanKit, FotoKit und die Projektzentrale die Werte. Kommen weitere Berichte: importieren und erneut übernehmen. Danach führt „Weiter“ zum Probenplan.</li>
    </ol>
    <p>Unter <b>„Mehr …“</b> unten links: Prüfberichte zeigen, Ansicht „Nach Stelle“ (eine Zeile je Probenahmestelle, PAK und Chlorid nebeneinander) oder „Je Probenart“, Ordner neu einlesen, anderes Projekt öffnen, Handbuch, Rückmeldung.</p>
-   <h3 id="rk-aenderungen">Neu in ResultKit 2.6.1 · 21.11.2026</h3>
+   <h3 id="rk-aenderungen">Neu in ResultKit 2.7.0 · 27.11.2026</h3>
+   <p><b>Mehrere Laboraufträge:</b> Gibt es in LabelKit einen zweiten Laborauftrag (Nachauftrag), zeigt ResultKit den Stand je Auftrag – z. B. „Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 5 von 8 · 3 offen“ –, an jeder Probe klein „A1“/„A2“ und im Detail den Laborauftrag. Neue Proben, die noch keinem Auftrag angehören, heißen „noch nicht beim Labor“; sie zählen weiter mit, bis ihr Ergebnis da ist. „Ergebnisse übernehmen“ schreibt zu jeder Probe den Laborauftrag mit – daraus ordnet die Projektzentrale die Prüfberichte später den Mitteilungen zu. Ein Projekt mit einem Laborauftrag bleibt wie bisher. <b>Zwei Prüfberichte für dieselben Proben</b> zählen als „strittig“ statt als Ergebnis; gingen Proben vermutlich doppelt ans Labor, rät ResultKit nicht mehr, eine Datei herauszunehmen (das würde Werte verlieren), sondern es mit dem Labor zu klären. <b>Neuere Fassung:</b> Stammt die letzte Übernahme von einer neueren ResultKit-Fassung, kannst du ansehen, aber nicht übernehmen – bitte die Seite neu laden (Strg+F5).</p>
+   <h3>Neu in ResultKit 2.6.1 · 21.11.2026</h3>
    <p><b>Auftragsreferenz ohne Projektnummer:</b> Nennt die Auftragsreferenz eines Prüfberichts gar keine Projektnummer, steht am Bericht ein Hinweis („bitte prüfen, ob der Bericht zu diesem Projekt gehört“). Die Werte zählen wie bisher – nichts wird gesperrt. PlanKit zeigt diesen Hinweis künftig nicht mehr, er gehört dorthin, wo die Berichte geprüft werden. <b>Kopfband</b> oben schmaler (wie LabelKit, FotoKit und PlanKit) – mehr Platz für die Ergebnisse.</p>
    <h3>Neu in ResultKit 2.6.0 · 20.11.2026</h3>
    <p><b>Datum in der Auftragsreferenz:</b> Steht in der Auftragsreferenz eines Prüfberichts ein Datum („Ortstermin 18.11.2026“), liest ResultKit daraus keine Projektnummer mehr – bisher galt „11.2026“ als anderes Projekt, und die Werte zählten nicht. Stehen mehrere Projektnummern da, gilt die dieses Projekts. „Nach Stelle“: die Probenahmestelle steht auch bei mittlerer Fensterbreite in einer Zeile. Für BelegKit vermerkt „_Ergebnisse.json“ jetzt, welche in LabelKit stornierten Proben trotzdem einen Laborwert haben.</p>
@@ -135,8 +137,8 @@ export class Oberflaeche {
    this.ablauf(-1);return;
   }
   // Stand der Übernahme (der Stand der Proben steht schon in der Karte): übernommen / nicht aktuell / noch nicht
-  const art=j?.art||'',text=art==='fertig'?'✓ '+(j!.titel.replace(/\s*✓\s*$/,'')):art==='geaendert'||art==='unlesbar'?'Übernahme nicht mehr aktuell':art==='uebernehmen'||art==='importiert'?'Noch nicht übernommen':art==='konflikt'?'Übernahme gesperrt':'';
-  stand.textContent=text;stand.className=`rk-stand${art==='fertig'?' ok':art==='geaendert'||art==='unlesbar'||art==='konflikt'?' gelb':''}`;stand.title=this.hooks.stand();
+  const art=j?.art||'',text=art==='fertig'?'✓ '+(j!.titel.replace(/\s*✓\s*$/,'')):art==='geaendert'||art==='unlesbar'?'Übernahme nicht mehr aktuell':art==='uebernehmen'||art==='importiert'?'Noch nicht übernommen':art==='konflikt'||art==='neuer'?'Übernahme gesperrt':'';
+  stand.textContent=text;stand.className=`rk-stand${art==='fertig'?' ok':art==='geaendert'||art==='unlesbar'||art==='konflikt'||art==='neuer'?' gelb':''}`;stand.title=this.hooks.stand();
   if(!j){haupt.hidden=true;this.ablauf(-1);return;}
   this.ablauf(ABLAUF[j.art]??1);
   const satz=(t:string)=>t.replace(/^📥\s*/,'').replace(/\s*→$/,'')+' →';
