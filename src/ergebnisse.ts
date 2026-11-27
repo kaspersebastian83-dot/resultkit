@@ -54,8 +54,8 @@ export const auftragWort=(nrs:number[])=>{const l=[...new Set(nrs)].sort((a,b)=>
 const probenText=(labels:string[])=>{const nrs=labels.map(nummer);return nrs.every(n=>n!==null)?nrListeText(nrs as number[]):labels.join(', ');};
 /** Neutraler Satz bei „doppelt beim Labor“ (R5, Entscheidung 27.11.2026): kein Rat, eine Datei herauszunehmen. */
 export function doppeltSatz(k:Konflikt){
- const d=k.doppelt!,p=probenText(k.proben);
- return `${p} (${auftragWort(d.auftraege)}) stehen in ${k.berichte.join(' und in ')} – vermutlich gingen sie doppelt ans Labor. `+
+ const d=k.doppelt!,p=probenText(k.proben),eine=k.proben.length===1;
+ return `${p} (${auftragWort(d.auftraege)}) ${eine?'steht':'stehen'} in ${k.berichte.join(' und in ')} – vermutlich ${eine?'ging sie':'gingen sie'} doppelt ans Labor. `+
   `${d.weitere.map(w=>`${w.bericht} enthält auch ${probenText(w.proben)} aus ${auftragWort(w.auftraege)}`).join('; ')}; eine Datei herauszunehmen würde Werte verlieren. `+
   `Bitte mit dem Labor klären, welcher Bericht für ${p} gilt; bis dahin übernimmt ResultKit nichts.`;
 }
@@ -78,7 +78,7 @@ export interface Zeile {label:string;nr:number|null;ref:string;desc:string;typ?:
 /** Konflikt (ab 2.2): zwei verschiedene Prüfberichte mit Werten für dieselben Proben.
  *  doppelt (ab 2.7.0, R5): die strittigen Proben gehören zu einem früheren Laborauftrag, und ein beteiligter Bericht enthält auch Proben
  *  eines späteren Auftrags – vermutlich gingen sie doppelt ans Labor; eine Datei herauszunehmen würde Werte verlieren. satz: der neutrale
- *  Text dazu (kein Rat „Datei herausnehmen“). Die Sperre (K2) bleibt in jedem Fall. */
+ *  Text dazu (kein Rat „Datei herausnehmen“) – auch für einen anderen Konflikt, an dem ein solcher Bericht beteiligt ist. Die Sperre (K2) bleibt in jedem Fall. */
 export interface Konflikt {berichte:string[];proben:string[];doppelt?:{auftraege:number[];weitere:{bericht:string;proben:string[];auftraege:number[]}[]};satz?:string}
 /** Alle vergleichbaren Beschreibungen eines Berichts weichen von LabelKit ab (ab 2.2) – vor dem Übernehmen fragen. */
 export interface FremdVerdacht {bericht:string;proben:number}
@@ -182,11 +182,17 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
    const spaeter=[...new Set(b.proben.map(s=>gross(s.label||'')).filter(l=>l&&!k.proben.includes(l)&&(kennung.get(l)||0)>max))].sort((a,b)=>a.localeCompare(b,'de',{numeric:true}));
    if(spaeter.length)weitere.push({bericht:c,proben:spaeter,auftraege:[...new Set(spaeter.map(l=>kennung.get(l)!))].sort((a,b)=>a-b)});}
   if(weitere.length){k.doppelt={auftraege:[...new Set(strittig)].sort((a,b)=>a-b),weitere};k.satz=doppeltSatz(k);}}
- const doppeltProben=new Set(konflikte.filter(k=>k.doppelt).flatMap(k=>k.proben.map(gross)));
+ // Ist ein Bericht eines anderen Konflikts an „doppelt beim Labor“ beteiligt, hieße „Datei herausnehmen“ auch dort Werte verlieren
+ // (Review 2.7.0): dann ebenfalls neutral, ohne Rat zum Herausnehmen.
+ const doppeltBerichte=new Set(konflikte.filter(k=>k.doppelt).flatMap(k=>k.berichte));
+ for(const k of konflikte)if(!k.satz){const mit=k.berichte.filter(c=>doppeltBerichte.has(c));if(!mit.length)continue;const p=probenText(k.proben),eine=k.proben.length===1;
+  k.satz=`${p} ${eine?'steht':'stehen'} in ${k.berichte.join(' und in ')}. ${mit.join(' und ')} enthält auch Proben, die doppelt ans Labor gingen; eine Datei herauszunehmen würde Werte verlieren. `+
+   `Bitte mit dem Labor klären, welcher Bericht für ${p} gilt; bis dahin übernimmt ResultKit nichts.`;}
+ const neutralProben=new Set(konflikte.filter(k=>k.satz).flatMap(k=>k.proben.map(gross))),doppeltProben=new Set(konflikte.filter(k=>k.doppelt).flatMap(k=>k.proben.map(gross)));
  for(const b of berichte)if(b.konfliktMit){
-  const neutral=konflikte.filter(k=>k.doppelt&&k.berichte.includes(code(b))),andere=b.konfliktMit.filter(c=>!neutral.some(k=>k.berichte.includes(c)));
+  const neutral=konflikte.filter(k=>k.satz&&k.berichte.includes(code(b))),andere=b.konfliktMit.filter(c=>!neutral.some(k=>k.berichte.includes(c)));
   if(andere.length)b.hinweise.unshift(`Werte für dieselben Proben stehen auch in ${andere.join(', ')} – ein anderer Bericht, keine neue Fassung. Es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist.`);
-  for(const k of neutral)b.hinweise.unshift(`Werte für ${probenText(k.proben)} (${auftragWort(k.doppelt!.auftraege)}) stehen auch in ${k.berichte.filter(c=>c!==code(b)).join(', ')} – vermutlich gingen sie doppelt ans Labor. Es gilt keiner, bis mit dem Labor geklärt ist, welcher Bericht für sie gilt.`);}
+  for(const k of neutral)b.hinweise.unshift(`Werte für ${probenText(k.proben)}${k.doppelt?` (${auftragWort(k.doppelt.auftraege)})`:''} stehen auch in ${k.berichte.filter(c=>c!==code(b)).join(', ')}${k.doppelt?' – vermutlich doppelt ans Labor':''}. Keine Datei herausnehmen (das würde Werte verlieren): Es gilt keiner, bis mit dem Labor geklärt ist, welcher Bericht gilt.`);}
  // Abweichungen XML↔PDF nur für Werte, die noch gelten (ein neuerer Bericht kann einzelne Parameter ersetzen)
  for(const [b,alle] of abweichungen){const gilt:Record<string,Abweichung[]>={};
   for(const s of b.proben){const k=norm(s.ref),a=(alle[k]||[]).filter(x=>(s.werte||[]).some(w=>tidy(w.p)===tidy(x.p)&&einheitKey(w.u)===einheitKey(x.u)));if(a.length)gilt[k]=a;}
@@ -227,7 +233,7 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   // ein Satz je Probe: der Hauptwert (Σ16 EPA-PAK, Chlorid, Asbest), sonst der erste strittige Parameter, dazu die Zahl der übrigen
   const l=strittig.find(x=>HAUPTWERT.test(x[0].p))||strittig[0],rest=strittig.length-1;
   const eineEinheit=new Set(l.map(w=>einheitKey(w.u))).size===1;   // verschiedene Einheiten: je Wert mit seiner Einheit (o41)
-  z.hinweise.unshift(`Zwei Prüfberichte: ${l.map(w=>`${w.bericht} „${w.r}${!eineEinheit&&w.u?` ${w.u}`:''}“`).join(', ')} (${l[0].p}${eineEinheit&&l[0].u?`, ${l[0].u}`:''}${rest?` und ${rest} weitere${rest===1?'r':''} Parameter`:''}) – es gilt keiner, bis ${doppeltProben.has(gross(z.label||''))?'mit dem Labor geklärt ist, welcher Bericht gilt (vermutlich doppelt ans Labor)':'eine der Dateien aus „Laborergebnisse“ genommen ist'}.`);}
+  z.hinweise.unshift(`Zwei Prüfberichte: ${l.map(w=>`${w.bericht} „${w.r}${!eineEinheit&&w.u?` ${w.u}`:''}“`).join(', ')} (${l[0].p}${eineEinheit&&l[0].u?`, ${l[0].u}`:''}${rest?` und ${rest} weitere${rest===1?'r':''} Parameter`:''}) – es gilt keiner, bis ${neutralProben.has(gross(z.label||''))?`mit dem Labor geklärt ist, welcher Bericht gilt${doppeltProben.has(gross(z.label||''))?' (vermutlich doppelt ans Labor)':''}`:'eine der Dateien aus „Laborergebnisse“ genommen ist'}.`);}
  const fremdVerdacht:FremdVerdacht[]=[...vergleich].filter(([,v])=>v.n>0&&v.ab===v.n).map(([b,v])=>({bericht:code(b),proben:v.n}));
  for(const z of zeilen.values()){
   // Endgültig erst, wenn kein Wert der Probe mehr nur vorläufig ist (z. B. PAK endgültig, Chlorid erst vorläufig → noch vorläufig)
@@ -322,8 +328,8 @@ export function ergebnisDatei(u:Uebersicht,auftrag:LabReport|null,dateien:DateiS
 
 /** Satz für die Sperre beim Übernehmen (ab 2.2). „Doppelt beim Labor“ (ab 2.7.0, R5): neutral, ohne Rat zum Herausnehmen. */
 export function konfliktText(k:Konflikt[]){
- const neutral=k.filter(x=>x.doppelt),rest=k.filter(x=>!x.doppelt);
- return `Nicht übernommen: ${[...neutral.map(doppeltSatz),...(rest.length?[`${rest.map(x=>`${x.berichte.join(' und ')} haben Werte für ${x.proben.join(', ')}`).join('; ')} – verschiedene Berichte, keine neue Fassung. `+
+ const neutral=k.filter(x=>x.satz),rest=k.filter(x=>!x.satz);
+ return `Nicht übernommen: ${[...neutral.map(x=>x.satz!),...(rest.length?[`${rest.map(x=>`${x.berichte.join(' und ')} haben Werte für ${x.proben.join(', ')}`).join('; ')} – verschiedene Berichte, keine neue Fassung. `+
   'Nimm die falsche Datei aus „Laborergebnisse“, dann erneut übernehmen.']:[])].join(' ')}`;
 }
 /** Werte, wie sie in „_Ergebnisse.json“ stehen (Bericht, Probe, Parameter, Einheit, Ergebnis) – zum Vergleich alter Übernahmen. */
@@ -360,7 +366,8 @@ export function neuereFassung(text:string|null,app:string):string{
  if(!text)return '';let o:{format?:unknown;version?:unknown;app?:{name?:unknown;version?:unknown}}|null=null;try{o=JSON.parse(text);}catch{return '';}
  if(!o||typeof o!=='object'||o.format!==FORMAT)return '';
  const v=typeof o.app?.version==='string'?o.app.version.trim():'';
- if(v&&/^\d+(\.\d+)*$/.test(v)&&versionVergleich(v,app)>0)return `ResultKit ${v}`;
+ const zahl=/^\d+(?:\.\d+)*/.exec(v)?.[0]||'';   // „2.8.0-rc1“ zählt als 2.8.0
+ if(zahl&&versionVergleich(zahl,app)>0)return `ResultKit ${v}`;
  if(typeof o.version==='number'&&o.version>VERSION)return `einer neueren ResultKit-Fassung (Format ${o.version})`;
  return '';
 }

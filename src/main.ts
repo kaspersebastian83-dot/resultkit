@@ -184,7 +184,7 @@ function auftragZeile(s:Scan,z:{auftrag?:string;neu?:boolean}){
 /** „A1“, „A2“ klein an der Probe – nur in einem Projekt mit Laboraufträgen. */
 function auftragMarke(s:Scan,z:{auftrag?:string}){
  if(!s.u.auftraege.length||!z.auftrag)return '';const a=s.u.auftraege.find(x=>x.id===z.auftrag);
- return a?` <small class="rk-a" title="${esc(auftragZeile(s,z))}">A${a.nr}</small>`:'';
+ return a?` <small class="rk-a" title="${esc(auftragZeile(s,z))}"><span aria-hidden="true">A${a.nr}</span><span class="rk-sr">Laborauftrag ${a.nr}</span></small>`:'';
 }
 /** Hinweise, die schon als eigener Stand gezeigt werden (Chip „vorläufig“, „nicht beauftragt“) – zählen nicht als „Hinweis“. */
 const STANDARD=/^(Nur vorläufige Werte|Nicht im Laborauftrag aus LabelKit|Teilweise ersetzt durch)/;
@@ -272,7 +272,7 @@ function renderUebersicht(s:Scan){
  $('u-filter').hidden=!gruppen.length;
  if(!gruppen.length){$('u-kacheln').innerHTML='';$('u-tabellen').innerHTML='';return;}
  $('u-kacheln').innerHTML=gruppen.map(g=>{const n=g.zeilen.length,offen=n-g.mitErgebnis,auff=g.zeilen.filter(auffaellig).length;
-  const vorl=g.zeilen.filter(z=>z.vorlaeufig&&!z.konflikt).length,strittig=g.zeilen.filter(z=>z.konflikt).length;
+  const vorl=g.zeilen.filter(z=>z.vorlaeufig&&!z.konflikt).length,strittig=g.zeilen.filter(z=>z.konflikt&&!z.nichtBeauftragt).length;   // wie zaehler.strittig
   const ausst=g.zeilen.filter(z=>z.ausstehend).length;
   const teile=[g.gruppe==='Asbest'?`${auff} Asbest nachgewiesen`:auff?`${auff} auffällig`:'',strittig?`${strittig} strittig`:'',vorl?`${vorl} vorläufig`:'',ausst?`${ausst} offen`:'',!offen&&!auff&&!vorl?'alle mit Ergebnis':''].filter(Boolean);
   return `<div class="u-kachel"><span class="u-k-name">${esc(GTITEL[g.gruppe])}</span><span class="u-k-zahl">${g.mitErgebnis} / ${n}</span><span class="u-k-text">${esc(teile.join(' · '))}</span></div>`;}).join('');
@@ -362,7 +362,7 @@ function mitGeschoss<T>(zeilen:T[],stelle:(z:T)=>string,an:boolean,spalten:numbe
 /** Ergebnis einer Probe als Zelle (Farbpunkt nach Skala, Asbest-Befund rot) – in beiden Ansichten gleich. */
 function ergebnis(gruppe:Gruppe,einheit:string,z:UZeile){
  // K2 (2.2): zwei Berichte, beide Werte wie im Bericht, ohne Bewertung – bis eine Datei aus dem Ordner genommen ist
- if(z.konflikt?.werte.length)return `<span class="rk-w rk-konflikt" title="Zwei verschiedene Prüfberichte – es gilt keiner, bis ${scan?.u.konflikte.some(k=>k.doppelt&&k.proben.includes(z.label.toUpperCase()))?'mit dem Labor geklärt ist, welcher Bericht gilt (vermutlich doppelt ans Labor)':'eine der Dateien aus „Laborergebnisse“ genommen ist'}">${z.konflikt.werte.map(w=>`<span><span class="u-wert">${w.p?`${esc(shortParameter(w.p))}: `:''}${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}</span> <small>${esc(w.bericht)}</small></span>`).join('')}</span>`;
+ if(z.konflikt?.werte.length)return `<span class="rk-w rk-konflikt" title="Zwei verschiedene Prüfberichte – es gilt keiner, bis ${scan?.u.konflikte.some(k=>k.satz&&k.proben.includes(z.label.toUpperCase()))?'mit dem Labor geklärt ist, welcher Bericht gilt (vermutlich doppelt ans Labor)':'eine der Dateien aus „Laborergebnisse“ genommen ist'}">${z.konflikt.werte.map(w=>`<span><span class="u-wert">${w.p?`${esc(shortParameter(w.p))}: `:''}${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}</span> <small>${esc(w.bericht)}</small></span>`).join('')}</span>`;
  if(gruppe==='Asbest')return z.befund?(z.befund.gefunden?punktWert(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen',true):`<span class="rk-w">${esc(z.befund.text)}</span>`):'';
  if(gruppe!=='Weitere'&&!z.haupt)return z.ausstehend?'':`<span class="u-aus">kein ${gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
  if(gruppe==='Weitere')return z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');

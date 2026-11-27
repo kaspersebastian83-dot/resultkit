@@ -91,7 +91,7 @@ export function labelkitReport(text:string,quelle:string,project:string|null,con
     if(isStorniert(raw)){if(n)storniert.add(n);continue;}   // Nummer bleibt vergeben: ein Laborwert dafür wird gemeldet, nie einer anderen Probe zugeordnet
     if(!n){report.warnings.push(`${type}: eine Probe ohne Nummer wurde übersprungen.`);continue;}
     if(isRueckstellprobe(raw)){rueckstell++;continue;}
-    if(seen.has(n)){report.warnings.push(`Probe ${n} ist in LabelKit doppelt vergeben (${type}) und wurde übersprungen.`);continue;}seen.add(n);
+    if(seen.has(n)){report.warnings.push(`Probe ${n} ist in LabelKit doppelt vergeben (${type}${auftragNr(raw.auftrag)?`, Merkmal „Auftrag ${auftragNr(raw.auftrag)}“`:''}) und wurde übersprungen.`);continue;}seen.add(n);
     const row:LabSample={label:`P${n}`,typ:type,ref:`Probe ${n}`,desc:description(raw).slice(0,500),art:`${type}${str(raw.matrix)?` · ${str(raw.matrix)}`:''}`.slice(0,160)};
     const datum=isoDate(raw.datum);if(datum)row.datum=datum;
     const surface=SURFACE_FROM_LABELKIT[str(raw.z4)];if(surface)row.surface=surface;

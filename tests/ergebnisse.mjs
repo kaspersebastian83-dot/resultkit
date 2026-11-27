@@ -549,6 +549,19 @@ ok('2.7 R5: Konflikt ohne Aufträge (oder alles derselbe Auftrag) → strittig, 
  const a=lkA(lk55());const w=E.uebersicht('99.9001',a,[ar('AR-83-01',r2(14,21)),ar('AR-84-01',r2(14,15))]);
  assert.equal(w.konflikte[0].satz,undefined);assert.match(E.konfliktText(w.konflikte),/Nimm die falsche Datei/);
 });
+ok('2.7 R5 (Review): Konflikt mit einem Bericht, der auch „doppelt beim Labor“ ist → ebenfalls neutral; eine Probe → Einzahl',()=>{
+ const a=lkA(lk55());
+ const u=E.uebersicht('99.9001',a,[ar('AR-74-01',r2(1,13)),ar('AR-75-01',[...r2(5,7),...r2(14,21)]),ar('AR-76-01',r2(14,15))]);
+ assert.equal(u.konflikte.length,2);assert.ok(u.konflikte.every(k=>k.satz),'beide neutral');
+ const t=E.konfliktText(u.konflikte);assert.doesNotMatch(t,/Nimm die falsche Datei/);
+ assert.match(t,/P14–P15 stehen in AR-75-01 und in AR-76-01\. AR-75-01 enthält auch Proben, die doppelt ans Labor gingen; eine Datei herauszunehmen würde Werte verlieren\./);
+ assert.ok(u.berichte.every(b=>!b.hinweise.some(h=>/aus „Laborergebnisse“ genommen/.test(h))));
+ assert.ok(u.zeilen.filter(z=>z.konflikt).every(z=>/mit dem Labor geklärt/.test(z.hinweise[0])));
+ const e=E.uebersicht('99.9001',a,[ar('AR-77-01',r2(1,13)),ar('AR-78-01',[5,14])]);
+ assert.match(e.konflikte[0].satz,/^P5 \(Auftrag 1\) steht in AR-77-01 und in AR-78-01 – vermutlich ging sie doppelt ans Labor\. AR-78-01 enthält auch P14 aus Auftrag 2;/);
+ const d=E.ergebnisDatei(E.uebersicht('99.9001',auftrag(),[]),auftrag(),[],'2.7.0');
+ assert.equal(E.neuereFassung(JSON.stringify({...d,app:{name:'ResultKit',version:'2.8.0-rc1'}}),'2.7.0'),'ResultKit 2.8.0-rc1','Vorabfassung sperrt auch');
+});
 ok('2.7 R4: neue Proben „noch nicht beim Labor“ – bleiben erwartet und offen, nicht vollständig; Übersicht, Kopie und Druck',()=>{
  const a=lkA(lk55({neu:[22,23]}));
  const u=E.uebersicht('99.9001',a,[ar('AR-91-01',r2(1,13)),ar('AR-92-01',r2(14,21))]);

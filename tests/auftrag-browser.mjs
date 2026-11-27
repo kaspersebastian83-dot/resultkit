@@ -56,8 +56,8 @@ try{
   assert.equal(await stand(),'Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 0 von 8 · 8 offen');
   assert.equal(await page.locator('#rk-stand').getAttribute('title'),'Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 0 von 8 · 8 offen','Fußleiste');
   const pak=page.locator('.u-gruppe').first();
-  assert.equal(await pak.locator('tr.u-zeile',{has:page.getByRole('button',{name:'P1',exact:true})}).locator('.rk-a').textContent(),'A1');
-  assert.equal(await pak.locator('tr.u-zeile',{has:page.getByRole('button',{name:'P14',exact:true})}).locator('.rk-a').textContent(),'A2');
+  assert.equal(await pak.locator('tr.u-zeile',{has:page.getByRole('button',{name:'P1',exact:true})}).locator('.rk-a [aria-hidden]').textContent(),'A1');
+  assert.equal(await pak.locator('tr.u-zeile',{has:page.getByRole('button',{name:'P14',exact:true})}).locator('.rk-a [aria-hidden]').textContent(),'A2');
   assert.equal(await pak.locator('tr.u-zeile',{has:page.getByRole('button',{name:'P14',exact:true})}).locator('td.rk-wz').textContent(),'ausstehend','Auftrag 2 ist beim Labor');
   if(process.env.AUFTRAG_BILD)await page.screenshot({path:`${process.env.AUFTRAG_BILD}/je-auftrag.png`,fullPage:true});   // zum Ansehen: AUFTRAG_BILD=<Ordner>
   await pak.getByRole('button',{name:'P14',exact:true}).click();

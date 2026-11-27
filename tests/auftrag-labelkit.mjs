@@ -2,6 +2,8 @@
 // Regel von LabelKit 5.5.0 nach (index.html, Block „NACHAUFTRAG (5.5.0)“: auftraegeAnwenden, auftraegePruefen, auftragMerkmalGilt,
 // auftragVon, nrIstFest). Gleiche Projektdatei → gleiche Kennung je Probe, gleiche Aufträge, gleiches „neu aufgebaut“.
 // Ändert LabelKit die Regel, wird dieser Test rot. Muster: tests/kopien-pz.mjs. Nur erfundene Proben.
+// Verglichen wird die Regel je Probe (wie LabelKit sie nach dem Laden anwendet); welche Probe ResultKit „P<n>“ nennt, regelt labelkitReport
+// wie seit 2.3 (Nummer aus _nr) – geprüft in tests/ergebnisse.mjs.
 // LabelKit daneben (../labelkit oder LABELKIT_DIR); in der CI Pflicht (LABELKIT_PFLICHT=1), sonst SKIP.
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
