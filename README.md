@@ -34,12 +34,19 @@ PlanKit, FotoKit und die Projektzentrale lesen nur diese Datei. Die vorige Über
   sonst die Büro-Skalen (`_Spektron-Skalen.json`). Ohne Skala bleibt ein Wert unbewertet – ResultKit erfindet keine Grenzwerte.
 - **In LabelKit stornierte Proben** (ab LabelKit 4.49.0, Feld `storniert`) sind keine Proben mehr: Sie fehlen im Laborauftrag, zählen nicht als offen oder ausstehend und gehen nicht nach `_Ergebnisse.json`. Ihre Nummer bleibt vergeben – nennt ein Prüfbericht trotzdem einen Wert dafür, erscheint oben der Hinweis „P7 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe …“; der Wert wird nicht übernommen.
 - Ändert sich der Ordner nach der Übernahme (neuer Bericht, neue LabelKit-Datei), zeigt ResultKit „bitte erneut übernehmen“.
+- **Laboraufträge aus LabelKit (ab 2.7, Plan `resultkit-nachauftrag-plan.md`, R1–R8):** Ab dem zweiten Laborauftrag trägt LabelKit (ab 5.5.0) an jeder Probe die Kennung des Auftrags (`a1`, `a2` …). ResultKit übernimmt sie nach **derselben Regel wie LabelKit** (Merkmal gilt nur mit fester Nummer und Eintrag in der Liste des Auftrags; fehlt die Liste, wird sie aus den Merkmalen neu aufgebaut – dann ein Hinweis), vergibt und ändert nie eine Kennung und schreibt die LabelKit-Datei nie. `tests/auftrag-labelkit.mjs` vergleicht die Regel mit LabelKits echtem Code.
+  - Stand je Auftrag (Karte, Fußleiste, Rückfrage): „Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 5 von 8 · 3 offen“; „A1“/„A2“ klein an der Probe; im Detail „Laborauftrag: Auftrag 2 vom 22.08.2026“. Ein Projekt mit einem Auftrag sieht aus wie bisher.
+  - Neue Proben (ohne Kennung, in keinem Prüfbericht) heißen „noch nicht beim Labor“ – sie bleiben erwartet: „vollständig“ erst mit ihrem Ergebnis, `offen[]` unverändert. Keine eigene Schlussfolgerung aus fehlender fester Nummer.
+  - Zwei Prüfberichte für dieselben Proben: Die Proben zählen als „strittig“, nicht als Ergebnis, „vollständig“ ist nein, die Sperre bleibt. Gehören sie zu einem früheren Auftrag als der Rest des Berichts („doppelt beim Labor“), rät ResultKit nicht zum Herausnehmen einer Datei, sondern: „Bitte mit dem Labor klären, welcher Bericht … gilt“.
+  - **Versionssperre:** Stammt `_Ergebnisse.json` von einer neueren ResultKit-Fassung (`app.version`, oder ein neueres Format), kann man ansehen, aber nicht übernehmen („bitte die Seite neu laden“).
 
 ## `_Ergebnisse.json` (Format `spektron-ergebnisse`, Version 1)
 
 `projekt` (Nummer), `uebernommen` (ISO-Zeit), `app`, `vollstaendig`, `stand`/`dateien` (Dateistand der Übernahme), `auftrag` (Proben aus LabelKit),
 `berichte` (je Bericht Herkunft wie PlanKits `LabOrigin`, `datum` des Prüfberichts, dazu `proben` wie `LabSample` mit `reportId` und `werte` `{p,r,u,loq,nwg,norm}` – `loq` Bestimmungsgrenze, `nwg` Nachweisgrenze des Verfahrens (ab 1.10, z. B. Asbest „0,001 %“), `norm` Prüfnorm, jeweils nur wenn der Bericht sie nennt),
 `ersetzt`, `offen`, `hinweise`, ab 2.6 `storniertMitWert` (optional: in LabelKit stornierte Proben, für die ein geltender Prüfbericht Messwerte hat – liest BelegKit; Leser müssen ohne das Feld arbeiten, fehlt es, ist es unbekannt). Lesen: `liesErgebnisDatei` in `src/ergebnisse.ts`.
+
+Ab 2.7 (optional, `version` bleibt 1): `auftrag.proben[].auftrag` – Kennung des Laborauftrags aus LabelKit, nur wenn sie nach LabelKits Regel gilt. Kein Feld am Bericht, keine Liste der Aufträge, kein Datum. **Lesart:** keine Kennung irgendwo → ein Auftrag (wie bisher); sonst ist eine Probe ohne Kennung neu (noch nicht beim Labor); ein Prüfbericht gehört zu den Aufträgen seiner Proben (gerechnet, nicht gespeichert). Ein Projekt mit einem Auftrag bekommt das Feld nicht – die Datei ist bis auf `uebernommen` und `app.version` gleich wie mit 2.6.1.
 
 ## Entwicklung
 

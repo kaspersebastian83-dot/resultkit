@@ -12,6 +12,7 @@ export interface UZeile {label:string;nr:number|null;stelle:string;
  /** Asbest: Befund wie im Prüfbericht; gefunden = Asbest nachgewiesen */befund:{text:string;gefunden:boolean}|null;
  /** Weitere Proben: bis zu zwei Werte */weitere:Wert[];
  ausstehend:boolean;vorlaeufig:boolean;nichtBeauftragt:boolean;
+ /** ab 2.7.0: Kennung des Laborauftrags aus LabelKit; neu = noch nicht beim Labor (Projekt mit Laboraufträgen, R4) */auftrag?:string;neu?:boolean;
  /** Prüfberichte, aus denen die gezeigten Werte stammen */berichte:string[];
  /** Chlorid umgerechnet: Wert wie im Bericht, z. B. „45 mg/m²“ */original?:string;
  /** Wert für die Bewertung – wie im Bericht (eine im Projekt angepasste Skala gilt für dessen Einheit) */bewertet:Wert|null;
@@ -78,7 +79,7 @@ export function uebersichtGruppen(zeilen:Zeile[]):UGruppe[]{
   const gezeigt=roh?[roh]:g==='Asbest'?w.filter(x=>ASBEST.test(x.p)):g==='Weitere'?w.slice(0,2):[];
   const u:UZeile={label:z.label||z.ref,nr:z.nr,stelle:z.desc||z.ref,haupt:haupt?{p:haupt.p,r:haupt.r,u:haupt.u,...(haupt.loq?{loq:haupt.loq}:{})}:null,
    befund:g==='Asbest'?asbestBefund(w):null,weitere:g==='Weitere'?w.slice(0,2).map(x=>({p:x.p,r:x.r,u:x.u})):[],   // PAK/Chlorid ohne Hauptwert: nichts Fremdes in die Spalte
-   ausstehend:z.status==='offen'||z.status==='ohneWerte',vorlaeufig:z.status==='vorlaeufig',nichtBeauftragt:z.status==='nichtBeauftragt',
+   ausstehend:z.status==='offen'||z.status==='ohneWerte',vorlaeufig:z.status==='vorlaeufig',nichtBeauftragt:z.status==='nichtBeauftragt',...(z.auftrag?{auftrag:z.auftrag}:{}),...(z.neu?{neu:true}:{}),
    berichte:[...new Set(gezeigt.map(x=>x.bericht).filter(Boolean))],bewertet:roh?{p:roh.p,r:roh.r,u:roh.u,...(roh.loq?{loq:roh.loq}:{})}:null,...(um&&roh&&roh.u!==um.u?{original:`${roh.r} ${roh.u}`}:{})};
   // Hauptwert der Spalte; bei Asbest/Weitere (kein Hauptwert) der erste strittige Parameter der Gruppe – sonst der erste (Codex, PR #33)
   // Konflikt je Parameter, die Einheit gehört nicht dazu (ab 2.5, o41): beide Berichte können verschiedene Einheiten nennen
@@ -185,7 +186,7 @@ export function sortiereMatrix(rows:MZeile[],spalte:MSpalte,auf:boolean):MZeile[
 export const SPALTE_TITEL:Record<Gruppe,string>={PAK:'Σ16 EPA-PAK',Chlorid:'Chlorid',Asbest:'Asbest',Weitere:'Weitere'};
 /** Zelle als Text für Excel/Word: Wert wie im Bericht, Einheit nur wenn sie von der Spalte abweicht. */
 export function zelleText(g:Gruppe,z:UZeile|undefined,einheit:string){
- if(!z)return '';if(z.ausstehend)return 'ausstehend';
+ if(!z)return '';if(z.ausstehend)return z.neu?'noch nicht beim Labor':'ausstehend';
  if(z.konflikt?.werte.length)return `${z.konflikt.werte.map(w=>`${w.p?`${w.p}: `:''}${w.r}${w.u&&w.u!==einheit?` ${w.u}`:''} (${w.bericht})`).join(' / ')} – 2 Berichte, ungeklärt`;
  if(g==='Asbest')return z.befund?.text||'';
  if(g==='Weitere')return z.weitere.map(w=>`${w.p} ${w.r}${w.u?` ${w.u}`:''}`).join(' · ');

@@ -1,6 +1,6 @@
 // „Jetzt dran“: der eine nächste Schritt in ResultKit – aus dem Ordnerstand abgeleitet, ohne Browserteile (in Node testbar).
 // Je Zustand höchstens ein Hauptknopf: Berichte importieren → Ergebnisse übernehmen → (übernommen, nichts zu tun) → erneut übernehmen.
-export type JetztArt='leer'|'warten'|'ohneWerte'|'importiert'|'uebernehmen'|'geaendert'|'unlesbar'|'fertig'|'konflikt';
+export type JetztArt='leer'|'warten'|'ohneWerte'|'importiert'|'uebernehmen'|'geaendert'|'unlesbar'|'fertig'|'konflikt'|'neuer';
 export type Aktion='import'|'uebernehmen'|'ansehen'|'hinweise'|'berichte';
 export interface JetztEingabe {
  /** Zeilen der Übersicht (LabelKit-Auftrag ∪ Berichte) */proben:number;
@@ -10,8 +10,12 @@ export interface JetztEingabe {
   /** übernommen vor 1.5: Oberflächenart/Raum fehlen für PlanKit */ohneLage?:boolean;
   /** übernommen vor 1.10: Nachweisgrenze der Asbestwerte fehlt */ohneNwg?:boolean;
   /** übernommen vor 1.13: führt eine in LabelKit stornierte Probe (offen, im Auftrag oder mit Werten) */mitStorniert?:boolean;
-  /** übernommen vor 2.2: andere Werte, als die Regel jetzt schreibt (Fassung statt Dateidatum, andere Projekte zählen nicht) */regel?:boolean}|null;vorhandenFehler:string;
- /** Konflikt (ab 2.2): verschiedene Berichte mit Werten für dieselben Proben – Übernahme gesperrt */konflikte?:{berichte:string[];proben:string[]}[];
+  /** übernommen vor 2.2: andere Werte, als die Regel jetzt schreibt (Fassung statt Dateidatum, andere Projekte zählen nicht) */regel?:boolean;
+  /** übernommen vor 2.7: ohne den Laborauftrag je Probe aus LabelKit */ohneAuftrag?:boolean}|null;vorhandenFehler:string;
+ /** Versionssperre (ab 2.7.0, R6): vorhandene „_Ergebnisse.json“ stammt von einer neueren Fassung („ResultKit 2.8.0“) – nur ansehen */neuer?:string;
+ /** diese Fassung („2.7.0“) – für den Satz der Versionssperre */version?:string;
+ /** Konflikt (ab 2.2): verschiedene Berichte mit Werten für dieselben Proben – Übernahme gesperrt. satz (ab 2.7.0): neutraler Text
+  *  „doppelt beim Labor“ (R5) statt „Datei herausnehmen“ */konflikte?:{berichte:string[];proben:string[];satz?:string}[];
  /** Hinweise insgesamt (Ordner, Laborauftrag, Berichte, Proben) */hinweise:number;
  /** Gerade importierte Berichte (bis „Übernehmen“ oder „Erst ansehen“) */importiert:string[]|null;
 }
@@ -34,17 +38,22 @@ export function jetztDran(e:JetztEingabe):Jetzt{
   if(e.berichte)return {...basis,art:'ohneWerte',titel:'XML des Prüfberichts ergänzen',text:`Im Ordner liegt kein Prüfbericht mit Messwerten – die Werte kommen aus der XML (Eurofins EOL).`,haupt:IMPORT};
   return {...basis,art:'warten',titel:'Beim Labor – noch keine Prüfberichte',text:e.auftrag?'Die Proben sind beauftragt; sobald die Prüfberichte da sind, hier importieren.':'Kein Laborauftrag aus LabelKit gefunden – Prüfberichte können trotzdem importiert werden.',haupt:IMPORT};
  }
+ // R6 (2.7.0): Übernahme einer neueren Fassung – ansehen ja, nie überschreiben (auch nicht nach einem Konflikt oder mit „Erneut übernehmen“)
+ if(e.neuer)return {...basis,art:'neuer',titel:'Neuere ResultKit-Fassung – bitte die Seite neu laden',
+  text:`Die Übernahme in „_Ergebnisse.json“ stammt von ${e.neuer} – neuer als dieses Fenster${e.version?` (${e.version})`:''}. Ansehen geht; übernehmen nicht, damit nichts von der neueren Fassung verloren geht. Bitte die Seite neu laden (Strg+F5).`,
+  haupt:{aktion:'ansehen',text:'Ergebnisse ansehen'},neben:IMPORT};
  // K2 (2.2): vor allem anderen, auch vor „Übernommen ✓“ – eine alte Übernahme kann nach der früheren Regel den falschen Bericht enthalten
- if(e.konflikte?.length){const proben=[...new Set(e.konflikte.flatMap(k=>k.proben))],berichte=[...new Set(e.konflikte.flatMap(k=>k.berichte))];
+ if(e.konflikte?.length){const rest=e.konflikte.filter(k=>!k.satz),proben=[...new Set(rest.flatMap(k=>k.proben))],berichte=[...new Set(rest.flatMap(k=>k.berichte))];
   return {...basis,art:'konflikt',titel:'Zwei Prüfberichte für dieselben Proben – erst klären',
-   text:`Für ${proben.join(', ')} stehen Werte in ${berichte.join(' und ')} – verschiedene Berichte, keine neue Fassung. Welcher gehört zu diesem Projekt? Nimm die falsche Datei aus „Laborergebnisse“ – bis dahin übernimmt ResultKit nichts.`+
+   text:[...e.konflikte.filter(k=>k.satz).map(k=>k.satz!),...(rest.length?[`Für ${proben.join(', ')} stehen Werte in ${berichte.join(' und ')} – verschiedene Berichte, keine neue Fassung. Welcher gehört zu diesem Projekt? Nimm die falsche Datei aus „Laborergebnisse“ – bis dahin übernimmt ResultKit nichts.`]:[])].join(' ')+
     (e.vorhanden?' PlanKit und FotoKit zeigen noch den Stand der letzten Übernahme.':''),
    haupt:{aktion:'berichte',text:'Prüfberichte zeigen'},neben:IMPORT};}
  if(e.vorhandenFehler)return {...basis,art:'unlesbar',titel:'Ergebnisse erneut übernehmen',text:`„_Ergebnisse.json“ ist nicht lesbar: ${e.vorhandenFehler} Erneut übernehmen schreibt eine neue Datei (die alte bleibt als „_Ergebnisse.vorher.json“).`,haupt:{aktion:'uebernehmen',text:'Erneut übernehmen'},neben:IMPORT};
- if(e.vorhanden&&e.vorhanden.stand===e.stand&&(e.vorhanden.ohneLage||e.vorhanden.ohneNwg||e.vorhanden.mitStorniert||e.vorhanden.regel)){
+ if(e.vorhanden&&e.vorhanden.stand===e.stand&&(e.vorhanden.ohneLage||e.vorhanden.ohneNwg||e.vorhanden.mitStorniert||e.vorhanden.regel||e.vorhanden.ohneAuftrag)){
   const neu=[e.vorhanden.ohneLage?'Oberflächenart und Raum aus LabelKit gehen mit an PlanKit (Balken am Plan, Raumbuch)':'',
    e.vorhanden.ohneNwg?'Asbestwerte tragen die Nachweisgrenze aus dem Prüfbericht (0,001 % / 0,1 % / 1 %)':'',
    e.vorhanden.mitStorniert?'in LabelKit stornierte Proben zählen nicht mehr als offen und gehen nicht an PlanKit und FotoKit':'',
+   e.vorhanden.ohneAuftrag?'zu jeder Probe steht der Laborauftrag aus LabelKit (für die Mitteilungen in der Projektzentrale)':'',
    e.vorhanden.regel?'bei mehreren Fassungen eines Prüfberichts gilt die höhere Fassung (-02 vor -01) – auch wenn sie die Werte in einer anderen Einheit angibt –, nicht mehr die zuletzt gespeicherte Datei, und Berichte eines anderen Projekts zählen nicht mit':''].filter(Boolean).join('; ');
   return {...basis,art:'geaendert',titel:'Bitte einmal erneut übernehmen',
    text:'Neu: '+neu+'. Die Übernahme vom '+uhr(e.vorhanden.uebernommen)+' enthält das noch nicht – '+(e.vorhanden.regel?'dabei ändern sich übernommene Werte – bitte die Übersicht vorher ansehen.':e.vorhanden.mitStorniert?'die Werte der übrigen Proben ändern sich dadurch nicht.':'Werte ändern sich dadurch nicht.'),haupt:{aktion:'uebernehmen',text:'Erneut übernehmen'},neben:IMPORT};}

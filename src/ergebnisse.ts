@@ -16,7 +16,7 @@
 // Umgerechnet wird dafür nichts; gezeigt und weitergegeben wird die Einheit wie im Bericht.
 import type {LabReport,Abweichung} from './labreport';
 import {referenceLabel,mitPdfAbgleichen,abgleichHinweis,ABGLEICH,projektnummerIn} from './labreport';
-import type {LabOrigin,LabSample,Wert} from './model';
+import type {LabOrigin,LabSample,LaborAuftrag,Wert} from './model';
 
 export const FORMAT='spektron-ergebnisse',VERSION=1,DATEI='_Ergebnisse.json';
 const tidy=(s:unknown)=>String(s??'').normalize('NFC').replace(/\s+/g,' ').trim();
@@ -41,6 +41,24 @@ export function beschreibungWeichtAb(auftrag:unknown,bericht:unknown,art=''){
 export const einheitKey=(u:unknown)=>tidy(u).replace(/\u03BC/g,'\u00B5').replace(/\s*\/\s*/g,'/').replace(/m2\b/g,'m²').replace(/cm2\b/g,'cm²');
 const norm=(s:unknown)=>tidy(s).toLocaleLowerCase('de').replace(/[^\p{L}\p{N}]/gu,'');
 const nummer=(label:string)=>{const n=Number(label.replace(/^P/i,''));return Number.isSafeInteger(n)&&n>0?n:null;};
+const auftragNr=(id:unknown)=>{const m=/^a(\d+)$/.exec(String(id||''));return m?Number(m[1]):0;};
+/** „P1–P13, P20“ (wie LabelKit nrListeText). */
+export function nrListeText(nrs:number[]){
+ const s=[...new Set(nrs.map(Number).filter(Number.isFinite))].sort((a,b)=>a-b),teile:string[]=[];
+ for(let i=0;i<s.length;){let j=i;while(j+1<s.length&&s[j+1]===s[j]+1)j++;teile.push(j>i?`P${s[i]}–P${s[j]}`:`P${s[i]}`);i=j+1;}
+ return teile.join(', ');
+}
+/** „Auftrag 1“, „Aufträge 1 und 2“, „Aufträge 1, 2 und 3“ */
+export const auftragWort=(nrs:number[])=>{const l=[...new Set(nrs)].sort((a,b)=>a-b);return l.length===1?`Auftrag ${l[0]}`:`Aufträge ${l.slice(0,-1).join(', ')} und ${l.at(-1)}`;};
+/** Probenliste: „P1–P13“ für Probennummern, sonst wie im Bericht. */
+const probenText=(labels:string[])=>{const nrs=labels.map(nummer);return nrs.every(n=>n!==null)?nrListeText(nrs as number[]):labels.join(', ');};
+/** Neutraler Satz bei „doppelt beim Labor“ (R5, Entscheidung 27.11.2026): kein Rat, eine Datei herauszunehmen. */
+export function doppeltSatz(k:Konflikt){
+ const d=k.doppelt!,p=probenText(k.proben);
+ return `${p} (${auftragWort(d.auftraege)}) stehen in ${k.berichte.join(' und in ')} – vermutlich gingen sie doppelt ans Labor. `+
+  `${d.weitere.map(w=>`${w.bericht} enthält auch ${probenText(w.proben)} aus ${auftragWort(w.auftraege)}`).join('; ')}; eine Datei herauszunehmen würde Werte verlieren. `+
+  `Bitte mit dem Labor klären, welcher Bericht für ${p} gilt; bis dahin übernimmt ResultKit nichts.`;
+}
 
 /** Ein Prüfbericht, wie er im Ordner liegt (XML und/oder PDF gleichen Namens). */
 export interface Eingang {report:LabReport;geaendert:number}
@@ -53,16 +71,23 @@ export interface Bericht extends LabOrigin {datum?:string;proben:LabSample[];gea
 export type Status='ergebnis'|'vorlaeufig'|'ohneWerte'|'offen'|'nichtBeauftragt';
 /** konflikt (ab 2.2): Parameter, für die zwei verschiedene Berichte einen Wert haben – alle Werte stehen in `werte`; u = Einheit
  *  des ersten Werts (ab 2.5 können die Berichte verschiedene Einheiten nennen). */
+/** auftrag (ab 2.7.0): Kennung des Laborauftrags aus LabelKit (nur erwartete Proben, nur gültige). neu (ab 2.7.0): Projekt mit
+ *  Laboraufträgen, Probe ohne Kennung und in keinem Prüfbericht – „noch nicht beim Labor“; bleibt erwartet und offen (R4). */
 export interface Zeile {label:string;nr:number|null;ref:string;desc:string;typ?:string;art?:string;datum?:string;erwartet:boolean;status:Status;werte:(Wert&{bericht:string;vorlaeufig:boolean})[];berichte:string[];hinweise:string[];
- konflikt?:{p:string;u:string;berichte:string[]}[]}
-/** Konflikt (ab 2.2): zwei verschiedene Prüfberichte mit Werten für dieselben Proben. */
-export interface Konflikt {berichte:string[];proben:string[]}
+ konflikt?:{p:string;u:string;berichte:string[]}[];auftrag?:string;neu?:true}
+/** Konflikt (ab 2.2): zwei verschiedene Prüfberichte mit Werten für dieselben Proben.
+ *  doppelt (ab 2.7.0, R5): die strittigen Proben gehören zu einem früheren Laborauftrag, und ein beteiligter Bericht enthält auch Proben
+ *  eines späteren Auftrags – vermutlich gingen sie doppelt ans Labor; eine Datei herauszunehmen würde Werte verlieren. satz: der neutrale
+ *  Text dazu (kein Rat „Datei herausnehmen“). Die Sperre (K2) bleibt in jedem Fall. */
+export interface Konflikt {berichte:string[];proben:string[];doppelt?:{auftraege:number[];weitere:{bericht:string;proben:string[];auftraege:number[]}[]};satz?:string}
 /** Alle vergleichbaren Beschreibungen eines Berichts weichen von LabelKit ab (ab 2.2) – vor dem Übernehmen fragen. */
 export interface FremdVerdacht {bericht:string;proben:number}
 /** storniert (ab 1.13): Probennummern, die in LabelKit storniert sind – keine Proben mehr, nicht offen, nicht gezählt, nicht übernommen.
  *  storniertMitWert (ab 2.6): davon die, für die ein geltender Prüfbericht dieses Projekts Messwerte hat (für BelegKit, Audit Lauf 2 B1). */
+/** auftraege (ab 2.7.0): Laboraufträge aus LabelKit – leer, solange keine Probe eine gültige Kennung trägt (ein Auftrag, wie bis 2.6).
+ *  zaehler.strittig (ab 2.7.0, R5): Proben mit Werten aus zwei verschiedenen Berichten – zählen nicht als Ergebnis (auch nicht als vorläufig). */
 export interface Uebersicht {projekt:string;auftrag:{quelle:string;proben:number;hinweise:string[]}|null;berichte:Bericht[];zeilen:Zeile[];storniert:string[];storniertMitWert:string[];konflikte:Konflikt[];fremdVerdacht:FremdVerdacht[];
- zaehler:{erwartet:number|null;ergebnis:number;vorlaeufig:number;offen:number;nichtBeauftragt:number};hinweise:string[]}
+ auftraege:LaborAuftrag[];zaehler:{erwartet:number|null;ergebnis:number;vorlaeufig:number;strittig:number;offen:number;nichtBeauftragt:number};hinweise:string[]}
 
 /** Was je Probenart im Bericht stehen sollte (grob, nur für einen Hinweis – nie zum Aussortieren). */
 const ERWARTET:Record<string,RegExp>={PAK:/pak|pyren|anthen|anthracen|naphthalin|chrysen|fluor|phenanthren|acenaph/i,Chlorid:/^\s*Chlorid\b/i,Asbest:/asbest/i};
@@ -146,8 +171,22 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
  for(const [k,g] of konfliktKeys){const codes=g.map(code).sort((a,b)=>a.localeCompare(b,'de',{numeric:true})),id=codes.join('\u0000'),probe=k.split('\u0000')[0];
   const e=konfliktMap.get(id)||{berichte:codes,proben:[]};if(!e.proben.includes(probe))e.proben.push(probe);konfliktMap.set(id,e);
   for(const b of g){b.konfliktMit=[...new Set([...(b.konfliktMit||[]),...codes.filter(c=>c!==code(b))])];}}
- const konflikte=[...konfliktMap.values()].map(k=>({...k,proben:k.proben.map(p=>/^P\d+$/i.test(p)?p.toUpperCase():p).sort((a,b)=>a.localeCompare(b,'de',{numeric:true}))}));
- for(const b of berichte)if(b.konfliktMit)b.hinweise.unshift(`Werte für dieselben Proben stehen auch in ${b.konfliktMit.join(', ')} – ein anderer Bericht, keine neue Fassung. Es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist.`);
+ const konflikte:Konflikt[]=[...konfliktMap.values()].map(k=>({...k,proben:k.proben.map(p=>/^P\d+$/i.test(p)?p.toUpperCase():p).sort((a,b)=>a.localeCompare(b,'de',{numeric:true}))}));
+ // R5 (2.7.0): Gehören alle strittigen Proben zu einem früheren Laborauftrag und enthält ein beteiligter Bericht auch Proben eines
+ // späteren Auftrags, gingen sie vermutlich doppelt ans Labor – dann ein neutraler Satz statt „Datei herausnehmen“ (würde Werte verlieren).
+ const kennung=new Map((auftrag?.rows||[]).filter(r=>r.auftrag&&r.label).map(r=>[gross(r.label),auftragNr(r.auftrag)]));
+ for(const k of konflikte){
+  const strittig=k.proben.map(p=>kennung.get(gross(p))||0);if(!strittig.length||strittig.some(n=>!n))continue;
+  const max=Math.max(...strittig),weitere:{bericht:string;proben:string[];auftraege:number[]}[]=[];
+  for(const c of k.berichte){const b=berichte.find(x=>code(x)===c);if(!b)continue;
+   const spaeter=[...new Set(b.proben.map(s=>gross(s.label||'')).filter(l=>l&&!k.proben.includes(l)&&(kennung.get(l)||0)>max))].sort((a,b)=>a.localeCompare(b,'de',{numeric:true}));
+   if(spaeter.length)weitere.push({bericht:c,proben:spaeter,auftraege:[...new Set(spaeter.map(l=>kennung.get(l)!))].sort((a,b)=>a-b)});}
+  if(weitere.length){k.doppelt={auftraege:[...new Set(strittig)].sort((a,b)=>a-b),weitere};k.satz=doppeltSatz(k);}}
+ const doppeltProben=new Set(konflikte.filter(k=>k.doppelt).flatMap(k=>k.proben.map(gross)));
+ for(const b of berichte)if(b.konfliktMit){
+  const neutral=konflikte.filter(k=>k.doppelt&&k.berichte.includes(code(b))),andere=b.konfliktMit.filter(c=>!neutral.some(k=>k.berichte.includes(c)));
+  if(andere.length)b.hinweise.unshift(`Werte für dieselben Proben stehen auch in ${andere.join(', ')} – ein anderer Bericht, keine neue Fassung. Es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist.`);
+  for(const k of neutral)b.hinweise.unshift(`Werte für ${probenText(k.proben)} (${auftragWort(k.doppelt!.auftraege)}) stehen auch in ${k.berichte.filter(c=>c!==code(b)).join(', ')} – vermutlich gingen sie doppelt ans Labor. Es gilt keiner, bis mit dem Labor geklärt ist, welcher Bericht für sie gilt.`);}
  // Abweichungen XML↔PDF nur für Werte, die noch gelten (ein neuerer Bericht kann einzelne Parameter ersetzen)
  for(const [b,alle] of abweichungen){const gilt:Record<string,Abweichung[]>={};
   for(const s of b.proben){const k=norm(s.ref),a=(alle[k]||[]).filter(x=>(s.werte||[]).some(w=>tidy(w.p)===tidy(x.p)&&einheitKey(w.u)===einheitKey(x.u)));if(a.length)gilt[k]=a;}
@@ -160,7 +199,7 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
  const stornoImBericht=new Map<string,{berichte:string[];werte:boolean}>();
  const zeilen=new Map<string,Zeile>();
  const zeile=(s:LabSample,erwartet:boolean)=>{const key=s.label||`?${norm(s.ref)||norm(s.labNr)}`;let z=zeilen.get(key);
-  if(!z){z={label:s.label,nr:s.label?nummer(s.label):null,ref:tidy(s.ref),desc:tidy(s.desc),...(s.typ?{typ:s.typ}:{}),...(s.art?{art:tidy(s.art)}:{}),...(s.datum?{datum:s.datum}:{}),erwartet,status:'offen',werte:[],berichte:[],hinweise:[]};zeilen.set(key,z);}
+  if(!z){z={label:s.label,nr:s.label?nummer(s.label):null,ref:tidy(s.ref),desc:tidy(s.desc),...(s.typ?{typ:s.typ}:{}),...(s.art?{art:tidy(s.art)}:{}),...(s.datum?{datum:s.datum}:{}),erwartet,status:'offen',werte:[],berichte:[],hinweise:[],...(erwartet&&s.auftrag?{auftrag:s.auftrag}:{})};zeilen.set(key,z);}
   return z;};
  for(const s of auftrag?.rows||[])zeile(s,true);
  const vergleich=new Map<Bericht,{n:number;ab:number}>();
@@ -188,12 +227,13 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
   // ein Satz je Probe: der Hauptwert (Σ16 EPA-PAK, Chlorid, Asbest), sonst der erste strittige Parameter, dazu die Zahl der übrigen
   const l=strittig.find(x=>HAUPTWERT.test(x[0].p))||strittig[0],rest=strittig.length-1;
   const eineEinheit=new Set(l.map(w=>einheitKey(w.u))).size===1;   // verschiedene Einheiten: je Wert mit seiner Einheit (o41)
-  z.hinweise.unshift(`Zwei Prüfberichte: ${l.map(w=>`${w.bericht} „${w.r}${!eineEinheit&&w.u?` ${w.u}`:''}“`).join(', ')} (${l[0].p}${eineEinheit&&l[0].u?`, ${l[0].u}`:''}${rest?` und ${rest} weitere${rest===1?'r':''} Parameter`:''}) – es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist.`);}
+  z.hinweise.unshift(`Zwei Prüfberichte: ${l.map(w=>`${w.bericht} „${w.r}${!eineEinheit&&w.u?` ${w.u}`:''}“`).join(', ')} (${l[0].p}${eineEinheit&&l[0].u?`, ${l[0].u}`:''}${rest?` und ${rest} weitere${rest===1?'r':''} Parameter`:''}) – es gilt keiner, bis ${doppeltProben.has(gross(z.label||''))?'mit dem Labor geklärt ist, welcher Bericht gilt (vermutlich doppelt ans Labor)':'eine der Dateien aus „Laborergebnisse“ genommen ist'}.`);}
  const fremdVerdacht:FremdVerdacht[]=[...vergleich].filter(([,v])=>v.n>0&&v.ab===v.n).map(([b,v])=>({bericht:code(b),proben:v.n}));
  for(const z of zeilen.values()){
   // Endgültig erst, wenn kein Wert der Probe mehr nur vorläufig ist (z. B. PAK endgültig, Chlorid erst vorläufig → noch vorläufig)
   const vorlaeufigeWerte=z.werte.filter(w=>w.vorlaeufig),endgueltig=z.werte.length>0&&!vorlaeufigeWerte.length;
   z.status=!z.erwartet&&auftrag?'nichtBeauftragt':z.werte.length?(endgueltig?'ergebnis':'vorlaeufig'):z.berichte.length?'ohneWerte':'offen';
+  if(auftrag?.auftraege?.length&&z.erwartet&&!z.auftrag&&z.status==='offen')z.neu=true;   // R4 (2.7.0): nur das Wort; bleibt erwartet und offen
   if(z.status==='nichtBeauftragt'&&!z.werte.length)z.hinweise.push('Steht im Bericht, aber ohne Messwerte.');
   if(z.status==='nichtBeauftragt')z.hinweise.push('Nicht im Laborauftrag aus LabelKit – Probennummer prüfen.');
   if(!z.label)z.hinweise.push(`Probenreferenz „${z.ref}“ hat keine Probennummer („Probe 3“).`);
@@ -203,23 +243,47 @@ export function uebersicht(projekt:string,auftrag:LabReport|null,eingaenge:Einga
    ?`Nur vorläufige Werte für ${[...new Set(vorlaeufigeWerte.map(w=>w.p))].join(', ')} – der endgültige Bericht fehlt dafür noch.`
    :'Nur vorläufige Werte – der endgültige Bericht fehlt noch.');}
  const liste=[...zeilen.values()].sort((a,b)=>(a.nr??1e9)-(b.nr??1e9)||a.ref.localeCompare(b.ref,'de',{numeric:true}));
- const zahl=(s:Status)=>liste.filter(z=>z.status===s).length;
+ const strittig=(z:Zeile)=>!!z.konflikt?.length&&(z.status==='ergebnis'||z.status==='vorlaeufig');   // R5 (2.7.0): zählt nicht als Ergebnis
+ const zahl=(s:Status)=>liste.filter(z=>z.status===s&&!strittig(z)).length;
  for(const l of storniert){const e=stornoImBericht.get(gross(l));if(e)hinweise.push(stornoHinweis(l,e.berichte,e.werte));}
  if(!auftrag)hinweise.push('Kein Laborauftrag aus LabelKit gefunden (Ordner „Laboraufträge“) – welche Proben noch fehlen, lässt sich nicht prüfen.');
  for(const b of berichte)if(b.fremdProjekt)hinweise.push(`Prüfbericht ${code(b)} nennt Projekt ${b.fremdProjekt} – seine Werte zählen hier nicht.`);
  const storniertMitWert=storniert.filter(l=>stornoImBericht.get(gross(l))?.werte);
  return {projekt,auftrag:auftrag?{quelle:auftrag.quelle,proben:auftrag.rows.length,hinweise:[...auftrag.warnings]}:null,berichte,zeilen:liste,storniert,storniertMitWert,konflikte,fremdVerdacht,
-  zaehler:{erwartet:auftrag?auftrag.rows.length:null,ergebnis:zahl('ergebnis'),vorlaeufig:zahl('vorlaeufig'),offen:zahl('offen')+zahl('ohneWerte'),nichtBeauftragt:zahl('nichtBeauftragt')},hinweise};
+  auftraege:[...(auftrag?.auftraege||[])],
+  zaehler:{erwartet:auftrag?auftrag.rows.length:null,ergebnis:zahl('ergebnis'),vorlaeufig:zahl('vorlaeufig'),strittig:liste.filter(strittig).length,offen:zahl('offen')+zahl('ohneWerte'),nichtBeauftragt:zahl('nichtBeauftragt')},hinweise};
 }
 
-/** Kurzer Stand in einem Satz, z. B. „8 von 10 Proben mit Ergebnis · 2 offen“. */
+/** Kurzer Stand in einem Satz, z. B. „8 von 10 Proben mit Ergebnis · 2 offen“. Mit Laboraufträgen (ab 2.7.0, R3) je Auftrag:
+ *  „Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 5 von 8 · 3 offen · 2 neue Proben noch nicht beim Labor“. */
 export function standText(u:Uebersicht){
+ const je=auftragStandText(u);if(je)return je;
  const z=u.zaehler,teile:string[]=[];
  if(z.erwartet!==null)teile.push(`${z.ergebnis} von ${z.erwartet} Proben mit Ergebnis`);else teile.push(`${z.ergebnis} Proben mit Ergebnis`);
- if(z.vorlaeufig)teile.push(`${z.vorlaeufig} nur vorläufig`);if(z.offen)teile.push(`${z.offen} offen`);if(z.nichtBeauftragt)teile.push(`${z.nichtBeauftragt} nicht beauftragt`);
+ if(z.strittig)teile.push(`${z.strittig} strittig`);if(z.vorlaeufig)teile.push(`${z.vorlaeufig} nur vorläufig`);if(z.offen)teile.push(`${z.offen} offen`);if(z.nichtBeauftragt)teile.push(`${z.nichtBeauftragt} nicht beauftragt`);
  return teile.join(' · ');
 }
-export const vollstaendig=(u:Uebersicht)=>u.zaehler.erwartet!==null&&u.zaehler.erwartet>0&&u.zaehler.ergebnis===u.zaehler.erwartet&&!u.zaehler.nichtBeauftragt;
+const tagKurz=(iso:string)=>{const m=/^\d{4}-(\d{2})-(\d{2})$/.exec(iso||'');return m?`${m[2]}.${m[1]}.`:'';};
+/** Stand je Laborauftrag (ab 2.7.0) – '' ohne Aufträge (dann gilt der Satz wie bis 2.6). Gerechnet aus Kennung und Status je Zeile. */
+export function auftragStandText(u:Uebersicht){
+ if(!u.auftraege?.length)return '';
+ const erwartet=u.zeilen.filter(z=>z.erwartet),teile:string[]=[];
+ const gruppe=(titel:string,zeilen:Zeile[])=>{
+  const strittig=zeilen.filter(z=>z.konflikt?.length&&(z.status==='ergebnis'||z.status==='vorlaeufig')).length;
+  const e=zeilen.filter(z=>z.status==='ergebnis'&&!z.konflikt?.length).length,v=zeilen.filter(z=>z.status==='vorlaeufig'&&!z.konflikt?.length).length;
+  const o=zeilen.filter(z=>z.status==='offen'||z.status==='ohneWerte').length;
+  teile.push(`${titel}: ${e} von ${zeilen.length}${e===zeilen.length?' ✓':''}`);if(strittig)teile.push(`${strittig} strittig`);if(v)teile.push(`${v} nur vorläufig`);if(o)teile.push(`${o} offen`);};
+ for(const a of u.auftraege){const z=erwartet.filter(x=>x.auftrag===a.id);if(z.length)gruppe(`Auftrag ${a.nr}${tagKurz(a.am)?` (${tagKurz(a.am)})`:''}`,z);}
+ // Kennung ohne Eintrag in der Liste gibt es nach der Regel nicht – falls doch: nicht verschweigen
+ const bekannt=new Set(u.auftraege.map(a=>a.id)),sonst=erwartet.filter(x=>x.auftrag&&!bekannt.has(x.auftrag));if(sonst.length)gruppe('Weitere Aufträge',sonst);
+ const ohne=erwartet.filter(x=>!x.auftrag),neu=ohne.filter(x=>x.neu),mitBericht=ohne.filter(x=>!x.neu);
+ if(mitBericht.length)gruppe('Ohne Laborauftrag in LabelKit',mitBericht);
+ if(neu.length)teile.push(`${neu.length} neue Probe${neu.length===1?'':'n'} noch nicht beim Labor`);
+ if(u.zaehler.nichtBeauftragt)teile.push(`${u.zaehler.nichtBeauftragt} nicht beauftragt`);
+ return teile.join(' · ');
+}
+/** Vollständig: alle erwarteten Proben mit endgültigem Ergebnis, keine „nicht beauftragt“ – und kein Konflikt (ab 2.7.0, R5). */
+export const vollstaendig=(u:Uebersicht)=>u.zaehler.erwartet!==null&&u.zaehler.erwartet>0&&u.zaehler.ergebnis===u.zaehler.erwartet&&!u.zaehler.nichtBeauftragt&&!u.konflikte?.length;
 
 /** Dateistand, auf dem eine Übernahme beruht: ändert sich der Ordner danach, zeigen die Apps „neu prüfen“. */
 export interface DateiStand {name:string;size:number;t:number}
@@ -227,8 +291,15 @@ export const standKennung=(dateien:DateiStand[])=>[...dateien].sort((a,b)=>a.nam
 
 /** storniertMitWert (ab 2.6, optional – Leser müssen ohne das Feld arbeiten; fehlt es, ist es unbekannt, nicht leer): in LabelKit stornierte
  *  Proben, für die ein geltender Prüfbericht Messwerte hat. Die Werte selbst stehen nie in `berichte`. Liest BelegKit (Hinweis vor der Rechnung). */
+/** auftrag.proben[].auftrag (ab 2.7.0, optional – `version` bleibt 1; Plan resultkit-nachauftrag-plan.md R1/R7): Kennung des
+ *  Laborauftrags aus LabelKit („a1“, „a2“ …), nur wenn sie nach LabelKits Regel gilt. Es gibt kein Feld am Bericht, keine Liste der
+ *  Aufträge und kein Datum in der Datei (Datum und „wer“ stehen in der LabelKit-Datei). Lesart für alle Leser:
+ *   – Keine Probe trägt eine Kennung → ein Laborauftrag, alles wie bis 2.6 (auch Dateien älterer Fassungen).
+ *   – Sonst ist eine Probe ohne Kennung neu (noch nicht beim Labor); sie steht trotzdem in `offen[]`, solange kein Ergebnis da ist.
+ *   – Ein Prüfbericht gehört zu den Aufträgen seiner Proben (`berichte[].proben[].label` → `auftrag.proben[].auftrag`) – gerechnet,
+ *     nicht gespeichert; Proben beider Runden → beide Aufträge; ohne Probe mit Kennung → keinem Auftrag zuzuordnen. */
 export interface ErgebnisDatei {format:typeof FORMAT;version:typeof VERSION;projekt:string;uebernommen:string;app:{name:'ResultKit';version:string};
- vollstaendig:boolean;stand:string;dateien:DateiStand[];storniertMitWert?:string[];auftrag:{quelle:string;proben:{label:string;typ?:string;ref:string;desc:string;surface?:LabSample['surface'];raum?:string}[]}|null;
+ vollstaendig:boolean;stand:string;dateien:DateiStand[];storniertMitWert?:string[];auftrag:{quelle:string;proben:{label:string;typ?:string;ref:string;desc:string;surface?:LabSample['surface'];raum?:string;auftrag?:string}[]}|null;
  berichte:(LabOrigin&{datum?:string;proben:LabSample[]})[];ersetzt:{bericht:string;durch:string[]}[];offen:string[];hinweise:string[]}
 
 /** Inhalt von „_Ergebnisse.json“: nur geltende Werte (ersetzte entfallen), je Bericht mit Herkunft wie in PlanKit. */
@@ -244,15 +315,16 @@ export function ergebnisDatei(u:Uebersicht,auftrag:LabReport|null,dateien:DateiS
  const berichte=u.berichte.filter(b=>!b.ersetztDurch&&!b.fremdProjekt).map(b=>({id:b.id,bericht:b.bericht,labor:b.labor,auftragsreferenz:b.auftragsreferenz,...(b.batch?{batch:b.batch}:{}),sources:{...b.sources},...(b.vorlaeufig?{vorlaeufig:true as const}:{}),...(b.datum?{datum:b.datum}:{}),
   proben:b.proben.filter(s=>(!b.ohneWerte?s.werte?.length:true)&&!istStorniert(s)).map(s=>({...s,...ergaenzt(s),reportId:b.id,werte:(s.werte||[]).map(w=>({...w}))}))}));
  return {format:FORMAT,version:VERSION,projekt:u.projekt,uebernommen:jetzt.toISOString(),app:{name:'ResultKit',version:app},vollstaendig:vollstaendig(u),stand:standKennung(dateien),dateien:[...dateien],
-  auftrag:auftrag?{quelle:auftrag.quelle,proben:auftrag.rows.map(r=>({label:r.label,...(r.typ?{typ:r.typ}:{}),ref:r.ref,desc:r.desc,...(r.surface?{surface:r.surface}:{}),...(r.raum?{raum:r.raum}:{})}))}:null,
+  auftrag:auftrag?{quelle:auftrag.quelle,proben:auftrag.rows.map(r=>({label:r.label,...(r.typ?{typ:r.typ}:{}),ref:r.ref,desc:r.desc,...(r.surface?{surface:r.surface}:{}),...(r.raum?{raum:r.raum}:{}),...(r.auftrag?{auftrag:r.auftrag}:{})}))}:null,
   berichte,ersetzt:u.berichte.filter(b=>b.ersetztDurch).map(b=>({bericht:b.bericht,durch:b.ersetztDurch!})),storniertMitWert:[...(u.storniertMitWert||[])],
   offen:u.zeilen.filter(z=>z.status==='offen'||z.status==='ohneWerte').map(z=>z.label||z.ref),hinweise:[...u.hinweise,...u.zeilen.flatMap(z=>z.hinweise.map(h=>`${z.label||z.ref}: ${h}`))]};
 }
 
-/** Satz für die Sperre beim Übernehmen (ab 2.2). */
+/** Satz für die Sperre beim Übernehmen (ab 2.2). „Doppelt beim Labor“ (ab 2.7.0, R5): neutral, ohne Rat zum Herausnehmen. */
 export function konfliktText(k:Konflikt[]){
- return `Nicht übernommen: ${k.map(x=>`${x.berichte.join(' und ')} haben Werte für ${x.proben.join(', ')}`).join('; ')} – verschiedene Berichte, keine neue Fassung. `+
-  'Nimm die falsche Datei aus „Laborergebnisse“, dann erneut übernehmen.';
+ const neutral=k.filter(x=>x.doppelt),rest=k.filter(x=>!x.doppelt);
+ return `Nicht übernommen: ${[...neutral.map(doppeltSatz),...(rest.length?[`${rest.map(x=>`${x.berichte.join(' und ')} haben Werte für ${x.proben.join(', ')}`).join('; ')} – verschiedene Berichte, keine neue Fassung. `+
+  'Nimm die falsche Datei aus „Laborergebnisse“, dann erneut übernehmen.']:[])].join(' ')}`;
 }
 /** Werte, wie sie in „_Ergebnisse.json“ stehen (Bericht, Probe, Parameter, Einheit, Ergebnis) – zum Vergleich alter Übernahmen. */
 const werteKennung=(berichte:{bericht:string;proben:LabSample[]}[])=>berichte.flatMap(b=>(b.proben||[]).flatMap(s=>(s.werte||[]).map(w=>[b.bericht,s.label||norm(s.ref),tidy(w.p),tidy(w.u),tidy(w.r)].join('\u0000')))).sort().join('\n');
@@ -268,6 +340,29 @@ export function regelGeaendert(datei:ErgebnisDatei|null,u:Uebersicht):boolean{
 export function ohneLage(datei:ErgebnisDatei|null,auftrag:LabReport|null):boolean{
  if(!datei||!auftrag?.rows.some(r=>r.surface||r.raum))return false;
  return !(datei.auftrag?.proben||[]).some(p=>p.surface||p.raum);
+}
+/** Vor ResultKit 2.7.0 übernommen (oder die Kennungen in LabelKit haben sich ohne neuen Dateistand geändert): die Datei führt den
+ *  Laborauftrag je Probe nicht so, wie ResultKit ihn jetzt aus LabelKit liest (Muster ohneLage). Werte ändern sich dadurch nicht. */
+export function ohneAuftrag(datei:ErgebnisDatei|null,auftrag:LabReport|null):boolean{
+ if(!datei||!auftrag)return false;
+ const inDatei=new Map((datei.auftrag?.proben||[]).filter(p=>p&&typeof p.label==='string').map(p=>[gross(p.label),typeof p.auftrag==='string'?p.auftrag:'']));
+ return auftrag.rows.some(r=>inDatei.has(gross(r.label))&&inDatei.get(gross(r.label))!==(r.auftrag||''));
+}
+/** Versionen wie LabelKit versionVergleich: 1 = a neuer, -1 = b neuer, 0 = gleich. */
+export function versionVergleich(a:string,b:string){
+ const x=String(a||'').split('.').map(n=>parseInt(n,10)||0),y=String(b||'').split('.').map(n=>parseInt(n,10)||0);
+ for(let i=0;i<Math.max(x.length,y.length,3);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d>0?1:-1;}return 0;
+}
+/** Versionssperre (ab 2.7.0, R6): stammt die vorhandene „_Ergebnisse.json“ von einer neueren ResultKit-Fassung (app.version) oder hat
+ *  sie ein neueres Format, nennt dies die Fassung – dann nur ansehen, nie überschreiben. Sonst ''. Liest den Text selbst (auch bei
+ *  einem Format, das liesErgebnisDatei ablehnt). */
+export function neuereFassung(text:string|null,app:string):string{
+ if(!text)return '';let o:{format?:unknown;version?:unknown;app?:{name?:unknown;version?:unknown}}|null=null;try{o=JSON.parse(text);}catch{return '';}
+ if(!o||typeof o!=='object'||o.format!==FORMAT)return '';
+ const v=typeof o.app?.version==='string'?o.app.version.trim():'';
+ if(v&&/^\d+(\.\d+)*$/.test(v)&&versionVergleich(v,app)>0)return `ResultKit ${v}`;
+ if(typeof o.version==='number'&&o.version>VERSION)return `einer neueren ResultKit-Fassung (Format ${o.version})`;
+ return '';
 }
 /** Vor ResultKit 1.10 übernommen: Asbestwerte ohne Nachweisgrenze, obwohl die Prüfberichte sie nennen (für den Asbest-Bericht nötig). */
 export function ohneNwg(datei:ErgebnisDatei|null,u:Uebersicht):boolean{

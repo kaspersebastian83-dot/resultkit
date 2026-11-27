@@ -8,7 +8,11 @@ export interface LabOrigin {id:string;bericht:string;labor:string;auftragsrefere
 export interface Wert {p:string;r:string;u:string;loq?:string;nwg?:string;norm?:string}
 export interface LabData {ref:string;desc:string;art?:string;labNr?:string;datum?:string;bericht?:string;reportId?:string;werte?:Wert[]}
 export type Surface='floor'|'wall'|'ceiling';
-export interface LabSample extends LabData {label:string;typ?:string;surface?:Surface;raum?:string}
+/** auftrag (ab ResultKit 2.7.0): Kennung des Laborauftrags aus LabelKit („a1“, „a2“ …) – nur an Proben des Laborauftrags und nur,
+ *  wenn sie nach LabelKits Regel gilt (src/labelkit.ts, Block LABORAUFTRAG). In „_Ergebnisse.json“ nur unter `auftrag.proben[]`. */
+export interface LabSample extends LabData {label:string;typ?:string;surface?:Surface;raum?:string;auftrag?:string}
+/** Ein Laborauftrag aus LabelKit, wie ResultKit ihn anzeigt (ab 2.7.0) – nur im Speicher, nie in einer Datei. am = JJJJ-MM-TT oder ''. */
+export interface LaborAuftrag {id:string;nr:number;am:string}
 /** ueber: nur im Speicher (KORROSION-CHLORID v2) – zählt erst über `from`; steht nie in einer Datei. */
 export interface Category {name:string;from:number;color?:string;ueber?:boolean}
 export interface Scale {name:string;cats:Category[]}

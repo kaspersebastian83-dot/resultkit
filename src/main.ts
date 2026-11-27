@@ -11,7 +11,7 @@ import {Oberflaeche} from './oberflaeche';
 import {skalenAbgleich} from './skalen-archiv.js';
 import {readLabFiles,readLabGroup,reportWarnings,projektnummerIn,type LabReport} from './labreport';
 import {labelkitReport} from './labelkit';
-import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,regelGeaendert,konfliktText,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
+import {uebersicht,standText,vollstaendig,ergebnisDatei,liesErgebnisDatei,ohneLage,ohneNwg,mitStorniert,regelGeaendert,ohneAuftrag,neuereFassung,konfliktText,standKennung,DATEI,type Uebersicht,type Eingang,type DateiStand,type ErgebnisDatei,type Zeile,type Bericht,type Status} from './ergebnisse';
 import {archiv,permission,findSubdir,fileInfo,listFiles,writeFile,readProjectData,openFolder,projectDirOf,pickFolder,supported,LABOR,AUFTRAEGE,PLAENE,type Dir,type ProjectFolder} from './ordner';
 import {ort,ortZumSchreiben,zweiOrteZeilen,planDatei,labelkitDatei} from './so';
 import {labQualifier,labNumber,rate,scaleFor,scaleKey,fromShared,shortParameter,setNutzung,getNutzung,usageFromNutzung,autoColors,rangeText,ink,farbeSicher,gueltigeSkalen,BELOW_LIMIT,NOT_DETECTED,NOT_DETERMINED,UNRATED} from './bewertung';
@@ -20,7 +20,7 @@ import {uebersichtGruppen,sortiere,wertFuer,matrix,sortiereMatrix,tabelleDaten,a
 import {jetztDran,type Aktion,type Chip,type Knopf} from './jetzt';
 import {druckModell,druckHtml,type DruckKopf,type Bewerte} from './druck';
 
-export const APP_VERSION='2.6.1';
+export const APP_VERSION='2.7.0';
 const VORHER='_Ergebnisse.vorher.json';
 
 // ---- Projektübergabe: #projekt=<Ordnername> (Spektron-Leiste, Projektzentrale); alte ?projekt-Links werden bereinigt ----
@@ -174,6 +174,18 @@ const KERN=[/^Summe\s*16\s*EPA[-– ]PAK/i,/^Benzo\[a\]pyren$/i,/chlorid/i,/asbe
 function kernwerte<T extends Wert>(werte:T[]):T[]{const k=KERN.flatMap(re=>werte.filter(w=>re.test(w.p)));return k.length?k:werte.slice(0,2);}
 
 const STATUS:Record<Status,string>={ergebnis:'✓ Ergebnis',vorlaeufig:'nur vorläufig',ohneWerte:'Bericht ohne Messwerte',offen:'offen beim Labor',nichtBeauftragt:'nicht beauftragt'};
+/** R4 (2.7.0): Projekt mit Laboraufträgen, Probe ohne Kennung und in keinem Prüfbericht – bleibt erwartet und offen, heißt nur anders. */
+const NEU='noch nicht beim Labor';
+/** „Auftrag 2 vom 22.08.2026“ (Datum aus der LabelKit-Datei, nur im Speicher) bzw. „neu – noch nicht beim Labor“. */
+function auftragZeile(s:Scan,z:{auftrag?:string;neu?:boolean}){
+ if(!z.auftrag)return z.neu?`neu – ${NEU}`:'ohne Laborauftrag in LabelKit';
+ const a=s.u.auftraege.find(x=>x.id===z.auftrag);return a?`Auftrag ${a.nr}${a.am?` vom ${datum(a.am)}`:''}`:z.auftrag;
+}
+/** „A1“, „A2“ klein an der Probe – nur in einem Projekt mit Laboraufträgen. */
+function auftragMarke(s:Scan,z:{auftrag?:string}){
+ if(!s.u.auftraege.length||!z.auftrag)return '';const a=s.u.auftraege.find(x=>x.id===z.auftrag);
+ return a?` <small class="rk-a" title="${esc(auftragZeile(s,z))}">A${a.nr}</small>`:'';
+}
 /** Hinweise, die schon als eigener Stand gezeigt werden (Chip „vorläufig“, „nicht beauftragt“) – zählen nicht als „Hinweis“. */
 const STANDARD=/^(Nur vorläufige Werte|Nicht im Laborauftrag aus LabelKit|Teilweise ersetzt durch)/;
 const zeilenHinweise=(z:Zeile)=>z.hinweise.filter(h=>!STANDARD.test(h));
@@ -204,7 +216,8 @@ function renderJetzt(s:Scan){
  const gueltig=s.u.berichte.filter(b=>!b.ersetztDurch&&!b.ohneWerte&&!b.fremdProjekt).length;
  // Berichte anderer Projekte zählen für „Jetzt dran“ nicht (nur solche im Ordner: wie „noch keine Berichte“)
  const j=jetztDran({proben:s.u.zeilen.length,berichte:s.u.berichte.filter(b=>!b.fremdProjekt).length,gueltig,auftrag:!!s.auftrag,stand:s.stand,
-  vorhanden:s.vorhanden?{stand:s.vorhanden.stand,uebernommen:s.vorhanden.uebernommen,vollstaendig:s.vorhanden.vollstaendig,ohneLage:ohneLage(s.vorhanden,s.auftrag),ohneNwg:ohneNwg(s.vorhanden,s.u),mitStorniert:mitStorniert(s.vorhanden,s.u),regel:regelGeaendert(s.vorhanden,s.u)}:null,vorhandenFehler:s.vorhandenFehler,konflikte:s.u.konflikte,
+  vorhanden:s.vorhanden?{stand:s.vorhanden.stand,uebernommen:s.vorhanden.uebernommen,vollstaendig:s.vorhanden.vollstaendig,ohneLage:ohneLage(s.vorhanden,s.auftrag),ohneNwg:ohneNwg(s.vorhanden,s.u),mitStorniert:mitStorniert(s.vorhanden,s.u),regel:regelGeaendert(s.vorhanden,s.u),ohneAuftrag:ohneAuftrag(s.vorhanden,s.auftrag)}:null,vorhandenFehler:s.vorhandenFehler,konflikte:s.u.konflikte,
+  neuer:neuereFassung(s.vorhandenText,APP_VERSION),version:APP_VERSION,
   hinweise:hinweisZahl(s),importiert:nachImport});
  letzteJetzt=j;
  const knopf=(k:Knopf|undefined,haupt:boolean)=>k?`<button type="button"${haupt&&k.aktion==='uebernehmen'?' id="btn-uebernehmen"':''} class="${haupt?'primary':''}" data-aktion="${k.aktion}"${beschaeftigt&&k.aktion!=='ansehen'?' disabled':''}>${esc(k.text)}</button>`:'';
@@ -298,7 +311,7 @@ function mTabelle(s:Scan,gruppen:UGruppe[]){
  const leer=`<tr><td colspan="${n}" class="muted">${filter==='offen'?'Keine offenen Proben.':filter==='auff'?'Keine auffälligen Proben.':'Keine Proben.'}</td></tr>`;
  // 2.0 (E13.5): die Stelle steht vorn, die Probennummer klein am Wert – „P1 · P7“ als Zeilenkopf entfällt
  const zeile=(r:MZeile)=>{const key=`M|${r.key}`,auf=aufgeklappt.has(key),proben=gruppen.map(g=>({g,z:r.zellen[g.gruppe]})).filter(x=>x.z);
-  const zellen=gruppen.map(g=>{const z=r.zellen[g.gruppe];return `<td class="rk-wz">${z?`${ergebnis(g.gruppe,g.einheit,z)}${hinweis(z,quelleVon(s,z))}<small class="rk-p">${esc(z.label)}</small>`:'<span class="m-leer" aria-label="keine Probe">–</span>'}</td>`;}).join('');
+  const zellen=gruppen.map(g=>{const z=r.zellen[g.gruppe];return `<td class="rk-wz">${z?`${ergebnis(g.gruppe,g.einheit,z)}${hinweis(z,quelleVon(s,z))}<small class="rk-p">${esc(z.label)}${auftragMarke(s,z)}</small>`:'<span class="m-leer" aria-label="keine Probe">–</span>'}</td>`;}).join('');
   const det=auf?`<tr class="u-detail"><td colspan="${n}">${proben.map(({g,z})=>{const q=quelleVon(s,z!);return q?`<h3 class="m-det-titel">${esc(z!.label)} · ${esc(GTITEL[g.gruppe])}</h3>${probeDetails(s,q)}`:'';}).join('')}</td></tr>`:'';
   return `<tr class="u-zeile m-zeile${auf?' auf':''}" data-m="${esc(r.key)}" aria-selected="false"><th scope="row"><button type="button" class="u-auf" tabindex="-1" aria-expanded="${auf}" title="${esc(auf?'Details zuklappen':`${r.labels.join(' · ')}: alle Parameter, Hinweise und Prüfbericht zeigen`)}">${esc(r.stelle)}</button></th>${zellen}</tr>${det}`;};
  return `<section class="u-gruppe m-gruppe" aria-label="Ergebnisse nach Probenahmestelle"><h2>Nach Probenahmestelle${codes.length?` <small>${esc(berichtZeile(codes,s.u.berichte))}</small>`:''}</h2><div class="rk-legenden">${gruppen.map(g=>legendeFuer(g,gruppen.length>1)).join('')}</div>
@@ -326,7 +339,7 @@ function kopierDaten(){
 }
 const kopiertText=(n:number)=>`${n} Zeile${n===1?'':'n'} kopiert – in Excel oder Word einfügen (Strg+V).`;
 /** Hinweise an einem Ergebnis: ausstehend, vorläufig, nicht beauftragt, ⚠ Hinweis. */
-const hinweis=(z:UZeile,q:Zeile|undefined)=>`${z.konflikt?' <small class="u-hw rk-konflikt-tag" title="Zwei verschiedene Prüfberichte haben Werte für diese Probe">⚠ 2 Berichte</small>':''}${z.ausstehend?'<span class="u-aus">ausstehend</span>':''}${!z.ausstehend&&z.vorlaeufig?' <small class="u-vorl" title="Nur vorläufiger Prüfbericht – der endgültige Wert kann sich noch ändern">vorläufig</small>':''}${z.nichtBeauftragt?' <small class="u-nb" title="Steht im Prüfbericht, aber nicht im Laborauftrag aus LabelKit">nicht beauftragt</small>':''}${q&&zeilenHinweise(q).length?` <small class="u-hw" title="${esc(zeilenHinweise(q).join(' '))}">⚠ Hinweis</small>`:''}`;
+const hinweis=(z:UZeile,q:Zeile|undefined)=>`${z.konflikt?' <small class="u-hw rk-konflikt-tag" title="Zwei verschiedene Prüfberichte haben Werte für diese Probe">⚠ 2 Berichte</small>':''}${z.ausstehend?(z.neu?`<span class="u-aus u-neu" title="Neue Probe – in LabelKit noch keinem Laborauftrag zugeordnet">${NEU}</span>`:'<span class="u-aus">ausstehend</span>'):''}${!z.ausstehend&&z.vorlaeufig?' <small class="u-vorl" title="Nur vorläufiger Prüfbericht – der endgültige Wert kann sich noch ändern">vorläufig</small>':''}${z.nichtBeauftragt?' <small class="u-nb" title="Steht im Prüfbericht, aber nicht im Laborauftrag aus LabelKit">nicht beauftragt</small>':''}${q&&zeilenHinweise(q).length?` <small class="u-hw" title="${esc(zeilenHinweise(q).join(' '))}">⚠ Hinweis</small>`:''}`;
 /** Legende einer Probenart (2.0, E13.1): eine Zeile – Skala kurz, Farbpunkte mit Bereich; Kategorienamen und volle Skala im Tooltip. */
 function legendeFuer(g:UGruppe,mitName=false){
  const skalen=new Map<string,{scale:Scale;u:string;quelle:string}>();let bg=false;
@@ -348,7 +361,7 @@ function mitGeschoss<T>(zeilen:T[],stelle:(z:T)=>string,an:boolean,spalten:numbe
 /** Ergebnis einer Probe als Zelle (Farbpunkt nach Skala, Asbest-Befund rot) – in beiden Ansichten gleich. */
 function ergebnis(gruppe:Gruppe,einheit:string,z:UZeile){
  // K2 (2.2): zwei Berichte, beide Werte wie im Bericht, ohne Bewertung – bis eine Datei aus dem Ordner genommen ist
- if(z.konflikt?.werte.length)return `<span class="rk-w rk-konflikt" title="Zwei verschiedene Prüfberichte – es gilt keiner, bis eine der Dateien aus „Laborergebnisse“ genommen ist">${z.konflikt.werte.map(w=>`<span><span class="u-wert">${w.p?`${esc(shortParameter(w.p))}: `:''}${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}</span> <small>${esc(w.bericht)}</small></span>`).join('')}</span>`;
+ if(z.konflikt?.werte.length)return `<span class="rk-w rk-konflikt" title="Zwei verschiedene Prüfberichte – es gilt keiner, bis ${scan?.u.konflikte.some(k=>k.doppelt&&k.proben.includes(z.label.toUpperCase()))?'mit dem Labor geklärt ist, welcher Bericht gilt (vermutlich doppelt ans Labor)':'eine der Dateien aus „Laborergebnisse“ genommen ist'}">${z.konflikt.werte.map(w=>`<span><span class="u-wert">${w.p?`${esc(shortParameter(w.p))}: `:''}${esc(w.r)}${w.u&&w.u!==einheit?` <small>${esc(w.u)}</small>`:''}</span> <small>${esc(w.bericht)}</small></span>`).join('')}</span>`;
  if(gruppe==='Asbest')return z.befund?(z.befund.gefunden?punktWert(ASBEST_ROT,esc(z.befund.text),'Asbest nachgewiesen',true):`<span class="rk-w">${esc(z.befund.text)}</span>`):'';
  if(gruppe!=='Weitere'&&!z.haupt)return z.ausstehend?'':`<span class="u-aus">kein ${gruppe==='PAK'?'Σ16-EPA-PAK':'Chlorid'}-Wert im Bericht</span>`;
  if(gruppe==='Weitere')return z.weitere.map(w=>`${esc(shortParameter(w.p))} <span class="u-wert">${esc(w.r)}</span> ${esc(w.u)}`).join(' · ');
@@ -365,7 +378,7 @@ function uTabelle(s:Scan,g:UGruppe,nach:'ort'|'nr'){
  const kopf=g.gruppe==='PAK'?`Σ16 EPA-PAK${g.einheit?` (${g.einheit})`:''}`:g.gruppe==='Chlorid'?`Chlorid${g.einheit?` (${g.einheit})`:''}`:g.gruppe==='Asbest'?'Befund':'Ergebnis';
  const leer=`<tr><td colspan="3" class="muted">${filter==='offen'?'Keine offenen Proben.':filter==='auff'?'Keine auffälligen Proben.':''}</td></tr>`;
  const zeile=(z:UZeile)=>{const erg=ergebnis(g.gruppe,g.einheit,z),q=quelleVon(s,z),key=`${g.gruppe}|${z.label}`,auf=aufgeklappt.has(key);
-  return `<tr class="u-zeile${z.ausstehend?' u-offen':''}${auf?' auf':''}" data-zeile="${esc(key)}"><th scope="row"><button type="button" class="u-auf" aria-expanded="${auf}" title="${auf?'Details zuklappen':'Alle Parameter, Hinweise und Prüfbericht zeigen'}">${esc(z.label)}</button></th><td>${esc(stelleText(z.stelle))}</td><td class="rk-wz">${erg}${hinweis(z,q)}</td></tr>${auf&&q?`<tr class="u-detail"><td colspan="3">${probeDetails(s,q)}</td></tr>`:''}`;};
+  return `<tr class="u-zeile${z.ausstehend?' u-offen':''}${auf?' auf':''}" data-zeile="${esc(key)}"><th scope="row"><button type="button" class="u-auf" aria-expanded="${auf}" title="${auf?'Details zuklappen':'Alle Parameter, Hinweise und Prüfbericht zeigen'}">${esc(z.label)}</button>${auftragMarke(s,z)}</th><td>${esc(stelleText(z.stelle))}</td><td class="rk-wz">${erg}${hinweis(z,q)}</td></tr>${auf&&q?`<tr class="u-detail"><td colspan="3">${probeDetails(s,q)}</td></tr>`:''}`;};
  return `<section class="u-gruppe" aria-label="${esc(GTITEL[g.gruppe])}"><h2>${esc(GTITEL[g.gruppe])}${codes.length?` <small>${esc(berichtZeile(codes,berichte))}</small>`:''}</h2>${legende}
   <div class="tabelle-scroll" title="Zeile anklicken: alle Parameter, Hinweise und Prüfbericht"><table class="u-tabelle"><thead><tr><th scope="col">Probe</th><th scope="col">${g.gruppe==='Asbest'?'Material und Stelle':'Probenahmestelle'}</th><th scope="col" class="rk-wz">${esc(kopf)}</th></tr></thead>
   <tbody>${mitGeschoss(zeilen,z=>z.stelle,nach==='ort',3,zeile)||leer}</tbody></table></div></section>`;
@@ -383,7 +396,8 @@ function probeDetails(s:Scan,z:Zeile){
  const beschreibung=z.desc&&stelleText(z.desc)!==z.desc?feld('Beschreibung',esc(z.desc)):'';
  return `<div class="rk-det">${hinweise.length?`<ul class="u-hinweise">${hinweise.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:''}
   <div class="rk-det-spalten"><div class="rk-det-werte">${params}</div><dl class="u-det">
-  ${feld('Stand',esc(STATUS[z.status]))}
+  ${feld('Stand',esc(z.neu?NEU:STATUS[z.status]))}
+  ${s.u.auftraege.length&&z.erwartet?feld('Laborauftrag',esc(auftragZeile(s,z))):''}
   ${feld(berichte.length===1?'Prüfbericht':'Prüfberichte',berichte.map(bericht).join('<br>'))}
   ${feld('Labor-Nr. · Probenahme',esc([probe?.labNr,datum(z.datum),[...new Set([z.typ,...(z.art||'').split(' · ')].filter(Boolean))].join(' · ')].filter(Boolean).join(' · ')),'mono-feld')}
   ${z.ref&&z.ref!==z.label?feld('Probenreferenz',esc(z.ref)):''}
@@ -453,6 +467,7 @@ async function projektWaehlen(){
 }
 
 // ---- Ergebnisse übernehmen ----
+const versionsText=(neuer:string)=>`Nicht übernommen: „_Ergebnisse.json“ stammt von ${neuer} – neuer als dieses Fenster (${APP_VERSION}). Bitte die Seite neu laden (Strg+F5); nichts wurde überschrieben.`;
 async function uebernehmen(){
  const f=folder;if(!f||!scan||beschaeftigt)return;
  const recht=permission(f.dir,true);   // noch in der Klick-Geste fragen
@@ -465,6 +480,8 @@ async function uebernehmen(){
   const frisch=await einlesen(f);if(folder!==f)return;
   if(frisch.stand!==scan.stand){scan=frisch;toast('Im Ordner hat sich gerade etwas geändert – bitte die Übersicht prüfen und erneut auf „Ergebnisse übernehmen“ klicken.',true);return;}
   scan=frisch;const u=frisch.u;
+  // R6 (2.7.0): Übernahme einer neueren Fassung nie überschreiben – bitte neu laden
+  const neuer=neuereFassung(frisch.vorhandenText,APP_VERSION);if(neuer){toast(versionsText(neuer),true);return;}
   // K2 (2.2): zwei verschiedene Berichte mit Werten für dieselben Proben → nichts übernehmen, kein „Trotzdem“
   if(u.konflikte.length){toast(konfliktText(u.konflikte),true);return;}
   // Berichte eines anderen Projekts zählen nicht (stehen nur in der Liste) – daher keine Rückfrage mehr dafür.
@@ -483,6 +500,7 @@ async function uebernehmen(){
    if(zuletzt.stand!==frisch.stand)throw Error('Im Ordner hat sich gerade etwas geändert – nichts übernommen. Bitte die Übersicht prüfen und erneut übernehmen.');
    const alt=await fileInfo(ablage,DATEI),altText=alt?await alt.text():null;
    if(altText!==vorherText)throw Error('Die Ergebnisse wurden inzwischen an anderer Stelle übernommen – nichts überschrieben. Bitte die Übersicht prüfen und bei Bedarf erneut übernehmen.');
+   {const neu=neuereFassung(altText,APP_VERSION);if(neu)throw Error(versionsText(neu));}   // R6: auch unmittelbar vor dem Schreiben
    if(alt)await writeFile(ablage,VORHER,altText!);
    const jetzt=await fileInfo(ablage,DATEI);
    if((jetzt?await jetzt.text():null)!==vorherText)throw Error('Die Ergebnisse wurden gerade eben an anderer Stelle übernommen – nichts überschrieben.');

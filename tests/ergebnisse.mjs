@@ -291,7 +291,7 @@ ok('Storno: Laborwert für eine stornierte Probe → eigener Hinweis, kein Ergeb
  const r=report('AR-5-02',[[1,pak('3')],[2,pak('42')],[3,pak('1')],[4,[{p:'Chlorid',r:'26',u:'µg/cm²'}]],[9,pak('1')]]);
  const u=E.uebersicht('99.9001',auftragStorno(),[{report:r,geaendert:1}]);
  assert.deepEqual(u.zeilen.map(z=>[z.label,z.status]),[['P1','ergebnis'],['P3','ergebnis'],['P9','nichtBeauftragt']]);
- assert.deepEqual(u.zaehler,{erwartet:2,ergebnis:2,vorlaeufig:0,offen:0,nichtBeauftragt:1},'P2/P4 weder Ergebnis noch offen noch nicht beauftragt');
+ assert.deepEqual(u.zaehler,{erwartet:2,ergebnis:2,vorlaeufig:0,strittig:0,offen:0,nichtBeauftragt:1},'P2/P4 weder Ergebnis noch offen noch nicht beauftragt');
  assert.deepEqual(u.hinweise,[
   'P2 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe (Prüfbericht AR-5-02). ResultKit übernimmt ihn nicht; gilt die Probe doch, heb das Storno in LabelKit auf.',
   'P4 ist in LabelKit storniert – der Laborwert gehört zu keiner offenen Probe (Prüfbericht AR-5-02). ResultKit übernimmt ihn nicht; gilt die Probe doch, heb das Storno in LabelKit auf.']);
@@ -454,5 +454,133 @@ ok('Zwei Berichte mit Wert nur für eine in LabelKit stornierte Probe sperren ni
  const u=E.uebersicht('99.9001',auftragStorno([2],false),[{report:fassung('AR-51-01',[[1,pak('3')],[2,pak('40')]]),geaendert:1},{report:fassung('AR-52-01',[[2,pak('41')],[3,pak('1')]]),geaendert:2}]);
  assert.deepEqual(u.konflikte,[]);assert.ok(u.berichte.every(b=>!b.konfliktMit));
  assert.deepEqual(E.ergebnisDatei(u,auftragStorno([2],false),[],'2.2.0').berichte.map(b=>[b.bericht,b.proben.map(p=>p.label)]),[['AR-51-01',['P1']],['AR-52-01',['P3']]]);
+});
+
+// ===== 2.7.0: Laboraufträge aus LabelKit (Plan resultkit-nachauftrag-plan.md, R1–R8). Erfundene Proben wie LabelKit 5.5.0 sie schreibt:
+// Runde 1 (14.08.): P1–P8 PAK, P9–P13 Chlorid → a1; Runde 2 (22.08.): P14–P17 PAK, P18–P21 Asbest → a2.
+const DRUCK=await import('../src/druck.ts');
+const r2=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
+const fest=tag=>({am:`${tag}T10:00:00.000Z`,anlass:'Abschluss'});
+const lkProbe=(n,a,extra={})=>({id:n,_nr:n,matrix:'Wischprobe',datum:'2026-08-12',z2:`EG Raum ${n}`,z3:'verrußt',z4:'Untersicht',cm2:'100',nrFest:fest(a==='a1'?'2026-08-14':'2026-08-22'),...(a?{auftrag:a}:{}),...extra});
+const lk55=({ohneListe=false,neu=[],extra=()=>({})}={})=>{
+ const d={version:'5.5.0',nrSchutz:1,projekt:{nr:'99.9001'},
+  proben:[...r2(1,8).map(n=>lkProbe(n,'a1',extra(n))),...r2(14,17).map(n=>lkProbe(n,'a2',extra(n))),...neu.map(n=>({...lkProbe(n,''),nrFest:undefined,...extra(n)}))],
+  chloridProben:r2(9,13).map(n=>lkProbe(n,'a1',{chloridNr:n,z4:'Ansicht',...extra(n)})),asbestProben:r2(18,21).map(n=>lkProbe(n,'a2',{matrix:'Material (mineralisch)',z3:'Putz',z4:'',...extra(n)})),sonstigeProben:[]};
+ if(!ohneListe)Object.assign(d,{weitereAuftraege:[{id:'a2',am:'2026-08-22',von:'Ka',proben:r2(14,21)}],auftragZaehler:2,auftrag1:{am:'2026-08-14',quelle:'Laborübergabe vom 14.08.2026',proben:r2(1,13)}});
+ return d;};
+const lkA=(d,name='99.9001_Daten.json')=>labelkitReport(JSON.stringify(d),name,'99.9001 Musterort');
+const typ55=n=>n<=8||(n>=14&&n<=17)?'PAK':n<=13?'Chlorid':'Asbest';
+const wert55=n=>({PAK:pak(String(n)),Chlorid:[{p:'Chlorid',r:'4',u:'µg/cm²'}],Asbest:[{p:'Asbestart',r:'Kein Asbest nachgewiesen',u:''}]})[typ55(n)];
+const ar=(code,nrs)=>({report:fassung(code,nrs.map(n=>[n,wert55(n)])),geaendert:1});
+const kennungen=d=>(d.auftrag?.proben||[]).map(p=>`${p.label}:${p.auftrag||''}`);
+
+ok('2.7 R2: Kennung nur bei gültigem Merkmal (feste Nummer und in der Liste); sonst neue Probe mit Hinweis',()=>{
+ const d=lk55({neu:[22]});
+ d.proben.push({...lkProbe(23,'a2'),nrFest:undefined});   // Kopie aus 5.4.0: Merkmal ohne feste Nummer
+ d.proben.push(lkProbe(24,'a2'));                          // feste Nummer, aber nicht in der Liste von Auftrag 2
+ const a=lkA(d),k=Object.fromEntries(a.rows.map(r=>[r.label,r.auftrag||'']));
+ assert.equal(k.P1,'a1');assert.equal(k.P13,'a1');assert.equal(k.P14,'a2');assert.equal(k.P21,'a2');
+ assert.equal(k.P22,'');assert.equal(k.P23,'');assert.equal(k.P24,'');
+ assert.deepEqual(a.auftraege,[{id:'a1',nr:1,am:'2026-08-14'},{id:'a2',nr:2,am:'2026-08-22'}]);
+ assert.ok(a.warnings.includes('P23: Merkmal „Auftrag 2“ aus LabelKit gilt nicht (Nummer nicht fest) – zählt als neue Probe; in LabelKit prüfen.'));
+ assert.ok(a.warnings.includes('P24: Merkmal „Auftrag 2“ aus LabelKit gilt nicht (Nummer nicht in der Liste dieses Auftrags) – zählt als neue Probe; in LabelKit prüfen.'));
+ assert.ok(!a.warnings.some(w=>/Liste der Laboraufträge fehlt/.test(w)));
+ const datei=E.ergebnisDatei(E.uebersicht('99.9001',a,[]),a,[],'2.7.0');
+ assert.deepEqual(kennungen(datei).filter(x=>/P2[2-4]:/.test(x)),['P22:','P23:','P24:'],'ungültig → ohne Kennung in der Datei');
+ assert.equal(datei.auftrag.proben.find(p=>p.label==='P14').auftrag,'a2');assert.equal(datei.version,1,'Version bleibt 1');
+ assert.ok(datei.berichte.every(b=>!('auftrag' in b)&&!('auftraege' in b))&&!('auftraege' in datei),'kein Feld am Bericht, keine Liste der Aufträge');
+});
+ok('2.7 R2: Liste/Zähler fehlen (5.4.0 hat gespeichert) → wie LabelKit aus den Merkmalen neu aufgebaut, Hinweis, keine Sperre',()=>{
+ const a=lkA(lk55({ohneListe:true}));
+ assert.deepEqual(a.rows.filter(r=>r.auftrag==='a2').map(r=>r.label),r2(14,21).map(n=>`P${n}`));
+ assert.equal(a.rows.filter(r=>r.auftrag==='a1').length,13);
+ assert.deepEqual(a.auftraege.map(x=>[x.id,x.am]),[['a1','2026-08-14'],['a2','2026-08-22']],'Tag aus den festen Nummern');
+ assert.ok(a.warnings.some(w=>w.startsWith('Liste der Laboraufträge fehlt in der LabelKit-Datei')&&/einmal öffnen und speichern/.test(w)));
+ const u=E.uebersicht('99.9001',a,[ar('AR-61-01',r2(1,13))]);assert.doesNotThrow(()=>E.ergebnisDatei(u,a,[],'2.7.0'));
+});
+ok('2.7 R1: ein Auftrag (keine Kennung) → Datei ohne neues Feld, Felder und Reihenfolge wie 2.6.1',()=>{
+ const d=lk55();for(const l of ['proben','chloridProben','asbestProben'])for(const p of d[l])delete p.auftrag;
+ for(const k of ['weitereAuftraege','auftragZaehler','auftrag1'])delete d[k];   // so schreibt LabelKit 5.5.0 ein Projekt mit einem Auftrag
+ const a=lkA(d);assert.equal(a.auftraege,undefined);assert.ok(a.rows.every(r=>!('auftrag' in r)));
+ const u=E.uebersicht('99.9001',a,[ar('AR-62-01',r2(1,21))]);assert.deepEqual(u.auftraege,[]);
+ assert.equal(E.standText(u),'21 von 21 Proben mit Ergebnis','Stand-Satz wie bisher');
+ const datei=E.ergebnisDatei(u,a,[],'2.7.0');
+ assert.deepEqual(Object.keys(datei),['format','version','projekt','uebernommen','app','vollstaendig','stand','dateien','auftrag','berichte','ersetzt','storniertMitWert','offen','hinweise'],'Felder wie 2.6.1');
+ assert.deepEqual(Object.keys(datei.auftrag.proben[0]),['label','typ','ref','desc','surface','raum'],'Probe des Laborauftrags wie 2.6.1');
+ assert.ok(!JSON.stringify(datei).includes('"auftrag":"a'),'keine Kennung');
+ assert.ok(u.zeilen.every(z=>!z.neu&&!z.auftrag));
+});
+ok('2.7 F4: Fälle A–G – Stand je Auftrag, neue Proben, „doppelt beim Labor“ strittig und neutral',()=>{
+ const a=lkA(lk55()),U=bs=>E.uebersicht('99.9001',a,bs);
+ // C: Auftrag 2 fest, nur AR-0001 → je Auftrag; P14–P21 offen (beim Labor), nicht „neu“
+ let u=U([ar('AR-71-01',r2(1,13))]);
+ assert.equal(E.standText(u),'Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 0 von 8 · 8 offen');assert.equal(E.vollstaendig(u),false);
+ assert.ok(u.zeilen.every(z=>!z.neu));let datei=E.ergebnisDatei(u,a,[],'2.7.0');
+ assert.deepEqual(datei.offen,r2(14,21).map(n=>`P${n}`));assert.equal(kennungen(datei).filter(x=>x.endsWith(':a1')).length,13);assert.equal(kennungen(datei).filter(x=>x.endsWith(':a2')).length,8);
+ // D: beide Berichte → vollständig
+ u=U([ar('AR-71-01',r2(1,13)),ar('AR-72-01',r2(14,21))]);
+ assert.equal(E.standText(u),'Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 8 von 8 ✓');assert.equal(E.vollstaendig(u),true);
+ // teilweise zurück: 5 von 8, 3 offen
+ u=U([ar('AR-71-01',r2(1,13)),ar('AR-72-01',r2(14,18))]);
+ assert.equal(E.standText(u),'Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 5 von 8 · 3 offen');
+ // E: doppelt beim Labor – strittig statt Ergebnis, vollständig nein, Sperre bleibt, neutraler Text
+ u=U([ar('AR-71-01',r2(1,13)),ar('AR-72-01',r2(1,21))]);
+ assert.equal(u.zaehler.ergebnis,8);assert.equal(u.zaehler.strittig,13);assert.equal(E.vollstaendig(u),false);
+ assert.equal(E.standText(u),'Auftrag 1 (14.08.): 0 von 13 · 13 strittig · Auftrag 2 (22.08.): 8 von 8 ✓');
+ const satz='P1–P13 (Auftrag 1) stehen in AR-71-01 und in AR-72-01 – vermutlich gingen sie doppelt ans Labor. AR-72-01 enthält auch P14–P21 aus Auftrag 2; eine Datei herauszunehmen würde Werte verlieren. Bitte mit dem Labor klären, welcher Bericht für P1–P13 gilt; bis dahin übernimmt ResultKit nichts.';
+ assert.equal(u.konflikte.length,1);assert.equal(u.konflikte[0].satz,satz);
+ assert.throws(()=>E.ergebnisDatei(u,a,[],'2.7.0'),e=>e.message==='Nicht übernommen: '+satz&&!/Nimm die falsche Datei|berichtigte Fassung/.test(e.message));
+ assert.ok(u.berichte.every(b=>!b.hinweise.some(h=>/aus „Laborergebnisse“ genommen/.test(h))),'kein Rat „Datei herausnehmen“ am Bericht');
+ assert.match(u.zeilen.find(z=>z.label==='P1').hinweise[0],/es gilt keiner, bis mit dem Labor geklärt ist, welcher Bericht gilt/);
+ // F: ein Bericht für beide Runden → vollständig, kein Konflikt
+ u=U([ar('AR-73-01',r2(1,21))]);assert.equal(E.vollstaendig(u),true);assert.deepEqual(u.konflikte,[]);
+ // G: Liste von 5.4.0 entfernt → gleiche Kennungen und Sätze wie C
+ const g=lkA(lk55({ohneListe:true}));u=E.uebersicht('99.9001',g,[ar('AR-71-01',r2(1,13))]);
+ assert.equal(E.standText(u),'Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 0 von 8 · 8 offen');
+ assert.deepEqual(kennungen(E.ergebnisDatei(u,g,[],'2.7.0')),kennungen(datei));
+});
+ok('2.7 R5: Konflikt ohne Aufträge (oder alles derselbe Auftrag) → strittig, vollständig nein, Text wie bisher',()=>{
+ const u=E.uebersicht('99.9001',auftrag(),[{report:fassung('AR-81-01',[[1,pak('3')],[2,pak('4')]]),geaendert:1},{report:fassung('AR-82-01',[[1,pak('5')]]),geaendert:2}]);
+ assert.equal(u.zaehler.strittig,1);assert.equal(u.zaehler.ergebnis,1);assert.equal(E.vollstaendig(u),false);
+ assert.equal(E.standText(u),'1 von 4 Proben mit Ergebnis · 1 strittig · 2 offen');assert.equal(u.konflikte[0].satz,undefined);
+ assert.throws(()=>E.ergebnisDatei(u,auftrag(),[],'2.7.0'),/^Error: Nicht übernommen: AR-81-01 und AR-82-01 haben Werte für P1 – verschiedene Berichte, keine neue Fassung\. Nimm die falsche Datei aus „Laborergebnisse“, dann erneut übernehmen\.$/);
+ // zwei Aufträge, strittige Proben aus Auftrag 2 und kein späterer Auftrag im Bericht → Text wie bisher
+ const a=lkA(lk55());const w=E.uebersicht('99.9001',a,[ar('AR-83-01',r2(14,21)),ar('AR-84-01',r2(14,15))]);
+ assert.equal(w.konflikte[0].satz,undefined);assert.match(E.konfliktText(w.konflikte),/Nimm die falsche Datei/);
+});
+ok('2.7 R4: neue Proben „noch nicht beim Labor“ – bleiben erwartet und offen, nicht vollständig; Übersicht, Kopie und Druck',()=>{
+ const a=lkA(lk55({neu:[22,23]}));
+ const u=E.uebersicht('99.9001',a,[ar('AR-91-01',r2(1,13)),ar('AR-92-01',r2(14,21))]);
+ assert.deepEqual(u.zeilen.filter(z=>z.neu).map(z=>z.label),['P22','P23']);assert.ok(u.zeilen.filter(z=>z.neu).every(z=>z.erwartet&&z.status==='offen'));
+ assert.equal(E.vollstaendig(u),false);
+ assert.equal(E.standText(u),'Auftrag 1 (14.08.): 13 von 13 ✓ · Auftrag 2 (22.08.): 8 von 8 ✓ · 2 neue Proben noch nicht beim Labor');
+ const datei=E.ergebnisDatei(u,a,[],'2.7.0');assert.deepEqual(datei.offen,['P22','P23'],'offen[] unverändert');assert.equal(datei.vollstaendig,false);
+ const g=UE.uebersichtGruppen(u.zeilen),z22=g.find(x=>x.gruppe==='PAK').zeilen.find(z=>z.label==='P22');
+ assert.equal(z22.neu,true);assert.equal(UE.zelleText('PAK',z22,'µg/m²'),'noch nicht beim Labor');
+ assert.equal(UE.zelleText('PAK',g.find(x=>x.gruppe==='PAK').zeilen.find(z=>z.label==='P14'),'µg/m²'),'14');
+ // Druckseite aus der Datei: Lesart „Kennung irgendwo → ohne Kennung = neu“
+ const html=DRUCK.druckHtml(DRUCK.druckModell(datei),{nr:'99.9001',ort:'Musterort',objekt:'',auftraggeber:'',gedruckt:'',stand:'',veraltet:false,version:'2.7.0',legende:''},()=>null);
+ assert.match(html,/<td class="dr-w dr-aus">noch nicht beim Labor/);assert.doesNotMatch(html,/>ausstehend</);
+ // eine neue Probe, die schon in einem Prüfbericht steht, ist nicht „neu“
+ const v=E.uebersicht('99.9001',a,[ar('AR-91-01',r2(1,13)),ar('AR-93-01',[22])]);assert.deepEqual(v.zeilen.filter(z=>z.neu).map(z=>z.label),['P23']);
+ assert.match(E.standText(v),/Ohne Laborauftrag in LabelKit: 1 von 1 ✓ · 1 neue Probe noch nicht beim Labor$/);
+ // ein Auftrag: offene Proben bleiben „ausstehend“ (keine Kennung irgendwo)
+ const e=E.uebersicht('99.9001',auftrag(),[]);assert.ok(e.zeilen.every(z=>!z.neu));
+ const h1=DRUCK.druckHtml(DRUCK.druckModell(E.ergebnisDatei(e,auftrag(),[],'2.7.0')),{nr:'',ort:'',objekt:'',auftraggeber:'',gedruckt:'',stand:'',veraltet:false,version:'',legende:''},()=>null);
+ assert.match(h1,/>ausstehend</);assert.doesNotMatch(h1,/noch nicht beim Labor/);
+});
+ok('2.7: ältere Übernahme ohne Kennung → ohneAuftrag; frisch nicht; ein Auftrag nie',()=>{
+ const a=lkA(lk55()),u=E.uebersicht('99.9001',a,[ar('AR-71-01',r2(1,13))]),frisch=E.ergebnisDatei(u,a,[],'2.7.0');
+ const alt={...frisch,app:{name:'ResultKit',version:'2.6.1'},auftrag:{...frisch.auftrag,proben:frisch.auftrag.proben.map(({auftrag,...p})=>p)}};
+ assert.equal(E.ohneAuftrag(alt,a),true);assert.equal(E.ohneAuftrag(frisch,a),false);assert.equal(E.ohneAuftrag(null,a),false);
+ assert.equal(E.ohneAuftrag(E.ergebnisDatei(E.uebersicht('99.9001',auftrag(),[]),auftrag(),[],'2.6.1'),auftrag()),false);
+ assert.equal(E.regelGeaendert(alt,u),false,'Werte gleich – nur die Kennung fehlt');
+});
+ok('2.7 R6: Versionsvergleich und Versionssperre (neuere app.version oder neueres Format)',()=>{
+ assert.equal(E.versionVergleich('2.10.0','2.9.9'),1);assert.equal(E.versionVergleich('2.7.0','2.7'),0);assert.equal(E.versionVergleich('2.6.1','2.7.0'),-1);
+ const d=E.ergebnisDatei(E.uebersicht('99.9001',auftrag(),[]),auftrag(),[],'2.7.0'),t=v=>JSON.stringify({...d,app:{name:'ResultKit',version:v}});
+ assert.equal(E.neuereFassung(t('2.8.0'),'2.7.0'),'ResultKit 2.8.0');assert.equal(E.neuereFassung(t('2.7.0'),'2.7.0'),'');assert.equal(E.neuereFassung(t('2.6.1'),'2.7.0'),'');
+ assert.equal(E.neuereFassung(JSON.stringify({...d,version:2}),'2.7.0'),'einer neueren ResultKit-Fassung (Format 2)');
+ assert.equal(E.neuereFassung(null,'2.7.0'),'');assert.equal(E.neuereFassung('{kaputt','2.7.0'),'');assert.equal(E.neuereFassung(JSON.stringify({format:'anders',app:{version:'9'}}),'2.7.0'),'');
 });
 console.log(`${n} Prüfungen ResultKit-Kern bestanden`);

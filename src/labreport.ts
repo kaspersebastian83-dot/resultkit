@@ -1,6 +1,6 @@
 // Laborberichte lesen – aus PlanKit (src/labreport.ts) übernommen; Änderungen: BG (loq) bleibt am Wert, Projektabgleich über die
 // Projektnummer. Eurofins-XML liefert die Werte, die PDF dient dem Abgleich (Proben, Labor-Nr., Datum, Art) und der Ablage.
-import type {LabSample,LabSources} from './model';
+import type {LabSample,LabSources,LaborAuftrag} from './model';
 export function sourceFilename(value:string){return value.split(/[\\/]/).at(-1)||'';}
 /* ===== PROJEKTNUMMER v1 – in ResultKit (src/labreport.ts), Projektzentrale (archiv/auswertung.js) und PlanKit (src/labreport.ts) gleich halten =====
    Projektnummern „26.0142“ in einer Auftragsreferenz (Freitext im Eurofins-Portal). Ein Datum ist nie eine Projektnummer: in „18.11.2026“
@@ -22,7 +22,9 @@ export interface LabReport {bericht:string;labor:string;auftragsreferenz:string;
  wertAbgleich?:WertAbgleich;
  /** Nur Laborauftrag aus LabelKit (ab 1.13): Probennummern, die in LabelKit storniert sind („P7“). Sie sind keine Proben mehr,
   *  die Nummer bleibt aber vergeben – ein Laborwert dafür gehört zu keiner offenen Probe. */
- storniert?:string[]}
+ storniert?:string[];
+ /** Nur Laborauftrag aus LabelKit (ab 2.7.0): die Laboraufträge mit Datum, sobald eine Probe eine gültige Kennung trägt – nur im Speicher. */
+ auftraege?:LaborAuftrag[]}
 /** Ein Wert aus der PDF-Ergebnistabelle: Text links (Parameter, ggf. Einheit/BG) und der Wert in der Spalte der Probe. */
 export interface PdfWert {zeile:string;r:string}
 export interface Abweichung {p:string;u:string;text:string}
